@@ -31,7 +31,7 @@ make blob             GREEN     2860 bytes, 89 relocations
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make test             GREEN     82 tests across 7 suites  (= make emulator)
+make test             GREEN     host unit tests + 82 tests across 7 suites
 make hardware-run     GREEN     4/4 scenarios, 13 checks each, on real hardware
 make coverage         GREEN     0 wrapped-but-untested
 ```
@@ -284,13 +284,30 @@ build; it is marked broken.
   against `$0016` under the simulator.
 - **Its settings are never in a consistent state**, because new firmware is
   tested often and settings get reset. `Command Interface` is normally
-  `Disabled`. Any test needing a setting must read it, change it only if wrong,
-  and restore exactly what it changed. `hwtest.py` does this; the shared guard
-  for other callers was in flight at the time of writing — **check `git log` for
-  `tools/u64_settings.py` and `tests/emulator/Makefile`'s `hardware:` target.**
-  Symptom when it is missing: sim6502's `u64` backend fails every test with
-  `status $1D`, "the Ultimate's error latch rejected this command push", which
-  looks like a broken SDK and is not.
+  `Disabled`.
+
+  **Never assume a baseline. `tools/u64_settings.py` is the shared guard** — it
+  reads each required setting, writes only the ones that are wrong, runs the
+  command, and restores only what it actually changed, on success, on failure
+  and on Ctrl-C alike. A setting already correct is never written and never
+  "restored" to a value it never left. It passes the wrapped command's exit
+  status through, so `make` still fails when tests fail.
+
+  ```
+  python3 tools/u64_settings.py --host 192.168.1.62 \
+      --require "C64 and Cartridge Settings:Command Interface=Enabled" \
+      -- <command and its arguments>
+  ```
+
+  Both `hwtest.py` and `tests/emulator/Makefile`'s `hardware:` target go through
+  it; `tools/test_u64_settings.py` covers the logic against a fake REST client,
+  and runs under `make test` without needing hardware or Docker. Any new test
+  that needs a setting wraps itself the same way rather than growing a second
+  copy of this.
+
+  The symptom when a caller forgets: sim6502's `u64` backend fails every test
+  with `status $1D`, "the Ultimate's error latch rejected this command push",
+  which looks like a broken SDK and is not.
 - Firmware source, worth grepping before assuming anything: `~/Git/1541ultimate`
   (v3.15-69). **It is GPL-3.0 and this SDK is MIT — it is a reference for
   interface facts only, never a source to copy from.** Copying would relicense
