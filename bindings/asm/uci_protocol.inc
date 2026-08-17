@@ -89,11 +89,11 @@ UCI_CMD_IDENTIFY = $01  ; Return an identification string. Cannot fail.
 
 ; ---- Ultimate DOS commands (targets $01/$02) ----
 DOS_CMD_IDENTIFY       = $01
-DOS_CMD_OPEN_FILE      = $02  ; <attrib> <filename>
+DOS_CMD_OPEN_FILE      = $02  ; <attrib> <filename> - attrib is a DOS_FA_* mask
 DOS_CMD_CLOSE_FILE     = $03
-DOS_CMD_READ_DATA      = $04  ; <len_lo> <len_hi>
-DOS_CMD_WRITE_DATA     = $05  ; <dummy> <dummy> <data...>
-DOS_CMD_FILE_SEEK      = $06  ; <pos32 LSB first>
+DOS_CMD_READ_DATA      = $04  ; <len:16> - arrives as 512-byte blocks; uci_exec walks the chain
+DOS_CMD_WRITE_DATA     = $05  ; $00 $00 <data...> - the two fixed bytes are skipped, not stored
+DOS_CMD_FILE_SEEK      = $06  ; <pos:32>
 DOS_CMD_FILE_INFO      = $07
 DOS_CMD_FILE_STAT      = $08  ; <filename>
 DOS_CMD_DELETE_FILE    = $09  ; <filename>
@@ -106,14 +106,14 @@ DOS_CMD_READ_DIR       = $14
 DOS_CMD_COPY_UI_PATH   = $15  ; Deprecated since FW 3.0
 DOS_CMD_CREATE_DIR     = $16  ; <dirname>
 DOS_CMD_COPY_HOME_PATH = $17
-DOS_CMD_LOAD_REU       = $21  ; <addr32> <len32>
-DOS_CMD_SAVE_REU       = $22  ; <addr32> <len32>
+DOS_CMD_LOAD_REU       = $21  ; <addr:32> <len:32> - the safe REU pair; never wrap the control pair, see #740
+DOS_CMD_SAVE_REU       = $22  ; <addr:32> <len:32> - the safe REU pair; never wrap the control pair, see #740
 DOS_CMD_MOUNT_DISK     = $23  ; <id> <filename>
 DOS_CMD_UMOUNT_DISK    = $24  ; <id>
 DOS_CMD_SWAP_DISK      = $25  ; <id>
-DOS_CMD_GET_TIME       = $26  ; [fmt]
-DOS_CMD_SET_TIME       = $27  ; <Y-1900> <M> <D> <h> <m> <s>
-DOS_CMD_ECHO           = $F0  ; Echo the command back as data
+DOS_CMD_GET_TIME       = $26  ; <fmt> - fmt may be omitted; the target defaults it to $00
+DOS_CMD_SET_TIME       = $27  ; <year_1900> <month> <day> <hour> <minute> <second> - year is the year minus 1900
+DOS_CMD_ECHO           = $F0  ; <data...> - Echo the command back as data
 
 ; ---- DOS file open attributes ----
 ; Bit flags for DOS_CMD_OPEN_FILE.
@@ -134,18 +134,23 @@ DOS_ATTR_ARCHIVE  = $20
 ; ---- Network commands (target $03) ----
 NET_CMD_IDENTIFY            = $01
 NET_CMD_GET_INTERFACE_COUNT = $02
-NET_CMD_GET_NETADDR         = $04  ; <iface> -> 6 byte MAC
-NET_CMD_GET_IPADDR          = $05  ; <iface> -> 12 bytes ip/mask/gw
-NET_CMD_SET_IPADDR          = $06  ; <iface> <12 bytes>
-NET_CMD_OPEN_TCP            = $07  ; <port16> <host>
-NET_CMD_OPEN_UDP            = $08  ; <port16> <host>
+NET_CMD_GET_NETADDR         = $04  ; <iface> - replies with UCI_NET_MACADDR_BYTES
+NET_CMD_GET_IPADDR          = $05  ; <iface> - replies with UCI_NET_IPCONFIG_BYTES, ip/mask/gw
+NET_CMD_SET_IPADDR          = $06  ; <iface> <ipconfig...> - ipconfig must be exactly UCI_NET_IPCONFIG_BYTES
+NET_CMD_OPEN_TCP            = $07  ; <port:16> <host>
+NET_CMD_OPEN_UDP            = $08  ; <port:16> <host>
 NET_CMD_CLOSE_SOCKET        = $09  ; <handle>
-NET_CMD_READ_SOCKET         = $10  ; <handle> <len16>
+NET_CMD_READ_SOCKET         = $10  ; <handle> <len:16>
 NET_CMD_WRITE_SOCKET        = $11  ; <handle> <data...>
-NET_CMD_LISTEN_START        = $12  ; INFERRED: <port16>, not in the published spec
+NET_CMD_LISTEN_START        = $12  ; <port:16> - INFERRED: not in the published spec
 NET_CMD_LISTEN_STOP         = $13  ; INFERRED: not in the published spec
 NET_CMD_LISTEN_STATE        = $14  ; INFERRED: not in the published spec
 NET_CMD_LISTEN_SOCKET       = $15  ; INFERRED: not in the published spec
+
+; ---- Network address sizes ----
+; Fixed-width blobs the network target exchanges.
+UCI_NET_MACADDR_BYTES  = $06  ; bytes in a MAC address
+UCI_NET_IPCONFIG_BYTES = $0C  ; bytes in an ip/mask/gateway triple
 
 ; ---- Control commands (target $04) ----
 CTRL_CMD_IDENTIFY          = $01
@@ -153,14 +158,14 @@ CTRL_CMD_READ_RTC          = $02  ; INFERRED: firmware only, not in the publishe
 CTRL_CMD_FINISH_CAPTURE    = $03
 CTRL_CMD_FREEZE            = $05
 CTRL_CMD_REBOOT            = $06  ; Never replies: the C64 and the UCI are reset
-CTRL_CMD_LOAD_REU          = $08  ; <filename>
+CTRL_CMD_LOAD_REU          = $08  ; <filename> - never returns on FW 3.14d and wedges the interface, see #740
 CTRL_CMD_SAVE_REU          = $09  ; <filename>
-CTRL_CMD_U64_SAVEMEM       = $0F  ; <filename>, U64 family only
+CTRL_CMD_U64_SAVEMEM       = $0F  ; <filename> - U64 family only
 CTRL_CMD_DECODE_TRACK      = $11  ; GCR -> binary in REU
 CTRL_CMD_ENCODE_TRACK      = $12  ; INFERRED: firmware only, not in the published spec
-CTRL_CMD_EASYFLASH         = $20  ; $00 <bank> <baseaddr> - sector erase
-CTRL_CMD_GET_HWINFO        = $28  ; [sub] $00 = model name, $01 = SID config
-CTRL_CMD_GET_DRVINFO       = $29  ; <effective_addr_flag>
+CTRL_CMD_EASYFLASH         = $20  ; $00 <bank> <baseaddr> - sector erase; baseaddr bit $20 selects the high ROM
+CTRL_CMD_GET_HWINFO        = $28  ; <sub> - sub may be omitted; the target defaults it to CTRL_HWINFO_MODEL
+CTRL_CMD_GET_DRVINFO       = $29  ; <effective_addr>
 CTRL_CMD_ENABLE_DRIVE_A    = $30
 CTRL_CMD_DISABLE_DRIVE_A   = $31
 CTRL_CMD_ENABLE_DRIVE_B    = $32
@@ -170,8 +175,8 @@ CTRL_CMD_GET_DRIVE_B_POWER = $35
 CTRL_CMD_GET_RAMDISKINFO   = $40  ; GEOS MegaPatch 3 RAM disk layout
 CTRL_CMD_LOAD_CONFIG       = $50  ; INFERRED: firmware only, not in the published spec
 CTRL_CMD_GET_PALETTE       = $51  ; -> 48 RGB bytes (FW > 3.15)
-CTRL_CMD_SET_PALETTE       = $52  ; <48 RGB bytes> (FW > 3.15)
-CTRL_CMD_SET_PALETTE_COLOR = $53  ; <index> <r> <g> <b> (FW > 3.15)
+CTRL_CMD_SET_PALETTE       = $52  ; <palette...> - palette is exactly UCI_PALETTE_BYTES (FW > 3.15)
+CTRL_CMD_SET_PALETTE_COLOR = $53  ; <index> <r> <g> <b> - (FW > 3.15)
 CTRL_CMD_RESET_PALETTE     = $54  ; restore the built-in palette (FW > 3.15)
 
 ; ---- Control: VIC-II palette ----
@@ -194,18 +199,18 @@ CTRL_DRVTYPE_SOFTIEC   = $0F
 CTRL_DRVTYPE_PRINTER   = $50
 
 ; ---- SoftwareIEC commands (target $05) ----
-SOFTIEC_CMD_IDENTIFY      = $01
-SOFTIEC_CMD_LOAD_SU       = $10  ; <sec> <verify> <addr16> <name>
-SOFTIEC_CMD_LOAD_EX       = $11  ; <sec> <verify>
-SOFTIEC_CMD_SAVE          = $12  ; <verify> <sec> <start16> <end16> <name>
+SOFTIEC_CMD_IDENTIFY      = $01  ; answers in ASCII; every other command on this target answers in binary
+SOFTIEC_CMD_LOAD_SU       = $10  ; <sec> <verify> <addr:16> <unused:16> <name> - sec 1 uses the file's own load address, 0 uses addr; unused is never read but must be sent
+SOFTIEC_CMD_LOAD_EX       = $11  ; <sec> <verify> - returns the end address in status bytes 1-2
+SOFTIEC_CMD_SAVE          = $12  ; <verify> <sec> <start:16> <end:16> <name>
 SOFTIEC_CMD_OPEN          = $13  ; <sec> $00 <name>
 SOFTIEC_CMD_CLOSE         = $14  ; <sec>
 SOFTIEC_CMD_CHKIN         = $15  ; <sec>
-SOFTIEC_CMD_CHKOUT        = $16  ; <sec> $00 <data...>
-SOFTIEC_CMD_ADD_PARTITION = $20  ; <index> <ident>':'<path>
+SOFTIEC_CMD_CHKOUT        = $16  ; <sec> $00 <data...> - sec & $F0 of $F0 opens and $E0 closes; anything else pushes data
+SOFTIEC_CMD_ADD_PARTITION = $20  ; <index> <ident_colon_path> - the string is 'IDENT:/path'
 SOFTIEC_CMD_DEL_PARTITION = $21  ; <index>
-SOFTIEC_CMD_GET_FATNAME   = $22  ; <channel> <iec name>
-SOFTIEC_CMD_GET_IECNAME   = $23  ; <fat name>
+SOFTIEC_CMD_GET_FATNAME   = $22  ; <channel> <iec_name> - resolves an IEC name to a host path
+SOFTIEC_CMD_GET_IECNAME   = $23  ; <fat_name>
 
 ; ---- SoftwareIEC status bytes ----
 ; This target returns a single binary status byte, not an ASCII status
@@ -225,18 +230,18 @@ SOFTIEC_ST_VERIFY_ERROR      = $80  ; LOAD_EX verify mismatch
 ; ---- HTTP commands (target $06, FW 3.15+) ----
 HTTP_CMD_IDENTIFY        = $01
 HTTP_CMD_FREE_ALL        = $10
-HTTP_CMD_HEADER_CREATE   = $11  ; <verb> <url>
+HTTP_CMD_HEADER_CREATE   = $11  ; <verb> <url> - verb is an HTTP_VERB_* code
 HTTP_CMD_HEADER_FREE     = $12  ; <handle>
-HTTP_CMD_HEADER_ADD      = $13  ; <handle> <'key: value'>
+HTTP_CMD_HEADER_ADD      = $13  ; <handle> <key_colon_value> - the string is 'key: value'
 HTTP_CMD_HEADER_QUERY    = $14  ; <handle> <key>
 HTTP_CMD_HEADER_LIST     = $15  ; <handle> <index>
-HTTP_CMD_BODY_CREATE     = $21  ; <format>
+HTTP_CMD_BODY_CREATE     = $21  ; <format> - format is an HTTP_BODY_* code
 HTTP_CMD_BODY_FREE       = $22  ; <handle>
-HTTP_CMD_BODY_ADD_INT    = $23  ; <handle> <keylen> <key> <int>
-HTTP_CMD_BODY_ADD_BOOL   = $24  ; <handle> <keylen> <key> <bool>
-HTTP_CMD_BODY_ADD_STRING = $25  ; <handle> <keylen> <key> <vallen> <val>
-HTTP_CMD_BODY_ADD_OBJECT = $26  ; <handle> <keylen> <key>
-HTTP_CMD_BODY_ADD_ARRAY  = $27  ; <handle> <keylen> <key>
+HTTP_CMD_BODY_ADD_INT    = $23  ; <handle> <key:len> <key> <value:32> - 1 to 4 value bytes are accepted, sign-extended from the last; send four
+HTTP_CMD_BODY_ADD_BOOL   = $24  ; <handle> <key:len> <key> <value> - any non-zero value is true
+HTTP_CMD_BODY_ADD_STRING = $25  ; <handle> <key:len> <key> <value:len> <value>
+HTTP_CMD_BODY_ADD_OBJECT = $26  ; <handle> <key:len> <key>
+HTTP_CMD_BODY_ADD_ARRAY  = $27  ; <handle> <key:len> <key>
 HTTP_CMD_BODY_UP         = $28  ; <handle>
 HTTP_CMD_BODY_REMOVE     = $29  ; <handle> <path>
 HTTP_CMD_BODY_QUERY      = $2A  ; <handle> <path>
@@ -244,8 +249,8 @@ HTTP_CMD_BODY_MOVE       = $2B  ; <handle> <path>
 HTTP_CMD_BODY_ADD_BINARY = $2C  ; <handle> <data...>
 HTTP_CMD_BODY_ADD        = $2D  ; <handle> <items...>
 HTTP_CMD_BODY_CLEAR      = $2E  ; <handle>
-HTTP_CMD_DO_EXCHANGE_OBJ = $31  ; <header> <body|$FF>
-HTTP_CMD_DO_EXCHANGE_RAW = $32  ; <header> <body|$FF>
+HTTP_CMD_DO_EXCHANGE_OBJ = $31  ; <header> <body> - pass HTTP_BODY_NONE as body to send none
+HTTP_CMD_DO_EXCHANGE_RAW = $32  ; <header> <body> - pass HTTP_BODY_NONE as body to send none
 
 ; ---- HTTP verbs ----
 HTTP_VERB_GET     = $01

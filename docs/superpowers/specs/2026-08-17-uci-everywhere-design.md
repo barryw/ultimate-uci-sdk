@@ -283,25 +283,32 @@ everything is the entire point of having a generic form.
 The alternative rule — under 256 is a byte, over is a word — silently sends one
 byte for a length of 255 and two for 256. Rejected.
 
-**The argument shapes must become structured data.** They exist today only as
-prose in `gen_protocol.py`, in four different notations:
+**The argument shapes had to become structured data. That is done** — `ARGS` in
+`gen_protocol.py`, 67 commands, checked by `check_args()` at generation time and
+by `tools/test_gen_protocol.py` under `make test`.
 
-```
-("DOS_CMD_READ_DATA",     0x04, "<len_lo> <len_hi>"),
-("DOS_CMD_FILE_SEEK",     0x06, "<pos32 LSB first>"),
-("DOS_CMD_RENAME_FILE",   0x0A, "<old> $00 <new>"),
-("HTTP_CMD_BODY_ADD_INT", 0x23, "<handle> <keylen> <key> <int>"),
-```
+Each shape is a list of `(kind, spec)` pairs: `byte`, `word`, `dword`, `str`,
+`pstr` (length-prefixed), `data` (trailing), `lit` (a fixed byte the caller does
+not supply). NUL-separated strings turned out not to need a kind of their own —
+`<old> $00 <new>` is `str`, `lit`, `str`, which is what the firmware actually
+splits on.
 
-Parsing that would be guessing at intent. A structured `args` field goes
-alongside the comment, expressing: byte, word, dword, string, NUL-separated
-string, length-prefixed string, trailing raw bytes, literal byte. Mechanical
-across the ~50 commands that take arguments, and it also gives the generated
-documentation an argument column and gives C and assembly callers a table they
-do not have today.
+Two rules are enforced rather than trusted, because breaking either produces
+bytes that a target accepts and misreads: `str` carries no length, so it must be
+last or immediately before a `lit`; `data` runs to the end, so nothing may
+follow it.
 
-Only commands with a non-byte numeric or a literal separator need an in-memory
-entry — roughly 25 of 101, about 150 bytes.
+**Every shape was read out of the firmware, not transcribed from the prose**,
+and that caught two errors the prose had been carrying: `SOFTIEC_CMD_LOAD_SU`'s
+filename starts two bytes later than it said, and `CTRL_CMD_EASYFLASH`'s base
+address is one byte and not two. The prose comments are gone; the emitters
+render the shape from `ARGS`, so the C header, the three assembler includes and
+the reference cannot disagree about what a command takes.
+
+Still to do when the wedge lands: emit the in-memory table it dispatches on.
+Only commands with a non-byte numeric or a literal separator need an entry —
+roughly 25 of 101, about 150 bytes. `ARGS` is the source for it; nothing else
+needs deciding first.
 
 ### Constants
 
@@ -382,10 +389,20 @@ Read out of the firmware, not inferred from constant names:
   with a plain `$01` — **no DMA bit**. Data never passes through `$DF1E`; the
   firmware writes straight into C64 RAM and returns the end address in status
   bytes 1–2, which the SDK's four-byte status capture already keeps.
-- `LOAD_SU` takes `<sec> <verify> <addr16> <name>`, where the secondary address
-  is the same 0-or-1 that `LOAD"X",8,1` uses. So `ULOAD "X"` is `sec=1` and
-  `ULOAD "X",$4000` is `sec=0, addr=$4000`. The semantics we chose are the
-  firmware's own; nothing is invented.
+- `LOAD_SU` takes `<sec> <verify> <addr16> <unused16> <name>`, where the
+  secondary address is the same 0-or-1 that `LOAD"X",8,1` uses. So `ULOAD "X"`
+  is `sec=1` and `ULOAD "X",$4000` is `sec=0, addr=$4000`. The semantics we
+  chose are the firmware's own; nothing is invented.
+
+  **The `<unused16>` is not padding we chose to add.** This line said
+  `<sec> <verify> <addr16> <name>` until the argument table was built and every
+  shape was read out of the firmware rather than transcribed. `cmd_load_su()`
+  opens `&command->message[8]`: a load shares `SAVE`'s layout and has to send
+  the end-address pair it never reads. Sending the name at offset 6 is accepted
+  and then opens whatever the tail happens to be, so it would have surfaced as
+  "file not found" on a file that is plainly there — during Phase 3, on the one
+  path that has to be tested on real hardware. `tools/test_gen_protocol.py`
+  now pins the offset.
 
 **Fallback triggers on the first command failing, not on detection.** Target
 `$05` reports present even when the IEC drive is switched off, and

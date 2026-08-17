@@ -31,7 +31,7 @@ make blob             GREEN     2860 bytes, 89 relocations
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make test             GREEN     host unit tests + 82 tests across 7 suites
+make test             GREEN     38 host unit tests + 82 tests across 7 suites
 make hardware-run     GREEN     4/4 scenarios, 13 checks each, on real hardware
 make coverage         GREEN     0 wrapped-but-untested
 ```
@@ -81,6 +81,15 @@ time:
   documented: the error strings in `ultimate_strerror.s` (printed via `CHROUT`,
   where PETSCII is what you want) and the blob's `"UCI"` signature (compared
   only against itself).
+- **Argument shapes come from `ARGS` in `tools/gen_protocol.py`, never from a
+  comment.** The comments used to carry the shapes in four notations and two of
+  them were wrong. Every entry in `ARGS` was read out of the firmware source;
+  `check_args()` rejects a shape that cannot be marshalled, and
+  `tools/test_gen_protocol.py` pins the wire offsets that were wrong.
+- **`SOFTIEC_CMD_LOAD_SU` sends an end-address pair it never reads.** The
+  filename starts at offset 8, because a load shares `SAVE`'s layout. Send the
+  name at 6 and the firmware opens whatever follows, which looks like "file not
+  found" on a file that is plainly there.
 - **The model name is mixed case**, unlike the uppercase identification strings.
 - **Target `$05` reports present even when the drive is off, and that is
   intended** ([#794](https://github.com/GideonZ/1541ultimate/issues/794), answered
@@ -267,12 +276,17 @@ only where the generic form cannot express the operation.
 | 2 | **BASIC wedge** — next | generic `UCI` statement and function, observers (`UERR`, `UST$`, `UDATA$`, `UBYTE`, `ULEN`, `UDEV`), target constants, `W()`/`L()`, installer with banner, `.prg` and `.crt` builds, `basic.suite` |
 | 3 | DOS service, file convenience, SoftwareIEC fast path, `reu.s` | `ULOAD`/`UBLOAD`/`USAVE`/`UDIR`/`USTASH`/`UFETCH` in all three languages at once |
 
-Phase 2 needs one thing that does not exist yet and is on its critical path:
-**the argument shapes in `tools/gen_protocol.py` must become structured data.**
-They are prose today, in four different notations (`<len_lo> <len_hi>`,
-`<pos32 LSB first>`, `<old> $00 <new>`, `<handle> <keylen> <key> <int>`).
-Parsing that would be guessing. A structured `args` field goes alongside the
-comment; roughly 50 commands take arguments.
+**Phase 2's stated blocker is cleared.** The argument shapes are structured data
+now: `ARGS` in `tools/gen_protocol.py`, 67 commands, `(kind, spec)` pairs over
+`byte`, `word`, `dword`, `str`, `pstr`, `data` and `lit`. `check_args()` fails
+generation on a shape that cannot be marshalled, the reference gained an
+argument column, and the emitters render the shape instead of repeating it in
+prose. What the wedge still needs is the ~150-byte in-memory table it dispatches
+on, generated from `ARGS` — nothing else has to be decided first.
+
+Every shape was read out of the firmware source rather than transcribed, which
+is worth keeping up as the table grows: it caught two errors the prose had been
+carrying, one of them on Phase 3's critical path. See §2.
 
 Do not start the Oscar64 / llvm-mos / KickC ports until the service API has
 settled. The blob is now their route in, so none of them needs a port at all.

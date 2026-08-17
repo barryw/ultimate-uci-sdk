@@ -88,11 +88,11 @@
 
 /* ---- Ultimate DOS commands (targets $01/$02) ---- */
 #define DOS_CMD_IDENTIFY       0x01
-#define DOS_CMD_OPEN_FILE      0x02  /* <attrib> <filename> */
+#define DOS_CMD_OPEN_FILE      0x02  /* <attrib> <filename> - attrib is a DOS_FA_* mask */
 #define DOS_CMD_CLOSE_FILE     0x03
-#define DOS_CMD_READ_DATA      0x04  /* <len_lo> <len_hi> */
-#define DOS_CMD_WRITE_DATA     0x05  /* <dummy> <dummy> <data...> */
-#define DOS_CMD_FILE_SEEK      0x06  /* <pos32 LSB first> */
+#define DOS_CMD_READ_DATA      0x04  /* <len:16> - arrives as 512-byte blocks; uci_exec walks the chain */
+#define DOS_CMD_WRITE_DATA     0x05  /* $00 $00 <data...> - the two fixed bytes are skipped, not stored */
+#define DOS_CMD_FILE_SEEK      0x06  /* <pos:32> */
 #define DOS_CMD_FILE_INFO      0x07
 #define DOS_CMD_FILE_STAT      0x08  /* <filename> */
 #define DOS_CMD_DELETE_FILE    0x09  /* <filename> */
@@ -105,14 +105,14 @@
 #define DOS_CMD_COPY_UI_PATH   0x15  /* Deprecated since FW 3.0 */
 #define DOS_CMD_CREATE_DIR     0x16  /* <dirname> */
 #define DOS_CMD_COPY_HOME_PATH 0x17
-#define DOS_CMD_LOAD_REU       0x21  /* <addr32> <len32> */
-#define DOS_CMD_SAVE_REU       0x22  /* <addr32> <len32> */
+#define DOS_CMD_LOAD_REU       0x21  /* <addr:32> <len:32> - the safe REU pair; never wrap the control pair, see #740 */
+#define DOS_CMD_SAVE_REU       0x22  /* <addr:32> <len:32> - the safe REU pair; never wrap the control pair, see #740 */
 #define DOS_CMD_MOUNT_DISK     0x23  /* <id> <filename> */
 #define DOS_CMD_UMOUNT_DISK    0x24  /* <id> */
 #define DOS_CMD_SWAP_DISK      0x25  /* <id> */
-#define DOS_CMD_GET_TIME       0x26  /* [fmt] */
-#define DOS_CMD_SET_TIME       0x27  /* <Y-1900> <M> <D> <h> <m> <s> */
-#define DOS_CMD_ECHO           0xF0  /* Echo the command back as data */
+#define DOS_CMD_GET_TIME       0x26  /* <fmt> - fmt may be omitted; the target defaults it to $00 */
+#define DOS_CMD_SET_TIME       0x27  /* <year_1900> <month> <day> <hour> <minute> <second> - year is the year minus 1900 */
+#define DOS_CMD_ECHO           0xF0  /* <data...> - Echo the command back as data */
 
 /* ---- DOS file open attributes ---- */
 /* Bit flags for DOS_CMD_OPEN_FILE. */
@@ -133,18 +133,23 @@
 /* ---- Network commands (target $03) ---- */
 #define NET_CMD_IDENTIFY            0x01
 #define NET_CMD_GET_INTERFACE_COUNT 0x02
-#define NET_CMD_GET_NETADDR         0x04  /* <iface> -> 6 byte MAC */
-#define NET_CMD_GET_IPADDR          0x05  /* <iface> -> 12 bytes ip/mask/gw */
-#define NET_CMD_SET_IPADDR          0x06  /* <iface> <12 bytes> */
-#define NET_CMD_OPEN_TCP            0x07  /* <port16> <host> */
-#define NET_CMD_OPEN_UDP            0x08  /* <port16> <host> */
+#define NET_CMD_GET_NETADDR         0x04  /* <iface> - replies with UCI_NET_MACADDR_BYTES */
+#define NET_CMD_GET_IPADDR          0x05  /* <iface> - replies with UCI_NET_IPCONFIG_BYTES, ip/mask/gw */
+#define NET_CMD_SET_IPADDR          0x06  /* <iface> <ipconfig...> - ipconfig must be exactly UCI_NET_IPCONFIG_BYTES */
+#define NET_CMD_OPEN_TCP            0x07  /* <port:16> <host> */
+#define NET_CMD_OPEN_UDP            0x08  /* <port:16> <host> */
 #define NET_CMD_CLOSE_SOCKET        0x09  /* <handle> */
-#define NET_CMD_READ_SOCKET         0x10  /* <handle> <len16> */
+#define NET_CMD_READ_SOCKET         0x10  /* <handle> <len:16> */
 #define NET_CMD_WRITE_SOCKET        0x11  /* <handle> <data...> */
-#define NET_CMD_LISTEN_START        0x12  /* INFERRED: <port16>, not in the published spec */
+#define NET_CMD_LISTEN_START        0x12  /* <port:16> - INFERRED: not in the published spec */
 #define NET_CMD_LISTEN_STOP         0x13  /* INFERRED: not in the published spec */
 #define NET_CMD_LISTEN_STATE        0x14  /* INFERRED: not in the published spec */
 #define NET_CMD_LISTEN_SOCKET       0x15  /* INFERRED: not in the published spec */
+
+/* ---- Network address sizes ---- */
+/* Fixed-width blobs the network target exchanges. */
+#define UCI_NET_MACADDR_BYTES  6  /* bytes in a MAC address */
+#define UCI_NET_IPCONFIG_BYTES 12  /* bytes in an ip/mask/gateway triple */
 
 /* ---- Control commands (target $04) ---- */
 #define CTRL_CMD_IDENTIFY          0x01
@@ -152,14 +157,14 @@
 #define CTRL_CMD_FINISH_CAPTURE    0x03
 #define CTRL_CMD_FREEZE            0x05
 #define CTRL_CMD_REBOOT            0x06  /* Never replies: the C64 and the UCI are reset */
-#define CTRL_CMD_LOAD_REU          0x08  /* <filename> */
+#define CTRL_CMD_LOAD_REU          0x08  /* <filename> - never returns on FW 3.14d and wedges the interface, see #740 */
 #define CTRL_CMD_SAVE_REU          0x09  /* <filename> */
-#define CTRL_CMD_U64_SAVEMEM       0x0F  /* <filename>, U64 family only */
+#define CTRL_CMD_U64_SAVEMEM       0x0F  /* <filename> - U64 family only */
 #define CTRL_CMD_DECODE_TRACK      0x11  /* GCR -> binary in REU */
 #define CTRL_CMD_ENCODE_TRACK      0x12  /* INFERRED: firmware only, not in the published spec */
-#define CTRL_CMD_EASYFLASH         0x20  /* $00 <bank> <baseaddr> - sector erase */
-#define CTRL_CMD_GET_HWINFO        0x28  /* [sub] $00 = model name, $01 = SID config */
-#define CTRL_CMD_GET_DRVINFO       0x29  /* <effective_addr_flag> */
+#define CTRL_CMD_EASYFLASH         0x20  /* $00 <bank> <baseaddr> - sector erase; baseaddr bit $20 selects the high ROM */
+#define CTRL_CMD_GET_HWINFO        0x28  /* <sub> - sub may be omitted; the target defaults it to CTRL_HWINFO_MODEL */
+#define CTRL_CMD_GET_DRVINFO       0x29  /* <effective_addr> */
 #define CTRL_CMD_ENABLE_DRIVE_A    0x30
 #define CTRL_CMD_DISABLE_DRIVE_A   0x31
 #define CTRL_CMD_ENABLE_DRIVE_B    0x32
@@ -169,8 +174,8 @@
 #define CTRL_CMD_GET_RAMDISKINFO   0x40  /* GEOS MegaPatch 3 RAM disk layout */
 #define CTRL_CMD_LOAD_CONFIG       0x50  /* INFERRED: firmware only, not in the published spec */
 #define CTRL_CMD_GET_PALETTE       0x51  /* -> 48 RGB bytes (FW > 3.15) */
-#define CTRL_CMD_SET_PALETTE       0x52  /* <48 RGB bytes> (FW > 3.15) */
-#define CTRL_CMD_SET_PALETTE_COLOR 0x53  /* <index> <r> <g> <b> (FW > 3.15) */
+#define CTRL_CMD_SET_PALETTE       0x52  /* <palette...> - palette is exactly UCI_PALETTE_BYTES (FW > 3.15) */
+#define CTRL_CMD_SET_PALETTE_COLOR 0x53  /* <index> <r> <g> <b> - (FW > 3.15) */
 #define CTRL_CMD_RESET_PALETTE     0x54  /* restore the built-in palette (FW > 3.15) */
 
 /* ---- Control: VIC-II palette ---- */
@@ -193,18 +198,18 @@
 #define CTRL_DRVTYPE_PRINTER   0x50
 
 /* ---- SoftwareIEC commands (target $05) ---- */
-#define SOFTIEC_CMD_IDENTIFY      0x01
-#define SOFTIEC_CMD_LOAD_SU       0x10  /* <sec> <verify> <addr16> <name> */
-#define SOFTIEC_CMD_LOAD_EX       0x11  /* <sec> <verify> */
-#define SOFTIEC_CMD_SAVE          0x12  /* <verify> <sec> <start16> <end16> <name> */
+#define SOFTIEC_CMD_IDENTIFY      0x01  /* answers in ASCII; every other command on this target answers in binary */
+#define SOFTIEC_CMD_LOAD_SU       0x10  /* <sec> <verify> <addr:16> <unused:16> <name> - sec 1 uses the file's own load address, 0 uses addr; unused is never read but must be sent */
+#define SOFTIEC_CMD_LOAD_EX       0x11  /* <sec> <verify> - returns the end address in status bytes 1-2 */
+#define SOFTIEC_CMD_SAVE          0x12  /* <verify> <sec> <start:16> <end:16> <name> */
 #define SOFTIEC_CMD_OPEN          0x13  /* <sec> $00 <name> */
 #define SOFTIEC_CMD_CLOSE         0x14  /* <sec> */
 #define SOFTIEC_CMD_CHKIN         0x15  /* <sec> */
-#define SOFTIEC_CMD_CHKOUT        0x16  /* <sec> $00 <data...> */
-#define SOFTIEC_CMD_ADD_PARTITION 0x20  /* <index> <ident>':'<path> */
+#define SOFTIEC_CMD_CHKOUT        0x16  /* <sec> $00 <data...> - sec & $F0 of $F0 opens and $E0 closes; anything else pushes data */
+#define SOFTIEC_CMD_ADD_PARTITION 0x20  /* <index> <ident_colon_path> - the string is 'IDENT:/path' */
 #define SOFTIEC_CMD_DEL_PARTITION 0x21  /* <index> */
-#define SOFTIEC_CMD_GET_FATNAME   0x22  /* <channel> <iec name> */
-#define SOFTIEC_CMD_GET_IECNAME   0x23  /* <fat name> */
+#define SOFTIEC_CMD_GET_FATNAME   0x22  /* <channel> <iec_name> - resolves an IEC name to a host path */
+#define SOFTIEC_CMD_GET_IECNAME   0x23  /* <fat_name> */
 
 /* ---- SoftwareIEC status bytes ---- */
 /* This target returns a single binary status byte, not an ASCII status */
@@ -224,18 +229,18 @@
 /* ---- HTTP commands (target $06, FW 3.15+) ---- */
 #define HTTP_CMD_IDENTIFY        0x01
 #define HTTP_CMD_FREE_ALL        0x10
-#define HTTP_CMD_HEADER_CREATE   0x11  /* <verb> <url> */
+#define HTTP_CMD_HEADER_CREATE   0x11  /* <verb> <url> - verb is an HTTP_VERB_* code */
 #define HTTP_CMD_HEADER_FREE     0x12  /* <handle> */
-#define HTTP_CMD_HEADER_ADD      0x13  /* <handle> <'key: value'> */
+#define HTTP_CMD_HEADER_ADD      0x13  /* <handle> <key_colon_value> - the string is 'key: value' */
 #define HTTP_CMD_HEADER_QUERY    0x14  /* <handle> <key> */
 #define HTTP_CMD_HEADER_LIST     0x15  /* <handle> <index> */
-#define HTTP_CMD_BODY_CREATE     0x21  /* <format> */
+#define HTTP_CMD_BODY_CREATE     0x21  /* <format> - format is an HTTP_BODY_* code */
 #define HTTP_CMD_BODY_FREE       0x22  /* <handle> */
-#define HTTP_CMD_BODY_ADD_INT    0x23  /* <handle> <keylen> <key> <int> */
-#define HTTP_CMD_BODY_ADD_BOOL   0x24  /* <handle> <keylen> <key> <bool> */
-#define HTTP_CMD_BODY_ADD_STRING 0x25  /* <handle> <keylen> <key> <vallen> <val> */
-#define HTTP_CMD_BODY_ADD_OBJECT 0x26  /* <handle> <keylen> <key> */
-#define HTTP_CMD_BODY_ADD_ARRAY  0x27  /* <handle> <keylen> <key> */
+#define HTTP_CMD_BODY_ADD_INT    0x23  /* <handle> <key:len> <key> <value:32> - 1 to 4 value bytes are accepted, sign-extended from the last; send four */
+#define HTTP_CMD_BODY_ADD_BOOL   0x24  /* <handle> <key:len> <key> <value> - any non-zero value is true */
+#define HTTP_CMD_BODY_ADD_STRING 0x25  /* <handle> <key:len> <key> <value:len> <value> */
+#define HTTP_CMD_BODY_ADD_OBJECT 0x26  /* <handle> <key:len> <key> */
+#define HTTP_CMD_BODY_ADD_ARRAY  0x27  /* <handle> <key:len> <key> */
 #define HTTP_CMD_BODY_UP         0x28  /* <handle> */
 #define HTTP_CMD_BODY_REMOVE     0x29  /* <handle> <path> */
 #define HTTP_CMD_BODY_QUERY      0x2A  /* <handle> <path> */
@@ -243,8 +248,8 @@
 #define HTTP_CMD_BODY_ADD_BINARY 0x2C  /* <handle> <data...> */
 #define HTTP_CMD_BODY_ADD        0x2D  /* <handle> <items...> */
 #define HTTP_CMD_BODY_CLEAR      0x2E  /* <handle> */
-#define HTTP_CMD_DO_EXCHANGE_OBJ 0x31  /* <header> <body|$FF> */
-#define HTTP_CMD_DO_EXCHANGE_RAW 0x32  /* <header> <body|$FF> */
+#define HTTP_CMD_DO_EXCHANGE_OBJ 0x31  /* <header> <body> - pass HTTP_BODY_NONE as body to send none */
+#define HTTP_CMD_DO_EXCHANGE_RAW 0x32  /* <header> <body> - pass HTTP_BODY_NONE as body to send none */
 
 /* ---- HTTP verbs ---- */
 #define HTTP_VERB_GET     0x01
