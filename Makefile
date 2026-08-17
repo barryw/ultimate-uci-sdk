@@ -44,7 +44,8 @@ hardware: lib
 hardware-run: lib
 	$(MAKE) -C tests/hardware run U64_HOST=$(U64_HOST)
 
-# Regenerate include/uci_protocol.h, bindings/asm/uci_protocol.inc and the
+# Regenerate include/uci_protocol.h, bindings/asm/uci_protocol.inc,
+# bindings/kickass/uci_protocol.asm, bindings/acme/uci_protocol.a and the
 # constant tables in the documentation. Run this after editing the protocol
 # definition; never edit the generated files by hand.
 protocol:
