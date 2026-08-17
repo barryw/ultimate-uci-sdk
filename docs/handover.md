@@ -1,12 +1,15 @@
-# Handover: implementing the service layers and their tests
+# Handover
 
-Written to be picked up cold. It says where things stand, what is already
-decided and why, the traps that have already cost debugging time, and a
-concrete order of work.
+Written to be picked up cold. Where things stand, what is already decided and
+why, the traps that have already cost debugging time, and what to do next.
 
-The short version: **the transport is done and thoroughly tested; the command
-surface is barely touched.** 11 of 101 UCI commands are exercised, because only
-detection and identity have an API. Everything below is about closing that.
+**Short version:** the transport is done and heavily tested, and it now ships in
+a second form — a standalone relocatable binary with a jump table — so every
+toolchain that cannot link a ca65 object can reach it. The service layer is
+still just bring-up, detection and identity. The BASIC wedge is next.
+
+**Verify with `git log` rather than trusting this file's counts.** As of writing:
+15 commits, `main`, clean tree, HEAD `3e2bd71`.
 
 ---
 
@@ -14,74 +17,80 @@ detection and identity have an API. Everything below is about closing that.
 
 | | State |
 |---|---|
-| Layer 1 — UCI transport | complete, assembly, 1398 bytes |
-| Layer 2 — bring-up, detection, identity | complete, assembly, 673 bytes |
-| Layer 2 — dos, file, network, http, control | **not started** |
+| Layer 1 — UCI transport | complete, assembly |
+| Layer 2 — bring-up, detection, identity | complete, assembly |
+| Layer 2 — dos, file, network, http, control, reu | **not started** — Phase 3 |
 | Layer 3 — ca65 / cc65 bindings | working |
-| Layer 3 — Oscar64, llvm-mos, KickC | **not started** (see §7) |
+| Layer 3 — the blob (any toolchain, no linking) | **working** — Phase 1, done |
+| Layer 3 — BASIC wedge | **not started** — Phase 2, next |
+| Layer 3 — Oscar64, llvm-mos, KickC | not started; the blob is now their route in |
 
 ```
 make lib              GREEN
-make -C examples/asm  GREEN     2.6 KB .prg
-make -C examples/cc65 GREEN     5.8 KB .prg
+make blob             GREEN     2860 bytes, 89 relocations
+make -C examples/asm  GREEN
+make -C examples/cc65 GREEN
 make hardware         GREEN
-make test             GREEN     75 tests across 5 suites  (= make emulator)
-make hardware-run     GREEN     13/13 across 4 config scenarios
+make test             GREEN     82 tests across 7 suites  (= make emulator)
+make hardware-run     GREEN     4/4 scenarios, 13 checks each, on real hardware
 make coverage         GREEN     0 wrapped-but-untested
 ```
 
-**The host test layer is gone, and is not coming back.** The 182 checks in
-`tests/unit` were written against the C core the assembly rewrite replaced.
-They are now `tests/emulator/sdk.suite`, `absent.suite` and `timeout.suite`,
-asserting the same behaviour against instructions a 6502 really executes.
-`make test` is an alias for `make emulator`; there is nothing left that a host
-compiler can run, because a host test for 6502 code has to reimplement the thing
-it is testing.
+### What Phase 1 added
 
-Porting them found three things worth knowing about, all fixed:
+The same object files, linked standalone at a chosen base with a jump table at
+the first bytes and a page-aligned parameter block at `base+$100`. Anything that
+can `jsr` an address can use the SDK with no linking at all — KickAssembler,
+ACME, 64tass, Oscar64, llvm-mos, KickC, and BASIC via `POKE`/`SYS`.
 
-- **`uci_store_status` stored one status byte and dropped the rest.** The
-  16-bit "is there room" compare tested `Z` after the high-byte `sbc`, which
-  only asks whether the high bytes differ. Nothing caught it because the
-  internal four-byte prefix is captured separately, so every result code was
-  still correct — only the caller's copy of the status string was truncated.
-- **Nothing installed the timeout.** `UCI_TIMEOUT_DEFAULT` lived in `uci.h` and
-  was never written to `uci_timeout`, so the shipped default was "wait forever",
-  and with `UCI_VARS` it was whatever byte happened to be in the caller's RAM.
-  `uci_init` sets it now, and `UCI_TIMEOUT_DEFAULT` is a generated constant so
-  assembly callers can see it.
-- **`bindings/oscar64` is broken** — it lists the C files that no longer exist.
-  The root `Makefile` no longer builds the Oscar64 example conditionally on the
-  compiler being installed, because that only hid the failure. See §7.
+**There is still exactly one implementation of the protocol.** The blob is not a
+port; it is the library's own object files linked differently. Keep it that way.
+
+- `bindings/blob/README.md` is the caller-facing contract: jump table offsets,
+  parameter block layout, how to relocate.
+- The jump table is **append-only**. Entries are never reordered or removed.
+  Phase 2 and Phase 3 append to it.
+- Relocation is a table of the 86-ish bytes holding the high half of an absolute
+  address, produced by diffing two builds one page apart
+  (`tools/gen_reloc.py`). Nothing in that generator knows about 6502 addressing
+  modes, which is what stops it falling behind the assembler.
+- Protocol constants are now generated for ca65, KickAssembler and ACME as well
+  as C, all from `tools/gen_protocol.py`.
 
 ---
 
 ## 2. Things not to re-derive
 
-Read [uci.md](uci.md) properly before writing a service. These are the ones that
-have already cost time:
+Read [uci.md](uci.md) properly before writing a service. These have already cost
+time:
 
 - **Queue pointers saturate on the last byte.** A reply that exactly fills the
   896-byte response queue leaves `DATA_AV` set for ever. `while (DATA_AV) read`
   hangs the machine. The core bounds every drain; a service must never
   reimplement that loop.
 - **Max command is 895 bytes, not 896.** The write pointer saturates the same
-  way. The core rejects oversized commands, so a service that chunks a write
-  must chunk to 895 minus its own header, not 896.
-- **`DOS_CMD_READ_DATA` arrives in 512-byte blocks.** Multi-block replies are
-  already handled by `uci_exec`; a service asks for what it wants and gets it
-  whole, up to its buffer.
+  way. A service that chunks a write must chunk to 895 minus its own header.
+- **`DOS_CMD_READ_DATA` arrives in 512-byte blocks.** `uci_exec` already walks
+  the chain; a service asks for what it wants and gets it whole.
 - **Status encoding is decided by shape, not by target.** SoftwareIEC answers
   `IDENTIFY` in ASCII and everything else in binary. `uci_decode` sniffs. Do not
   add per-command status logic to a service.
-- **Never put protocol bytes in a string literal.** cc65 translates literals to
-  PETSCII. `"NO TARGET"` compiled to `$CE $CF ...` and silently stopped
-  matching. Generate byte lists from `tools/gen_protocol.py`.
-- **The model name is mixed case**, unlike the uppercase identification
-  strings. Anything printing it needs folding or conversion.
+- **Never put protocol bytes in a string literal.** `ca65 -t c64` installs the
+  c64 charmap, so `.byte "OK"` assembles to PETSCII `$CF $CB`. Generate byte
+  lists from `tools/gen_protocol.py`. Two deliberate exceptions, both tested and
+  documented: the error strings in `ultimate_strerror.s` (printed via `CHROUT`,
+  where PETSCII is what you want) and the blob's `"UCI"` signature (compared
+  only against itself).
+- **The model name is mixed case**, unlike the uppercase identification strings.
 - **Target `$05` reports present even when the drive is off**
   ([firmware #794](https://github.com/GideonZ/1541ultimate/issues/794)). A
-  SoftwareIEC service must expect its first real command to fail.
+  SoftwareIEC service must expect its first real command to fail, and fall back
+  on that failure rather than on detection.
+- **`UCI_CTRL_DMA` and `UCI_CTRL_TRIGGER` are not a fast path.** Both latch into
+  `freeze_i` in the FPGA source — the freezer line. See uci.md's closing
+  section. The real fast load is `SOFTIEC_CMD_LOAD_SU` then `LOAD_EX` on target
+  `$05`, which pushes with a plain `$01` and no freeze bit; the firmware writes
+  straight into C64 RAM and returns the end address in status bytes 1-2.
 
 ---
 
@@ -91,177 +100,203 @@ Every service is `uci_exec` plus argument marshalling. No service touches
 `$DF1B-$DF1F` or the handshake. If you find yourself writing `sta
 UCI_REG_CONTROL` in a service, stop.
 
-The pattern is in `src/uci/ultimate.s`, `ultimate_get_model`: clear a request
-block, set target and command, point `args` at a small byte array, call
-`uci_exec`. Wider parameters go in the shared variable block rather than on any
-stack — see `ult_buf` / `ult_buflen` / `ult_outlen`.
+The pattern is in `src/uci/ultimate.s`, `ultimate_get_model`. Wider parameters go
+in the shared variable block rather than on any stack.
 
 Three constraints that are not negotiable, because they are what the SDK sells:
 
-1. **Caller-owned buffers.** No allocation, no hidden statics a second call
-   would stomp.
+1. **Caller-owned buffers.** No allocation, no hidden statics.
 2. **Bounded time.** Every entry point completes or returns
-   `ULTIMATE_ERR_TIMEOUT`. Network and HTTP services must raise the timeout
-   themselves and restore it — see `uci_set_timeout`.
+   `ULTIMATE_ERR_TIMEOUT`. `uci_init` installs `UCI_TIMEOUT_DEFAULT`; services
+   that wait on the network raise it themselves and restore it.
 3. **Add your variables to the single block** in `uci_core.s`, and update
    `UCI_VARS_SIZE` in `tools/gen_protocol.py`. The `.assert` in `uci_core.s`
-   fails the build if you forget. One block keeps cartridge placement to one
-   knob.
+   fails the build if you forget. **Both branches** of that block — the
+   `.ifdef UCI_VARS` equates and the `.else` BSS — must stay in step, or one of
+   the two builds silently diverges.
 
-When a service wraps a command, add it to `WRAPPED` in
-`tools/gen_coverage.py`. `make coverage` then **fails** until a test sends it.
-That is the mechanism that stops this drifting again.
+**With `UCI_VARS` defined the SDK emits no BSS at all.** That is now true and
+the blob depends on it. A new module with a `.bss` section breaks the standalone
+link.
+
+When a service wraps a command, add it to `WRAPPED` in `tools/gen_coverage.py`.
+`make coverage` then **fails** until a test sends it.
+
+**The one exception to "services never touch hardware"** will be `reu.s` in
+Phase 3: there is no UCI command that moves bytes between C64 RAM and the REU,
+so that module drives `$DF00-$DF0A` directly. It is an exception, not the rule
+eroding — see the design doc.
 
 ---
 
-## 4. Adding a test, at each layer
+## 4. Adding a test
 
-### Emulator — `tests/emulator/`
+Seven suites, all run by `make test` through the sim6502 container.
 
-Five suites, all run by `make test` through the sim6502 container.
-`tests/README.md` has the table; the two you will add to are these.
+| Suite | Backend | Covers |
+|---|---|---|
+| `protocol.suite` | `u64sim`, and real hardware | firmware behaviours the SDK depends on |
+| `sdk.suite` | `u64sim` | transport, services, status decoding |
+| `sdk-placed.suite` | `u64sim` | the same with SDK RAM relocated (generated) |
+| `timeout.suite` | `u64sim`, latency raised | bounded time |
+| `absent.suite` | `sim` — nothing at `$DF1B` | failing fast with no Ultimate |
+| `blob.suite` | `u64sim` | the blob through its jump table, no symbols |
+| `blob-relocated.suite` | `u64sim` | the blob moved at run time |
 
-**Protocol expectation** (`protocol.suite`) — pins a firmware behaviour the SDK
-depends on. Runs against the simulator *and* real hardware with the same file:
-
-```
-test("dos-open-missing", "opening a missing file is reported") {
-  uci($01, $02, $01, "no-such-file.prg")
-  assert(uci_status("FILE DOESN'T EXIST"), "OPEN_FILE on a missing file failed")
-}
-```
-
-**SDK behaviour** (`sdk.suite`) — drives the assembled SDK through `harness.s`.
-**Most of the time this needs no new assembly.** The harness exports a request
-block and the buffers it points at, so a test fills the block from the DSL:
-
-```
-jsr([boot], stop_on_rts = true, fail_on_brk = true)
-jsr([t_init], stop_on_rts = true, fail_on_brk = true)
-jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
-[req_target] = $01
-[req_command] = $04                  ; READ_DATA
-[buf_args] = $10
-[buf_args] + $01 = $00
-[req_arglen] = $02
-jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
-assert([result] == $00, "ULTIMATE_OK")
-assert([req_datalen].w == $0010, "sixteen bytes")
-assert(([buf_data] + $02).b == $48, "'H'")
-```
-
-`t_req_reset` zeroes the block, re-aims its pointers and clears the buffers, so
-a test cannot pass on a byte the previous one left. Write word fields as two
-byte stores — a small value assigns as one byte and would leave the high byte of
-a pointer intact, which is the difference between a null pointer and a live one.
-
+**Most tests need no new assembly.** `harness.s` exports a request block and the
+buffers it points at, so a suite fills the block from the DSL and calls
+`t_exec`. `t_req_reset` zeroes it, re-aims its pointers and clears the buffers.
 Add a harness entry point only for something the request block cannot express.
-`t_decode`, `t_strerror`, `t_wedge` and `t_break_cstack` are the current
-examples. When you do, export it and add its name to `HARNESS_SYMS` in the
-Makefile, or the suite cannot name it.
 
-`sdk.suite` runs twice, the second time against a build with the SDK's RAM
-relocated (`sdk-placed.suite`, generated). Nothing extra to do; it happens.
+Traps in the DSL, each of which has already cost a debugging cycle:
 
-Two behaviours need their own suite because they need a different device, not a
-different test: `timeout.suite` runs with the simulated interface latency raised
-past the SDK's budget, and `absent.suite` runs under the plain `sim` backend,
-where nothing answers at `$DF1B-$DF1F` at all. Add to those when you add an
-entry point whose failure path matters — which, for network and HTTP, is all of
-them.
+- **sim6502 hard-fails any test whose body never executes anything.** A test of
+  pure `assert()` against loaded memory will not run. Every test needs a `jsr`.
+- **sim6502 does not reset CPU registers between tests.** `assert(a == $00)`
+  after a call proves nothing unless you set `a = $ff` first. Two tests shipped
+  vacuous this way before it was caught.
+- **Write word fields as two byte stores.** A small value assigns as one byte
+  and leaves the high byte of a pointer intact — the difference between a null
+  pointer and a live one.
+- **A behavioural test of relocated or generated code proves only the path it
+  executes.** Where a linker-built reference exists, compare against it with
+  `memcmp` instead. That is what `blob-relocated.suite` does now.
 
-### Hardware — `tests/hardware/`
+### Hardware
 
-`ucitest.c` is a TAP program. Add a check with `check(name, expected, actual)`.
-It publishes counters to `$033C` so the host driver reads results by DMA rather
-than parsing the screen; if you add fields, keep the layout comment accurate.
+`ucitest.c` is a TAP program; add a check with `check(name, expected, actual)`.
+It publishes counters to `$033C` so `hwtest.py` reads results by DMA.
 
 `hwtest.py` reconfigures the Ultimate over REST and runs the program once per
-configuration. Add a scenario when a *setting* changes what the SDK should do.
+configuration, restoring every setting afterwards and never writing flash.
 
 ---
 
-## 5. Risk tags: do this before writing file tests
+## 5. Known debt, carried forward
 
-Most of the remaining command surface mutates something.
-`DELETE_FILE`, `RENAME`, `CREATE_DIR`, `SET_TIME`, `SAVE_REU`,
-`EASYFLASH` erase, `SET_PALETTE`, `MOUNT_DISK`, `REBOOT`.
+These came out of the Phase 1 reviews. Each is real and each has a location.
+Ordered by when they need doing.
 
-A default `make hardware-run` must never delete a user's files or reboot their
-machine. Before the first DOS write test, introduce tags and honour them:
+**Before Phase 3:**
 
-| Tag | Meaning | Runs by default |
-|---|---|---|
-| `safe` | read-only | yes |
-| `mutating` | writes, but only under a fixture directory | yes |
-| `destructive` | can lose data outside the fixture | **no**, opt-in |
-| `manual` | cannot be automated | never |
+- `tests/emulator/blob-relocated.suite` hardcodes `memcmp(..., 2860)` and
+  `relocharness.s` copies a fixed 12 pages (3072 bytes). Phase 3 grows the blob
+  past that and **both relocation tests silently start under-verifying.** Derive
+  both from the built size, or fail the build when the binary outgrows the copy.
 
-sim6502 already supports `--filter-tag` / `--exclude-tag`, and
-`example/ultimate.suite` upstream uses `hardware-wedges` for exactly this. Two
-commands need `manual` today: `CTRL_CMD_FREEZE` only completes when the user
-leaves the menu, and `CTRL_CMD_REBOOT` kills the session by design.
+**Whenever the relevant file is next touched:**
 
-Fixtures live in `tests/emulator/fixtures/usb0`. For real hardware they have to
-be pushed over FTP first — the REST API has no arbitrary file-write endpoint:
+- `bindings/cc65/Makefile` and `bindings/blob/Makefile` keep two hand-maintained
+  lists of the same modules. A fifth module added to the library would silently
+  never reach the blob. Share one `sources.mk`.
+- `ULT_ERR_COUNT = 10` in `ultimate_strerror.s` is hand-written beside ten
+  generated `ULTIMATE_ERR_*` codes. An eleventh code silently prints "UNKNOWN
+  ERROR". Emit the count, or `.assert` the table length.
+- `tools/gen_coverage.py`'s untested-entry-point gate was never extended to the
+  blob's jump table entries; most are never called by any test.
+- `bindings/blob/README.md`'s jump table is hand-written. The design asked for it
+  to be generated from the ca65 link map.
+- **~20 harness assertions are non-vacuous only by accident.** `harness.prg`'s
+  BSS overlaps cc65's ONCE segment by 38 bytes, so `result` and `caps_*` get
+  non-zero bytes before each test. If that overlap ever changes, a whole class of
+  `assert(... == $00)` goes vacuous with nothing failing. Use `memfill(..., $ff)`
+  sentinels, as `sdk-absent-softiec` already does correctly.
+- `sdk.suite`'s `sdk-exec-rejects-wrapping-lengths` is vacuous: `arglen` is
+  rejected against the maximum before the sum is computed, and with both bounds
+  in place a 16-bit wrap is unreachable. Delete it or say plainly that the sum
+  check is unreachable defence-in-depth.
+- `timeout.suite`'s header claims to prove bounded time for every entry point.
+  It exercises one path, and asserts init *succeeds* under that latency. Narrow
+  the claim or add the cases.
+- `docs/architecture.md` says `uci_core.s` assembles to 1398 bytes; measured is
+  1401. Predates Phase 1.
+
+---
+
+## 6. The simulator ceiling — decided
+
+`u64sim` implements Ultimate DOS (`$01`/`$02`) and part of the control target
+(`$04`). Network, HTTP, SoftwareIEC and the REU are **hardware only**.
+
+**The decision, taken: accept hardware-only coverage for what the simulator
+cannot reach, and treat `make hardware-run` as required before a release rather
+than optional.** The SoftwareIEC fast load path in Phase 3 lives permanently in
+`tests/hardware` for this reason. Extending `u64sim` stays open but is not on
+the critical path.
+
+Fixtures live in `tests/emulator/fixtures/usb0`. For real hardware they are
+pushed over FTP — the REST API has no arbitrary file-write endpoint:
 
 ```
 curl --ftp-create-dirs -T tests/emulator/fixtures/usb0/data/hello.txt \
      ftp://192.168.1.62/USB1/data/hello.txt
 ```
 
----
+**Test data policy:** every mutating test creates its own file, uses it, and
+deletes it. Nothing pre-existing on the device is ever touched. That collapses
+the old four risk tags into two that matter — `mutating` is safe by default
+because it only touches what it made, and `destructive` shrinks to the genuinely
+irreversible (reboot, flash, palette), which stays opt-in.
 
-## 6. The simulator ceiling
-
-`u64sim` implements Ultimate DOS (`$01`/`$02`) and part of the control target
-(`$04`). Network, HTTP and SoftwareIEC are **hardware only** — about half the
-command surface can never be covered in CI as things stand.
-`docs/generated/command-coverage.md` marks this per command.
-
-Two ways forward, and the choice matters:
-
-- **Extend `u64sim`** with network/HTTP/SoftwareIEC targets. It is the same
-  author as this SDK, so it is a real option, and it is the only route to CI
-  coverage of those services.
-- **Accept hardware-only coverage** for them, and make `make hardware-run` a
-  required step before release rather than an optional one.
-
-Whichever, say so explicitly. A permanently half-red coverage table that nobody
-has decided about is worse than a smaller table everyone trusts.
+`CTRL_CMD_LOAD_REU` (`$04 $08`) never returns on firmware 3.14d and wedges the
+interface until a power cycle
+([#740](https://github.com/GideonZ/1541ultimate/issues/740)). **Wrap the DOS REU
+pair (`$21`/`$22`); never wrap the control pair.** It stays reachable through the
+generic form only, so issuing it is always deliberate.
 
 ---
 
-## 7. Suggested order
+## 7. What to do next
 
-1. ~~Unbreak `make test`~~ — done, see §1. The build is green end to end.
-2. **Ultimate DOS**, in this order: `CHANGE_DIR`, `GET_PATH`, `OPEN_DIR`,
-   `READ_DIR`, `OPEN_FILE`, `READ_DATA`, `CLOSE_FILE`. All read-only, all
-   simulated by `u64sim`, so they are testable in CI from day one — and they
-   are the commands most programs actually want.
-3. **Risk tags** (§5), before the first write test.
-4. **DOS writes**: `WRITE_DATA`, `CREATE_DIR`, `DELETE_FILE`, `RENAME`, `COPY`.
-5. **Then decide the simulator question** (§6) before starting network or HTTP,
-   because the answer changes how those get tested.
+The design is written and agreed: **[docs/superpowers/specs/2026-08-17-uci-everywhere-design.md](superpowers/specs/2026-08-17-uci-everywhere-design.md)**.
+Read it before starting. Phase 1's plan, for the shape a plan should take, is
+[docs/superpowers/plans/2026-08-17-phase1-blob.md](superpowers/plans/2026-08-17-phase1-blob.md).
+
+The goal in one line: **a complete, parallel implementation of the UCI in
+assembly, C and BASIC, in the smallest and most reusable form that can be
+built.** Completeness comes from the generic `uci_exec`; sugar earns its place
+only where the generic form cannot express the operation.
+
+| | Phase | Notes |
+|---|---|---|
+| 1 | the blob | **done** |
+| 2 | **BASIC wedge** — next | generic `UCI` statement and function, observers (`UERR`, `UST$`, `UDATA$`, `UBYTE`, `ULEN`, `UDEV`), target constants, `W()`/`L()`, installer with banner, `.prg` and `.crt` builds, `basic.suite` |
+| 3 | DOS service, file convenience, SoftwareIEC fast path, `reu.s` | `ULOAD`/`UBLOAD`/`USAVE`/`UDIR`/`USTASH`/`UFETCH` in all three languages at once |
+
+Phase 2 needs one thing that does not exist yet and is on its critical path:
+**the argument shapes in `tools/gen_protocol.py` must become structured data.**
+They are prose today, in four different notations (`<len_lo> <len_hi>`,
+`<pos32 LSB first>`, `<old> $00 <new>`, `<handle> <keylen> <key> <int>`).
+Parsing that would be guessing. A structured `args` field goes alongside the
+comment; roughly 50 commands take arguments.
 
 Do not start the Oscar64 / llvm-mos / KickC ports until the service API has
-settled. Every port multiplies the cost of an API change, and there is a
-toolchain image (`tools/docker`) ready to verify them when the time comes.
-
-`bindings/oscar64/ultimate.mk` still lists the deleted C files, and the example
-that used it is no longer built. It is one of those three ports now, not a
-binding that needs a small repair: Oscar64 has no external assembler, so
-reaching an assembly core from it means either a port held to `tests/emulator`
-or a relocatable binary with a jump table.
+settled. The blob is now their route in, so none of them needs a port at all.
+`bindings/oscar64/ultimate.mk` still lists the deleted C core and does not
+build; it is marked broken.
 
 ---
 
 ## 8. Ground truth
 
-- Hardware on the bench: Ultimate 64 Elite, `192.168.1.62`, firmware 3.15.
-  Its **Command Interface setting is normally Disabled** — `hwtest.py` enables
-  it per scenario and restores it, and never writes flash.
-- Firmware source, worth grepping before assuming anything:
-  `~/Git/1541ultimate` (v3.15-69). `roms/c64rom/kernal/uci.s` is Gideon's own
-  6502 client and settles most arguments.
-- Nothing in this repository has been committed yet.
+- Hardware on the bench: **Ultimate 64 Elite, `192.168.1.62`, firmware 3.15**
+  (fpga 123, core 1.4E). Real hardware reports `targets=$007e` — all six —
+  against `$0016` under the simulator.
+- **Its settings are never in a consistent state**, because new firmware is
+  tested often and settings get reset. `Command Interface` is normally
+  `Disabled`. Any test needing a setting must read it, change it only if wrong,
+  and restore exactly what it changed. `hwtest.py` does this; the shared guard
+  for other callers was in flight at the time of writing — **check `git log` for
+  `tools/u64_settings.py` and `tests/emulator/Makefile`'s `hardware:` target.**
+  Symptom when it is missing: sim6502's `u64` backend fails every test with
+  `status $1D`, "the Ultimate's error latch rejected this command push", which
+  looks like a broken SDK and is not.
+- Firmware source, worth grepping before assuming anything: `~/Git/1541ultimate`
+  (v3.15-69). **It is GPL-3.0 and this SDK is MIT — it is a reference for
+  interface facts only, never a source to copy from.** Copying would relicense
+  the SDK and remove the reason a demo author can link it into something they
+  sell. `roms/c64rom/kernal/uci.s` is Gideon's own 6502 client and settles most
+  arguments; `software/6502/cmd_test_rom.tas` is an 8K autostart cartridge that
+  adds a BASIC command driving the UCI — the closest prior art to Phase 2.
+- KickAssembler is at `/Users/barry/Development/Kickassembler/kickass`. ACME is
+  installed. Both parse the generated constant files.
