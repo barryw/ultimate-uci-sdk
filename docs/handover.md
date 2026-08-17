@@ -32,7 +32,9 @@ make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
 make test             GREEN     38 host unit tests + 82 tests across 7 suites
-make hardware-run     GREEN     4/4 scenarios, 13 checks each, on real hardware
+make hardware-run     GREEN     4/4 scenarios on real hardware, 13 checks each
+                                except uci-disabled, which asserts one clean
+                                failure and is meant to report failed=1
 make coverage         GREEN     0 wrapped-but-untested
 ```
 
