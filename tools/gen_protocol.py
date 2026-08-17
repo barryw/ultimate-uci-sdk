@@ -54,8 +54,8 @@ GROUPS = [
         ("UCI_CTRL_ABORT",    0x04, "Request abort of the running command"),
         ("UCI_CTRL_CLR_ERR",  0x08, "Clear the state-error flag"),
         ("UCI_CTRL_IRQ",      0x20, "Raise IRQ on completion (FW 3.15+, latched on push)"),
-        ("UCI_CTRL_TRIGGER",  0x40, "Enter DMA mode when $FF00 is written (latched on push)"),
-        ("UCI_CTRL_DMA",      0x80, "Enter DMA mode immediately (latched on push)"),
+        ("UCI_CTRL_TRIGGER",  0x40, "Freeze the machine on the next $FF00 write (latched on push). NOT a transfer accelerator"),
+        ("UCI_CTRL_DMA",      0x80, "Freeze the machine immediately (latched on push). NOT a transfer accelerator - see docs/uci.md"),
     ]),
 
     ("Status register bits", "Read from $DF1C.", [

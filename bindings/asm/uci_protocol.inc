@@ -33,8 +33,8 @@ UCI_CTRL_DATA_ACC = $02  ; Acknowledge / release the current data block
 UCI_CTRL_ABORT    = $04  ; Request abort of the running command
 UCI_CTRL_CLR_ERR  = $08  ; Clear the state-error flag
 UCI_CTRL_IRQ      = $20  ; Raise IRQ on completion (FW 3.15+, latched on push)
-UCI_CTRL_TRIGGER  = $40  ; Enter DMA mode when $FF00 is written (latched on push)
-UCI_CTRL_DMA      = $80  ; Enter DMA mode immediately (latched on push)
+UCI_CTRL_TRIGGER  = $40  ; Freeze the machine on the next $FF00 write (latched on push). NOT a transfer accelerator
+UCI_CTRL_DMA      = $80  ; Freeze the machine immediately (latched on push). NOT a transfer accelerator - see docs/uci.md
 
 ; ---- Status register bits ----
 ; Read from $DF1C.

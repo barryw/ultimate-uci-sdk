@@ -323,3 +323,19 @@ There is no timer to key off that a game can rely on, so the SDK counts status
 polls instead. That makes the budget a function of CPU speed, which on Ultimate
 hardware spans 1 MHz to 48 MHz. See [compatibility.md](compatibility.md) for what
 that means in practice and how to set it.
+
+---
+
+## The control register's freeze bits are not a fast path
+
+`UCI_CTRL_DMA` (`$80`) and `UCI_CTRL_TRIGGER` (`$40`) sound like a way to make
+transfers faster. They are not. Both latch into `freeze_i` in
+`fpga/io/command_interface/vhdl_source/command_protocol.vhd`, which is the
+cartridge freeze line — the mechanism the Ultimate's freezer uses to take the
+bus. `TRIGGER` is the classic "freeze on the next `$FF00` write".
+
+The actual fast load path is a different target entirely: `SOFTIEC_CMD_LOAD_SU`
+followed by `SOFTIEC_CMD_LOAD_EX` on target `$05`. The firmware writes straight
+into C64 RAM and returns the end address in status bytes 1-2; the data never
+passes through `$DF1E`. The Ultimate's own kernal wedge pushes those commands
+with a plain `UCI_CTRL_PUSH_CMD` and no freeze bit at all.
