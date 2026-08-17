@@ -58,11 +58,13 @@ hardware-run: lib
 	$(MAKE) -C tests/hardware run U64_HOST=$(U64_HOST)
 
 # Regenerate include/uci_protocol.h, bindings/asm/uci_protocol.inc,
+# bindings/asm/uci_argtable.inc, bindings/asm/uci_keywords.inc,
 # bindings/kickass/uci_protocol.asm, bindings/acme/uci_protocol.a and the
-# constant tables in the documentation. Run this after editing the protocol
-# definition; never edit the generated files by hand.
+# tables in the documentation. Run this after editing the protocol definition
+# or the keyword set; never edit the generated files by hand.
 protocol:
 	python3 tools/gen_protocol.py
+	python3 tools/gen_keywords.py
 	python3 tools/gen_coverage.py
 
 # Fail when an SDK entry point has no test behind it.

@@ -4,7 +4,13 @@ Design for making the whole Ultimate Command Interface reachable from every
 toolchain a C64 programmer might use, in the smallest and most reusable form
 that can be built.
 
-Status: agreed in design. Not implemented.
+Status: agreed in design. Phase 1 (the blob) is done. Phase 2's generated
+foundations — the argument shapes, the runtime argument table and the keyword
+table — are done; the wedge code itself is not written yet.
+
+Where this document and the code disagree, the code won and the section says so.
+Two keyword names changed in §4 for reasons that only showed up once the ROM's
+tokeniser was modelled instead of reasoned about.
 
 ---
 
@@ -233,9 +239,30 @@ why completeness comes from the generic form and keywords are ergonomics.
 | `UDEV` | raw device code: 85, 404 |
 | `ULEN` | reply length in bytes |
 | `UST$` | status string as sent: `"00,OK"` |
-| `UDATA$` | reply as a string, clipped to 255 |
+| `UDAT$` | reply as a string, clipped to 255 |
 | `UBYTE(n)` | byte *n* of the reply |
-| `W(x)`, `L(x)` | force a 16- or 32-bit argument |
+| `UW(x)`, `UL(x)` | force a 16- or 32-bit argument |
+
+**Two of these names changed once CRUNCH was modelled rather than reasoned
+about.** Both were found by `tools/c64_crunch.py`, which reimplements the ROM's
+tokeniser, and both are enforced by `gen_keywords.py` so the next new keyword
+cannot reintroduce them:
+
+- **`UDATA$` was impossible.** CRUNCH matches a reserved word anywhere, not only
+  at a word boundary, so it crunches to `U` `[DATA]` `$` — and the `DATA` token
+  arms verbatim mode, which stops the rest of the statement being tokenised.
+  `A$=UDATA$+"X"` would reach the interpreter with `+"X"` as raw text. `UDAT$`
+  crunches clean.
+- **`W(` and `L(` could not be bare letters.** A keyword matching anywhere means
+  claiming `W` tokenises the `W` in `FOR W=1 TO 10`, breaking every program that
+  uses it as a variable. They take the `U` prefix like everything else and their
+  opening paren into the name, exactly as the ROM's own `TAB(` and `SPC(` do,
+  which keeps `UW` and `UL` usable as ordinary variables.
+
+`ULEN`, and Phase 3's `ULOAD`, `UBLOAD` and `USAVE`, are fine but are *not* the
+text the user typed by the time the wedge sees them: they contain `LEN`, `LOAD`
+and `SAVE`, so they arrive as token sequences. The wedge matches the crunched
+form and `LIST` prints the name, which is why the generated table carries both.
 
 `UCI` the statement and `UCI(…)` the function share one token: `IGONE` fires in
 statement position and `IEVAL` in expression position, and the wedge owns both
@@ -273,12 +300,12 @@ UCI 1,$04,8192            : REM READ_DATA, <len16>
 UCI 1,$06,100000          : REM FILE_SEEK, <pos32>
 UCI 1,$02,1,"GAME.PRG"    : REM OPEN_FILE, byte then string
 UCI 1,$0A,"OLD","NEW"     : REM RENAME, the $00 separator is inserted
-UCI 5,$99,W(300),L(1)     : REM a command the table has never heard of
+UCI 5,$99,UW(300),UL(1)   : REM a command the table has never heard of
 ```
 
-`W()` and `L()` are not decoration: without them the generic form cannot express
-a wide argument for a firmware command newer than the SDK's table, and reaching
-everything is the entire point of having a generic form.
+`UW()` and `UL()` are not decoration: without them the generic form cannot
+express a wide argument for a firmware command newer than the SDK's table, and
+reaching everything is the entire point of having a generic form.
 
 The alternative rule — under 256 is a byte, over is a word — silently sends one
 byte for a length of 255 and two for 256. Rejected.
@@ -652,10 +679,10 @@ is usable rather than merely defined.
   `$8000-$9FFF` is banked out while it is resident. That is the price of
   autostart and surviving a reset. Shipping both builds is what keeps it a
   choice rather than a tax.
-- **The argument shape table can drift from firmware.** `W()` and `L()` are the
-  escape, which is why they are not optional.
-- **Structured argument shapes are real work** across ~50 commands, and are on
-  the critical path for phase 2.
+- **The argument shape table can drift from firmware.** `UW()` and `UL()` are
+  the escape, which is why they are not optional.
+- **Structured argument shapes are real work** across ~50 commands, and were on
+  the critical path for phase 2. Done: `ARGS` in `gen_protocol.py`.
 - **The firmware repository is GPL-3.0 and this SDK is MIT.** It is a reference
   for interface facts and nothing else. No source is copied from it, in any
   phase — doing so would relicense the SDK and remove the reason a game or demo
