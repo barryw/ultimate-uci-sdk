@@ -1,0 +1,38 @@
+; timeout.suite - the SDK against an Ultimate that answers too slowly.
+;
+; Run on its own, with the simulated interface held Busy for far longer than the
+; SDK's budget:
+;
+;   sim6502 -s timeout.suite --backend u64sim --u64sim-uci-latency 200000
+;
+; Every entry point completes or returns ULTIMATE_ERR_TIMEOUT - that is the
+; guarantee the SDK sells, and this is the only place it can be exercised
+; without unplugging something. The latency is a suite-wide setting, which is
+; why this is its own file: every other test wants a device that answers.
+;
+; SPDX-License-Identifier: MIT
+
+suites {
+  suite("ultimate sdk against a slow interface") {
+    system(c64)
+    symbols("/code/tests/emulator/harness.sym")
+    load("/code/tests/emulator/harness.prg", strip_header = true)
+
+    test("exec-timeout", "a device that does not answer in time is given up on") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "bring-up still works: the interface is there")
+
+      [timeout_val] = $01               ; one unit: 256 status polls
+      jsr([t_set_timeout], stop_on_rts = true, fail_on_brk = true)
+
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $01               ; IDENTIFY: cannot fail, but can be slow
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+
+      assert([result] == $02, "ULTIMATE_ERR_TIMEOUT")
+      assert([req_datalen].w == $0000, "and nothing was invented to fill the buffer")
+    }
+  }
+}

@@ -1,0 +1,27 @@
+# Build output
+build/
+*.o
+*.prg
+*.lbl
+*.sym
+*.map
+*.lst
+
+# cc65 intermediate assembly emitted next to the objects
+bindings/cc65/build/
+bindings/cc65/build-placed/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Subagent-driven development scratch
+.superpowers/
+
+# Oscar64 build artifacts
+*.asm
+*.int
+*.dbj
+
+# Generated from sdk.suite for the relocated-memory build
+tests/emulator/sdk-placed.suite

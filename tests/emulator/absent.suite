@@ -1,0 +1,58 @@
+; absent.suite - the SDK on a machine with no Ultimate in it.
+;
+; Same program as sdk.suite, loaded under a backend that puts nothing at
+; $DF1B-$DF1F. Failing cleanly on a plain C64 is the hardest property to test,
+; because every other layer is built around a device that answers: the mock
+; can be told to disappear, the simulated Ultimate cannot.
+;
+; The behaviour under test is fail-fast. Reading open bus and then polling for a
+; reply that will never come is the failure mode that hangs the machine, and
+; nothing about it looks wrong until it happens on someone else's C64.
+;
+;   make run
+;
+; SPDX-License-Identifier: MIT
+
+suites {
+  suite("ultimate sdk with no interface present") {
+    system(c64)
+    symbols("/code/tests/emulator/harness.sym")
+    load("/code/tests/emulator/harness.prg", strip_header = true)
+
+    test("absent-signature", "the signature check reports nothing on the bus") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_present], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "uci_present says no")
+    }
+
+    test("absent-init", "bring-up fails with NO_DEVICE rather than waiting") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $01, "ULTIMATE_ERR_NO_DEVICE")
+      jsr([t_available], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and the SDK does not claim to be up")
+    }
+
+    ; A program that ignores the init result and issues a command anyway must
+    ; still get an answer. Pushing a command into open bus and then polling for
+    ; a reply is what hangs a C64 with no cartridge in it.
+    test("absent-exec", "a command issued anyway fails fast") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $01
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $01, "ULTIMATE_ERR_NO_DEVICE")
+      assert([req_datalen].w == $0000, "nothing was read from open bus")
+    }
+
+    test("absent-detect", "capability probing reports nothing, and says so") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_detect], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $01, "ULTIMATE_ERR_NO_DEVICE")
+      assert([caps_present] == $00, "not present")
+      assert([caps_targets_lo] == $00, "no targets")
+      assert([caps_targets_hi] == $00, "no targets")
+    }
+  }
+}

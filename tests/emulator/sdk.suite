@@ -1,0 +1,708 @@
+; sdk.suite - the SDK's assembled 6502 code against a simulated Ultimate.
+;
+; This is where the shipping binary is exercised: real 6502 instructions, real
+; registers, a device that makes the code wait. Everything the SDK promises that
+; can be reached without hardware is asserted here.
+;
+;   make run
+;
+; The suite runs twice - once as built, once against a build with the SDK's RAM
+; relocated (sdk-placed.suite, generated) - so "placeable" stays a tested
+; property rather than a claim in the documentation.
+;
+; Two things it cannot reach, and why:
+;   - no device at all           absent.suite, which loads the same program
+;                                under a backend with no UCI on the bus
+;   - a device that never answers timeout.suite, which raises the simulated
+;                                interface latency past the SDK's budget
+;
+; SPDX-License-Identifier: MIT
+
+suites {
+  suite("ultimate sdk on 6502") {
+    system(c64)
+    symbols("/code/tests/emulator/harness.sym")
+    load("/code/tests/emulator/harness.prg", strip_header = true)
+
+    ; ---------------------------------------------------------------- bring-up
+
+    test("sdk-signature", "the signature is on the bus and readable without blocking") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_present], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $01, "uci_present sees the interface")
+      jsr([t_ident_reg], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $c9, "UCI_IDENT_IDLE: no interrupt pending")
+    }
+
+    test("sdk-init", "ultimate_init finds the interface and returns OK") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      jsr([t_available], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $01, "ultimate_available follows a successful init")
+    }
+
+    ; The bounded-time guarantee has to hold for a program that never calls
+    ; uci_set_timeout - and with UCI_VARS the variables are in RAM the caller
+    ; owns, which nothing zeroes. So bring-up installs the budget.
+    test("sdk-default-timeout", "init installs the default timeout budget") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      [timeout_val] = $00
+      jsr([t_set_timeout], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_get_timeout], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $c8, "UCI_TIMEOUT_DEFAULT, not the zero we left behind")
+    }
+
+    ; A program that died mid-command leaves bytes in the command queue that
+    ; nothing in the status register exposes. Abort is what rewinds the write
+    ; pointer, and init is what issues it.
+    test("sdk-init-rewinds-command", "init discards command bytes a dead program left behind") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      $df1d = $aa                       ; written, never pushed
+      $df1d = $bb
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $f0               ; ECHO returns the command bytes verbatim
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([req_datalen].w == $0002, "two bytes: the leftovers are gone")
+      assert([buf_data] == $01, "target byte first, not the stray $aa")
+    }
+
+    test("sdk-init-recovers-data-state", "init recovers an exchange the previous program abandoned") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_wedge], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $f0
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the next command still works")
+      assert([req_datalen].w == $0002, "and its reply is its own, not the abandoned one")
+    }
+
+    ; docs/asm-abi.md claims the assembly entry points need no C runtime. This
+    ; is that claim, executed: the cc65 software stack pointer is nulled first,
+    ; so anything reaching for it writes through a null pointer into the 6510's
+    ; port registers at $00/$01 rather than quietly working by accident.
+    test("sdk-assembly-abi", "the assembly entry points do not touch the cc65 stack") {
+      jsr([t_break_cstack], stop_on_rts = true, fail_on_brk = true)
+
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ultimate_init")
+
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $f0
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "uci_exec")
+      assert([buf_data] == $01, "and its reply arrived")
+
+      [ident_target] = $01
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+      jsr([t_identify], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ultimate_identify")
+      assert([reply0] == $55, "'U'")
+
+      jsr([t_get_model], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ultimate_get_model")
+    }
+
+    ; ---------------------------------------------------------------- exchange
+
+    test("sdk-exec-encodes-command", "target, command, arguments and payload reach the wire in order") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+
+      [req_target] = $01
+      [req_command] = $f0
+      [buf_args] = $de
+      [buf_args] + $01 = $ad
+      [req_arglen] = $02
+      [buf_payload] = $be
+      [buf_payload] + $01 = $ef
+      [req_payloadlen] = $02
+
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([req_datalen].w == $0006, "six bytes echoed back")
+      assert([buf_data] == $01, "target")
+      assert(([buf_data] + $01).b == $f0, "command")
+      assert(([buf_data] + $02).b == $de, "arguments, in order")
+      assert(([buf_data] + $03).b == $ad, "...")
+      assert(([buf_data] + $04).b == $be, "then the payload, after the arguments")
+      assert(([buf_data] + $05).b == $ef, "...")
+      assert([req_statuslen].w == $0005, "00,OK")
+      assert([buf_status] == $30, "'0'")
+      assert([devcode].w == $0000, "device code 0")
+    }
+
+    test("sdk-exec-truncation", "a reply that does not fit is reported, and the exchange still finishes") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+
+      [req_target] = $01
+      [req_command] = $f0
+      [buf_args] = $01
+      [buf_args] + $01 = $02
+      [buf_args] + $02 = $03
+      [buf_args] + $03 = $04
+      [req_arglen] = $04
+      [req_datamax] = $04               ; room for four of the six bytes
+      [req_datamax] + $01 = $00
+
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $08, "ULTIMATE_ERR_TRUNCATED")
+      assert([req_datalen].w == $0004, "the buffer was filled, not overrun")
+      assert(([buf_data] + $04).b == $00, "and nothing was written past it")
+
+      ; Truncating must leave the interface usable, not half way through a
+      ; transfer: the rest of the reply is drained and discarded.
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $f0
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the next command succeeds")
+      assert([req_datalen].w == $0002, "with its own reply")
+    }
+
+    ; Asking for no data is deliberate. Reporting it as truncation would make
+    ; every fire-and-forget command look like a failure.
+    test("sdk-exec-discards-reply", "a caller with no data buffer is not a truncated caller") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+
+      [req_target] = $01
+      [req_command] = $f0
+      [req_data] = $00
+      [req_data] + $01 = $00
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK, not ULTIMATE_ERR_TRUNCATED")
+      assert([req_datalen].w == $0000, "nothing stored")
+    }
+
+    test("sdk-exec-device-error", "a failing command reports the device's own code") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+
+      [req_target] = $01
+      [req_command] = $04               ; READ_DATA with no file open
+      [buf_args] = $10
+      [buf_args] + $01 = $00
+      [req_arglen] = $02
+
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+      assert([devcode].w == 85, "85,NO FILE OPEN")
+      assert([buf_status] == $38, "'8'")
+      assert(([buf_status] + $01).b == $35, "'5'")
+    }
+
+    ; The numeric prefix is captured internally, never re-read from the caller's
+    ; copy. Decoding a two-byte copy of "85,NO FILE OPEN" would see "85" here by
+    ; luck, but a three-digit HTTP status would decode as its first two digits.
+    test("sdk-exec-short-status-buffer", "a short status buffer does not change how the status is read") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+
+      [req_target] = $01
+      [req_command] = $04
+      [buf_args] = $10
+      [buf_args] + $01 = $00
+      [req_arglen] = $02
+      [req_statusmax] = $02
+      [req_statusmax] + $01 = $00
+
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+      assert([devcode].w == 85, "the full prefix was decoded")
+      assert([req_statuslen].w == $0002, "the caller still only got two bytes")
+      assert(([buf_status] + $02).b == $00, "and nothing past them")
+    }
+
+    ; DOS_CMD_READ_DATA arrives in 512-byte blocks, so anything longer walks the
+    ; DATA_MORE chain. big.bin is 600 bytes of i mod 256.
+    test("sdk-exec-multi-block", "a reply longer than one block is stitched back together") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $02               ; OPEN_FILE
+      [buf_args] = $01                  ; attribute: read
+      [buf_args] + $01 = $2f            ; "/Usb0/big.bin"
+      [buf_args] + $02 = $55
+      [buf_args] + $03 = $73
+      [buf_args] + $04 = $62
+      [buf_args] + $05 = $30
+      [buf_args] + $06 = $2f
+      [buf_args] + $07 = $62
+      [buf_args] + $08 = $69
+      [buf_args] + $09 = $67
+      [buf_args] + $0a = $2e
+      [buf_args] + $0b = $62
+      [buf_args] + $0c = $69
+      [buf_args] + $0d = $6e
+      [req_arglen] = $0e
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "OPEN_FILE succeeded")
+
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $04               ; READ_DATA, 600 bytes
+      [buf_args] = $58
+      [buf_args] + $01 = $02
+      [req_arglen] = $02
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([req_datalen].w == 600, "both blocks, counted once")
+      assert([buf_data] == $00, "byte 0")
+      assert(([buf_data] + $ff).b == $ff, "byte 255, the end of the first block")
+      assert(([buf_data] + $100).b == $00, "byte 256")
+      assert(([buf_data] + $1ff).b == $ff, "byte 511, the last byte of block one")
+      assert(([buf_data] + $200).b == $00, "byte 512, the first of block two")
+      assert(([buf_data] + $257).b == $57, "byte 599, the last byte of the file")
+
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $03               ; CLOSE_FILE
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "CLOSE_FILE succeeded")
+    }
+
+    ; The largest command the hardware can receive: two header bytes and 893
+    ; arguments. One more would be dropped by the command pointer, and the
+    ; Ultimate would be told the command was shorter than it was.
+    ;
+    ; The 895-byte reply is also the closest the SDK can get to filling the
+    ; 896-byte response queue, which is where DATA_AV would stick set for ever.
+    ; It cannot reach the exact case, because it refuses to send the 896th
+    ; command byte - the bounded drain in uci_read_block is what makes both
+    ; terminate.
+    test("sdk-exec-largest-command", "the largest legal command is sent whole and read back whole") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+
+      memfill([buf_args], 893, $5a)
+      [req_target] = $01
+      [req_command] = $f0
+      [req_arglen] = $7d                ; 893 = $037d
+      [req_arglen] + $01 = $03
+
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([req_datalen].w == $037f, "895 bytes: UCI_MAX_COMMAND_USABLE")
+      assert([buf_data] == $01, "target")
+      assert(([buf_data] + $01).b == $f0, "command")
+      assert(memchk([buf_data] + $02, 893, $5a), "every argument byte came back")
+    }
+
+    ; A fire-and-forget command returns as soon as the interface is idle again.
+    ; CTRL_CMD_FREEZE is the real case: it only completes when the user leaves
+    ; the Ultimate's menu, so waiting for a reply would hang the caller.
+    test("sdk-exec-no-reply", "the NO_REPLY flag skips the data phase") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+
+      [req_target] = $84                ; UCI_TARGET_CONTROL | UCI_TARGET_NO_REPLY
+      [req_command] = $05               ; CTRL_CMD_FREEZE
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([req_datalen].w == $0000, "no data phase")
+      assert([req_statuslen].w == $0000, "no status phase")
+    }
+
+    ; -------------------------------------------------------------- validation
+
+    test("sdk-exec-rejects-no-target", "target zero is a caller bug, not an I/O error") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $00
+      [req_command] = $01
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    test("sdk-exec-rejects-length-without-pointer", "a length with a null pointer is rejected") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $01
+      [req_args] = $00
+      [req_args] + $01 = $00
+      [req_arglen] = $04
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    test("sdk-exec-rejects-oversized-command", "one byte over the limit is refused, not silently clipped") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $01
+      [req_arglen] = $7e                ; 2 + 894 = 896, one too many
+      [req_arglen] + $01 = $03
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    test("sdk-exec-rejects-wrapping-lengths", "two large lengths cannot wrap into a small one") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
+      [req_target] = $01
+      [req_command] = $01
+      [req_arglen] = $00
+      [req_arglen] + $01 = $80          ; $8000
+      [req_payloadlen] = $00
+      [req_payloadlen] + $01 = $80      ; $8000, and $8000 + $8000 + 2 = 2
+      jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    ; ---------------------------------------------------------------- identity
+
+    test("sdk-identify", "ultimate_identify reads the DOS version string") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_identify_dos1], stop_on_rts = true, fail_on_brk = true)
+
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([reply0] == $55, "'U'")
+      assert([reply1] == $4c, "'L'")
+      assert([reply2] == $54, "'T'")
+      assert([reply3] == $49, "'I'")
+    }
+
+    ; The interesting half of capability detection: recognising the firmware's
+    ; placeholder reply and turning it into ULTIMATE_ERR_NOT_SUPPORTED rather
+    ; than handing "NO TARGET" back as if it were a version string.
+    test("sdk-absent-target", "an unimplemented target reports NOT SUPPORTED") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_identify_absent], stop_on_rts = true, fail_on_brk = true)
+
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+      assert([reply0] == $00, "the caller's buffer is left empty, not full of NO TARGET")
+    }
+
+    ; Firmware without a SoftwareIEC target still answers on $05, through the
+    ; placeholder - in ASCII, while that target's own status format is a single
+    ; binary byte. The data marker has to win or this reads as a device error.
+    test("sdk-absent-softiec", "the NO TARGET marker beats the target's own status format") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      memfill([reply], 64, $ff)
+      [ident_target] = $05
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+      jsr([t_identify], stop_on_rts = true, fail_on_brk = true)
+
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+      assert([reply0] == $00, "an empty string, not NO TARGET")
+      assert([reply_len].w == $0000, "and a length of zero")
+    }
+
+    test("sdk-identify-short-buffer", "identify clips instead of overflowing") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      memfill([reply], 64, $ff)
+      [ident_target] = $01
+      [ident_buflen] = $08
+      [ident_buflen] + $01 = $00
+      jsr([t_identify], stop_on_rts = true, fail_on_brk = true)
+
+      assert([result] == $00, "clipping an identification string is not an error")
+      assert([reply0] == $55, "'U'")
+      assert(([reply] + $06).b == $54, "'T' of ULTIMAT")
+      assert(([reply] + $07).b == $00, "terminated at buflen - 1")
+      assert(([reply] + $08).b == $ff, "and nothing written past the buffer")
+      assert([reply_len].w == $0007, "seven characters stored")
+    }
+
+    ; u64sim implements DOS on $01 and $02 and the control target on $04, and
+    ; nothing else - so this is also a check that detection reports absence
+    ; correctly, not just presence.
+    test("sdk-detect", "capability probing finds exactly the targets that exist") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_detect], stop_on_rts = true, fail_on_brk = true)
+
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([caps_present] == $01, "present")
+      assert([caps_ident] == $c9, "identification register")
+      assert([caps_targets_lo] == $16, "targets: DOS1, DOS2 and control")
+      assert([caps_targets_hi] == $00, "nothing above target $07")
+    }
+
+    ; The model name is mixed case, unlike the uppercase identification strings.
+    ; Anything printing it on a stock C64 has to fold or convert it first.
+    test("sdk-get-model", "the control target names the machine") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $18
+      [ident_buflen] + $01 = $00
+      jsr([t_get_model], stop_on_rts = true, fail_on_brk = true)
+
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([reply0] == $55, "'U'")
+      assert([reply1] == $6c, "'l' - lower case, so the name is mixed case")
+    }
+
+    ; ------------------------------------------------------------ status codes
+
+    test("sdk-status-format", "the encoding each target is expected to use") {
+      [fmt_target] = $01
+      jsr([t_status_fmt], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "DOS: UCI_STATUS_FMT_DECIMAL2")
+      [fmt_target] = $03
+      jsr([t_status_fmt], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "network: decimal2")
+      [fmt_target] = $04
+      jsr([t_status_fmt], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "control: decimal2")
+      [fmt_target] = $06
+      jsr([t_status_fmt], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $01, "HTTP: UCI_STATUS_FMT_DECIMAL3")
+      [fmt_target] = $05
+      jsr([t_status_fmt], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $02, "SoftwareIEC: UCI_STATUS_FMT_BINARY")
+    }
+
+    ; 00 is success; 01 and 02 are advisory - the command did what was asked and
+    ; has something to add. Reporting those as failures would break working
+    ; programs.
+    test("sdk-decode-decimal2", "NN,TEXT decoding") {
+      [dec_target] = $01
+      [dec_len] = $05
+      [dec_buf] = $30
+      [dec_buf] + $01 = $30
+      [dec_buf] + $02 = $2c             ; "00,OK"
+      [dec_buf] + $03 = $4f
+      [dec_buf] + $04 = $4b
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([devcode].w == $0000, "device code 0")
+
+      [dec_buf] + $01 = $31             ; "01,..." DIRECTORY EMPTY
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "01 is advisory, not a failure")
+      assert([devcode].w == 1, "and the code is still reported")
+
+      [dec_buf] + $01 = $32             ; "02,..." REQUEST TRUNCATED
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "02 is advisory too")
+
+      [dec_buf] = $32                   ; "21,UNKNOWN COMMAND"
+      [dec_buf] + $01 = $31
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+
+      [dec_buf] = $39                   ; "99,FUNCTION NOT IMPLEMENTED"
+      [dec_buf] + $01 = $39
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+
+      [dec_target] = $04                ; "81,INVALID PARAMS" on the control target
+      [dec_buf] = $38
+      [dec_buf] + $01 = $31
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+
+      [dec_target] = $01                ; "85,NO FILE OPEN"
+      [dec_buf] = $38
+      [dec_buf] + $01 = $35
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+      assert([devcode].w == 85, "the raw code is kept")
+
+      ; "03,MORE DATA NOT SUPPORTED" is a network failure, not an advisory.
+      [dec_target] = $03
+      [dec_buf] = $30
+      [dec_buf] + $01 = $33
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+    }
+
+    test("sdk-decode-decimal3", "NNN TEXT decoding, and what counts as an error") {
+      [dec_target] = $06
+      [dec_len] = $06
+      [dec_buf] = $30                   ; "000 OK"
+      [dec_buf] + $01 = $30
+      [dec_buf] + $02 = $30
+      [dec_buf] + $03 = $20
+      [dec_buf] + $04 = $4f
+      [dec_buf] + $05 = $4b
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([devcode].w == $0000, "device code 0")
+
+      [dec_buf] = $32                   ; "200 OK"
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "2xx is success")
+      assert([devcode].w == 200, "and the code is the server's")
+
+      [dec_buf] = $34                   ; "404 ..."
+      [dec_buf] + $01 = $30
+      [dec_buf] + $02 = $34
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+      assert([devcode].w == 404, "404 kept verbatim: it may be the remote server's")
+
+      [dec_buf] = $35                   ; "503 ..."
+      [dec_buf] + $01 = $30
+      [dec_buf] + $02 = $33
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+      assert([devcode].w == 503, "503")
+    }
+
+    test("sdk-decode-binary", "a single binary status byte from SoftwareIEC") {
+      [dec_target] = $05
+      [dec_len] = $01
+
+      [dec_buf] = $00                   ; SOFTIEC_ST_OK
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+
+      [dec_buf] = $01                   ; SOFTIEC_ST_FILE_NOT_FOUND
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+
+      [dec_buf] = $05                   ; SOFTIEC_ST_MODULE_NOT_LOADED
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+
+      [dec_buf] = $07                   ; SOFTIEC_ST_INVALID_NAME
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+
+      [dec_buf] = $02                   ; SOFTIEC_ST_SAVE_ERROR
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $06, "ULTIMATE_ERR_IO")
+
+      [dec_buf] = $80                   ; SOFTIEC_ST_VERIFY_ERROR
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+      assert([devcode].w == $0080, "the raw byte is kept")
+    }
+
+    ; The bug this exists to prevent: SOFTIEC_CMD_IDENTIFY answers with the
+    ; firmware's shared ASCII status while every other command on that target
+    ; answers in binary. A decoder that trusts the target id reads the '0' of
+    ; "00,OK" as binary $30 and fails the one command documented as unable to
+    ; fail - which made capability probing report a working target as absent.
+    test("sdk-decode-by-shape", "status is decoded by shape, not by target id") {
+      [dec_target] = $05                ; ASCII on the binary target
+      [dec_len] = $05
+      [dec_buf] = $30
+      [dec_buf] + $01 = $30
+      [dec_buf] + $02 = $2c
+      [dec_buf] + $03 = $4f
+      [dec_buf] + $04 = $4b
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([devcode].w == $0000, "read as decimal2, not as binary $30")
+
+      [dec_len] = $01                   ; ...without swallowing a real binary one
+      [dec_buf] = $05
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+
+      [dec_target] = $01                ; three digits, arriving from DOS
+      [dec_len] = $06
+      [dec_buf] = $32
+      [dec_buf] + $01 = $30
+      [dec_buf] + $02 = $30
+      [dec_buf] + $03 = $20
+      [dec_buf] + $04 = $4f
+      [dec_buf] + $05 = $4b
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the shape decides")
+      assert([devcode].w == 200, "200")
+
+      ; A binary status from a target with no binary vocabulary is a protocol
+      ; violation, not an invitation to apply SoftwareIEC's numbering to it.
+      [dec_len] = $01
+      [dec_buf] = $05
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "ULTIMATE_ERR_PROTOCOL")
+      assert([devcode].w == $ffff, "UCI_DEVICE_CODE_NONE")
+
+      [dec_target] = $03
+      [dec_buf] = $00
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "and the same from the network target")
+    }
+
+    test("sdk-decode-malformed", "anything that matches no encoding is a protocol error") {
+      [dec_target] = $01
+
+      [dec_len] = $00                   ; silence is success
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([devcode].w == $ffff, "UCI_DEVICE_CODE_NONE")
+
+      [dec_len] = $02                   ; "OK" - no digits at all
+      [dec_buf] = $4f
+      [dec_buf] + $01 = $4b
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "ULTIMATE_ERR_PROTOCOL")
+
+      [dec_len] = $01                   ; a lone digit matches no encoding
+      [dec_buf] = $34
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "ULTIMATE_ERR_PROTOCOL")
+
+      [dec_len] = $02                   ; one digit and one letter
+      [dec_buf] = $30
+      [dec_buf] + $01 = $4b
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "ULTIMATE_ERR_PROTOCOL")
+    }
+
+    ; These are the SDK's only strings meant for a screen rather than for the
+    ; wire, so they are the only ones that go through ca65's c64 charmap: 'O' is
+    ; $cf here, not ASCII $4f. That is the boundary the SDK draws - display text
+    ; is written as a literal and comes out in PETSCII, anything compared against
+    ; the Ultimate is emitted numerically and never touches the charmap. Asserting
+    ; the PETSCII values is what keeps the two from being mixed up again.
+    test("sdk-strerror", "every result code has a name, and an unknown one does too") {
+      [err_code] = $00
+      jsr([t_strerror], stop_on_rts = true, fail_on_brk = true)
+      assert([err_text] == $cf, "'O' of OK, in PETSCII")
+      assert(([err_text] + $01).b == $cb, "'K'")
+      assert(([err_text] + $02).b == $00, "terminated")
+
+      [err_code] = $01
+      jsr([t_strerror], stop_on_rts = true, fail_on_brk = true)
+      assert([err_text] == $ce, "'N' of NO ULTIMATE FOUND")
+
+      [err_code] = $02
+      jsr([t_strerror], stop_on_rts = true, fail_on_brk = true)
+      assert([err_text] == $d4, "'T' of TIMEOUT")
+
+      [err_code] = $c8
+      jsr([t_strerror], stop_on_rts = true, fail_on_brk = true)
+      assert([err_text] == $d5, "'U' of UNKNOWN ERROR")
+      assert(([err_text] + $01).b == $ce, "'N'")
+    }
+  }
+}

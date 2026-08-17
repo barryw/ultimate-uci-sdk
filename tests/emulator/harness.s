@@ -1,0 +1,392 @@
+; harness.s - entry points for driving the SDK from a sim6502 test suite.
+;
+; This runs the SDK's *assembled 6502 code* against a simulated Ultimate, which
+; is the only place the shipping binary gets exercised at all. Each entry point
+; runs one SDK call and leaves its result in a labelled byte the suite can
+; assert on.
+;
+; Two calling conventions are deliberately mixed. A few entry points go the long
+; way round through cc65's software stack (`t_identify_dos1`, `t_detect`) to
+; prove the C entry points are callable at all; the rest call the assembly ABI
+; directly, which is what an assembly program does and what nothing else tested
+; before.
+;
+; Build:  make
+; Run:    see tests/emulator/README.md
+;
+; SPDX-License-Identifier: MIT
+
+        .include "ultimate.inc"
+
+        .forceimport __STARTUP__
+        .export _main
+
+        ; --- C ABI, through cc65's software stack ---
+        .import _ultimate_init
+        .import _ultimate_detect
+        .import _ultimate_identify
+        .import pusha, pushax
+        .importzp c_sp
+
+        ; --- assembly ABI, called directly ---
+        .import uci_exec
+        .import uci_present, uci_ident
+        .import uci_decode, uci_dec_target, uci_dec_ptr, uci_dec_len
+        .import uci_status_fmt
+        .import uci_set_timeout_a, uci_get_timeout_a
+        .import uci_last_code
+        .import ultimate_available, ultimate_identify, ultimate_get_model
+        .import ultimate_strerror
+        .import ult_buf, ult_buflen, ult_outlen
+
+        ; --- entry points ---
+        .export boot
+        .export t_break_cstack
+        .export t_init
+        .export t_present
+        .export t_ident_reg
+        .export t_available
+        .export t_identify_dos1
+        .export t_identify_absent
+        .export t_detect
+        .export t_identify
+        .export t_get_model
+        .export t_req_reset
+        .export t_exec
+        .export t_decode
+        .export t_status_fmt
+        .export t_strerror
+        .export t_set_timeout
+        .export t_get_timeout
+        .export t_wedge
+
+        ; --- results ---
+        .export result
+        .export devcode
+        .export reply
+        .export reply_len
+        .export caps
+
+        ; --- parameters ---
+        .export ident_target, ident_buflen
+        .export dec_target, dec_buf, dec_len
+        .export fmt_target
+        .export err_code, err_text
+        .export timeout_val
+
+        ; --- the request block and the buffers it points at ---
+        .export req
+        .export req_target, req_command
+        .export req_args, req_arglen
+        .export req_payload, req_payloadlen
+        .export req_data, req_datamax, req_datalen
+        .export req_status, req_statusmax, req_statuslen
+        .export buf_args, buf_payload, buf_data, buf_status
+
+        ; A few individual bytes get their own labels so a suite can name them
+        ; without address arithmetic.
+        .export reply0, reply1, reply2, reply3
+        .export caps_present, caps_ident, caps_targets_lo, caps_targets_hi
+
+REPLY_MAX    = 64
+ARGS_MAX     = 896      ; UCI_MAX_COMMAND_USABLE, rounded up
+PAYLOAD_MAX  = 256
+DATA_MAX     = 1024     ; room for the largest reply the SDK can provoke
+STATUS_MAX   = 256
+ERR_TEXT_MAX = 32
+
+STACK_TOP    = $CF00    ; well clear of the harness, below the I/O area
+
+; ---------------------------------------------------------------------------
+
+        .bss
+
+result:     .res 1
+devcode:    .res 2
+reply_len:  .res 2
+caps:       .res 4      ; ultimate_capabilities: present, ident, targets(2)
+reply:      .res REPLY_MAX
+
+ident_target: .res 1
+ident_buflen: .res 2
+dec_target:   .res 1
+dec_len:      .res 1
+dec_buf:      .res 8
+fmt_target:   .res 1
+err_code:     .res 1
+err_text:     .res ERR_TEXT_MAX
+timeout_val:  .res 1
+
+req:         .res UCI_REQ_SIZE
+buf_args:    .res ARGS_MAX
+buf_payload: .res PAYLOAD_MAX
+buf_data:    .res DATA_MAX
+buf_status:  .res STATUS_MAX
+
+reply0          = reply
+reply1          = reply + 1
+reply2          = reply + 2
+reply3          = reply + 3
+caps_present    = caps
+caps_ident      = caps + 1
+caps_targets_lo = caps + 2
+caps_targets_hi = caps + 3
+
+req_target      = req + UCI_REQ_TARGET
+req_command     = req + UCI_REQ_COMMAND
+req_args        = req + UCI_REQ_ARGS
+req_arglen      = req + UCI_REQ_ARGLEN
+req_payload     = req + UCI_REQ_PAYLOAD
+req_payloadlen  = req + UCI_REQ_PAYLOADLEN
+req_data        = req + UCI_REQ_DATA
+req_datamax     = req + UCI_REQ_DATAMAX
+req_datalen     = req + UCI_REQ_DATALEN
+req_status      = req + UCI_REQ_STATUS
+req_statusmax   = req + UCI_REQ_STATUSMAX
+req_statuslen   = req + UCI_REQ_STATUSLEN
+
+; ---------------------------------------------------------------------------
+
+        .code
+
+; The suite loads this program rather than running it, so the normal start-up
+; never executes. boot does the one thing the C entry points need from it: a
+; valid C stack pointer. Call it once, from each test.
+boot:
+        lda #<STACK_TOP
+        sta c_sp
+        lda #>STACK_TOP
+        sta c_sp + 1
+        rts
+
+; The opposite of boot: leave the cc65 software stack pointer null, so that
+; anything on the assembly path which reaches for it writes through a null
+; pointer into the 6510's port registers at $00/$01 and takes the machine with
+; it. That is how "the assembly ABI needs no C runtime" gets tested rather than
+; asserted.
+t_break_cstack:
+        lda #$00
+        sta c_sp
+        sta c_sp + 1
+        rts
+
+; Nothing to do when run as a program; the suite calls the entry points below.
+_main:
+        rts
+
+; --------------------------------------------------------------- bring-up ---
+
+t_init:
+        jsr _ultimate_init
+        sta result
+        rts
+
+t_present:
+        jsr uci_present
+        sta result
+        rts
+
+t_ident_reg:
+        jsr uci_ident
+        sta result
+        rts
+
+t_available:
+        jsr ultimate_available
+        sta result
+        rts
+
+; --------------------------------------------------------------- identity ---
+
+; ultimate_identify(target, buf, buflen, outlen) through the C ABI - four
+; arguments, so the first three go on the C stack and the last arrives in A/X.
+.macro identify_call target
+        lda #target
+        jsr pusha
+        lda #<reply
+        ldx #>reply
+        jsr pushax
+        lda #<REPLY_MAX
+        ldx #>REPLY_MAX
+        jsr pushax
+        lda #<reply_len
+        ldx #>reply_len
+        jsr _ultimate_identify
+.endmacro
+
+t_identify_dos1:
+        identify_call UCI_TARGET_DOS1
+        sta result
+        rts
+
+t_identify_absent:
+        identify_call $07               ; no firmware implements target $07
+        sta result
+        rts
+
+t_detect:
+        lda #<caps
+        ldx #>caps
+        jsr _ultimate_detect
+        sta result
+        rts
+
+; The same call through the assembly ABI, with the buffer length under the
+; suite's control so a deliberately short buffer can be tested.
+t_identify:
+        jsr set_ult_buf
+        lda ident_target
+        jsr ultimate_identify
+        sta result
+        rts
+
+t_get_model:
+        jsr set_ult_buf
+        jsr ultimate_get_model
+        sta result
+        rts
+
+set_ult_buf:
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda ident_buflen
+        sta ult_buflen
+        lda ident_buflen + 1
+        sta ult_buflen + 1
+        lda #<reply_len
+        sta ult_outlen
+        lda #>reply_len
+        sta ult_outlen + 1
+        rts
+
+; -------------------------------------------------------------- exchanges ---
+
+; Put the request block back to a known state: every field zero, the four
+; pointers aimed at the harness buffers, and those buffers cleared so no
+; assertion can pass on a byte left by the previous test.
+t_req_reset:
+        lda #$00
+        ldx #UCI_REQ_SIZE - 1
+@zero:  sta req,x
+        dex
+        bpl @zero
+
+        lda #<buf_args
+        sta req_args
+        lda #>buf_args
+        sta req_args + 1
+        lda #<buf_payload
+        sta req_payload
+        lda #>buf_payload
+        sta req_payload + 1
+        lda #<buf_data
+        sta req_data
+        lda #>buf_data
+        sta req_data + 1
+        lda #<DATA_MAX
+        sta req_datamax
+        lda #>DATA_MAX
+        sta req_datamax + 1
+        lda #<buf_status
+        sta req_status
+        lda #>buf_status
+        sta req_status + 1
+        lda #<STATUS_MAX
+        sta req_statusmax
+        lda #>STATUS_MAX
+        sta req_statusmax + 1
+
+        lda #$00
+        tay
+@clr:   sta buf_data,y
+        sta buf_data + $100,y
+        sta buf_data + $200,y
+        sta buf_data + $300,y
+        sta buf_status,y
+        iny
+        bne @clr
+        rts
+
+t_exec:
+        lda #<req
+        ldx #>req
+        jsr uci_exec
+        sta result
+        jsr uci_last_code
+        sta devcode
+        stx devcode + 1
+        rts
+
+; Leave the interface wedged the way a program that died mid-exchange leaves
+; it: a command pushed, its reply waiting, and nothing acknowledged. The next
+; ultimate_init has to recover from this.
+t_wedge:
+        lda #UCI_TARGET_DOS1
+        sta UCI_REG_CMDDATA
+        lda #UCI_CMD_IDENTIFY
+        sta UCI_REG_CMDDATA
+        lda #UCI_CTRL_PUSH_CMD
+        sta UCI_REG_CONTROL
+@wait:  lda UCI_REG_STATUS
+        and #UCI_STAT_STATE
+        cmp #UCI_STATE_BUSY
+        beq @wait
+        rts
+
+; ----------------------------------------------------------------- status ---
+
+t_decode:
+        lda dec_target
+        sta uci_dec_target
+        lda #<dec_buf
+        sta uci_dec_ptr
+        lda #>dec_buf
+        sta uci_dec_ptr + 1
+        lda dec_len
+        sta uci_dec_len
+        jsr uci_decode
+        sta result
+        jsr uci_last_code
+        sta devcode
+        stx devcode + 1
+        rts
+
+t_status_fmt:
+        lda fmt_target
+        jsr uci_status_fmt
+        sta result
+        rts
+
+; The string is copied through a patched absolute address rather than an
+; indirect: every zero page location the harness could borrow is spoken for by
+; either the cc65 runtime or the SDK, and UCI_ZP moves between the two builds
+; this suite runs against.
+t_strerror:
+        lda err_code
+        jsr ultimate_strerror
+        sta @src + 1
+        stx @src + 2
+        ldy #$00
+@src:   lda $FFFF,y
+        sta err_text,y
+        beq @done
+        iny
+        cpy #ERR_TEXT_MAX - 1
+        bcc @src
+        lda #$00
+        sta err_text + ERR_TEXT_MAX - 1
+@done:  rts
+
+; ---------------------------------------------------------------- timeout ---
+
+t_set_timeout:
+        lda timeout_val
+        jsr uci_set_timeout_a
+        rts
+
+t_get_timeout:
+        jsr uci_get_timeout_a
+        sta result
+        rts

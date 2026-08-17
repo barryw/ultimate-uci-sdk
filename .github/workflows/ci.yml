@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: MIT
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  generated:
+    name: generated files are current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the generated constants are up to date
+        run: |
+          python3 tools/gen_protocol.py
+          python3 tools/gen_coverage.py
+          git diff --exit-code -- include/uci_protocol.h bindings/asm/uci_protocol.inc docs/generated
+      - name: Fail on an SDK entry point with no test behind it
+        run: make coverage
+
+  build:
+    name: cc65 build and examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cc65
+        run: sudo apt-get update && sudo apt-get install -y cc65
+      - name: Build the library
+        run: make lib
+      - name: Build the assembly and cc65 examples
+        run: |
+          make -C examples/asm
+          make -C examples/cc65
+      - name: Build the hardware test program
+        run: make hardware
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prg
+          path: |
+            examples/asm/identify.prg
+            examples/cc65/identify.prg
+            tests/hardware/ucitest.prg
+
+  emulator:
+    name: sim6502 emulator tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cc65
+        run: sudo apt-get update && sudo apt-get install -y cc65
+      - name: Run the SDK against a simulated Ultimate
+        run: make emulator

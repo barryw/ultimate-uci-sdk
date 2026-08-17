@@ -1,0 +1,47 @@
+/*
+ * abi_assert.c - keep the assembly view of uci_request honest.
+ *
+ * bindings/asm/ultimate.inc hard-codes the byte offsets of every field in
+ * uci_request. If the struct ever changes shape - a field reordered, a type
+ * widened, a compiler that pads differently - assembly callers would start
+ * writing into the wrong fields and the failure would show up as mysterious
+ * protocol errors on real hardware.
+ *
+ * So the offsets are asserted here instead, at build time, in C, where the
+ * compiler is the authority on the layout. A mismatch is a compile error
+ * naming the field that moved.
+ *
+ * This file emits no code.
+ *
+ * Part of the Ultimate SDK. SPDX-License-Identifier: MIT
+ */
+
+#include <stddef.h>
+#include "ultimate.h"
+
+/* A negative array size is a hard error in every C compiler worth using. */
+#define UCI_STATIC_ASSERT(name, cond) \
+    typedef char uci_abi_check_##name[(cond) ? 1 : -1]
+
+UCI_STATIC_ASSERT(target,     offsetof(uci_request, target)     ==  0);
+UCI_STATIC_ASSERT(command,    offsetof(uci_request, command)    ==  1);
+UCI_STATIC_ASSERT(args,       offsetof(uci_request, args)       ==  2);
+UCI_STATIC_ASSERT(arglen,     offsetof(uci_request, arglen)     ==  4);
+UCI_STATIC_ASSERT(payload,    offsetof(uci_request, payload)    ==  6);
+UCI_STATIC_ASSERT(payloadlen, offsetof(uci_request, payloadlen) ==  8);
+UCI_STATIC_ASSERT(data,       offsetof(uci_request, data)       == 10);
+UCI_STATIC_ASSERT(datamax,    offsetof(uci_request, datamax)    == 12);
+UCI_STATIC_ASSERT(datalen,    offsetof(uci_request, datalen)    == 14);
+UCI_STATIC_ASSERT(status,     offsetof(uci_request, status)     == 16);
+UCI_STATIC_ASSERT(statusmax,  offsetof(uci_request, statusmax)  == 18);
+UCI_STATIC_ASSERT(statuslen,  offsetof(uci_request, statuslen)  == 20);
+UCI_STATIC_ASSERT(size,       sizeof(uci_request)               == 22);
+
+/* Pointers are 16 bits on the 6502; the assembly shim assumes it. */
+UCI_STATIC_ASSERT(pointer,    sizeof(uint8_t *)                 ==  2);
+
+/* The capability block the assembly service layer fills in. */
+UCI_STATIC_ASSERT(caps_present, offsetof(ultimate_capabilities, present) == 0);
+UCI_STATIC_ASSERT(caps_ident,   offsetof(ultimate_capabilities, ident)   == 1);
+UCI_STATIC_ASSERT(caps_targets, offsetof(ultimate_capabilities, targets) == 2);
+UCI_STATIC_ASSERT(caps_size,    sizeof(ultimate_capabilities)            == 4);

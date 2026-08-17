@@ -1,0 +1,77 @@
+; protocol.suite - the protocol facts the SDK is built on, made executable.
+;
+; Every assertion here corresponds to a claim in docs/uci.md. The point is that
+; the claims stop being prose: they run against sim6502's simulated Ultimate in
+; CI, and against a real machine on the bench with the same file.
+;
+;   make run                                   ; simulated
+;   make hardware U64_HOST=192.168.1.62        ; real Ultimate
+;
+; SPDX-License-Identifier: MIT
+
+suites {
+  suite("uci protocol assumptions") {
+    system(c64)
+
+    test("identify-dos1", "target $01 is Ultimate DOS and says so") {
+      uci($01, $01)
+      assert(uci_status("00,OK"), "IDENTIFY cannot fail")
+      assert(uci_data(0) == $55, "'U'")
+      assert(uci_data(1) == $4c, "'L'")
+      assert(uci_data(2) == $54, "'T'")
+    }
+
+    test("identify-dos2", "target $02 is a second, independent DOS instance") {
+      uci($02, $01)
+      assert(uci_status("00,OK"), "IDENTIFY cannot fail")
+      assert(uci_data(0) == $55, "'U'")
+    }
+
+    test("identify-control", "target $04 is the control target") {
+      uci($04, $01)
+      assert(uci_status("00,OK"), "IDENTIFY cannot fail")
+      assert(uci_data(0) == $43, "'C' of CONTROL TARGET")
+    }
+
+    ; docs/uci.md, "Probing for a target": this is what capability detection
+    ; depends on. If an unimplemented target ever started erroring instead of
+    ; answering, ultimate_detect() would need rewriting.
+    test("absent-target-answers", "an unimplemented target answers NO TARGET") {
+      uci($07, $01)
+      assert(uci_status("00,OK"), "the placeholder target still succeeds")
+      assert(uci_data(0) == $4e, "'N'")
+      assert(uci_data(1) == $4f, "'O'")
+      assert(uci_data(2) == $20, "space")
+      assert(uci_data(3) == $54, "'T' of TARGET")
+    }
+
+    test("absent-target-rejects-commands", "the placeholder only answers IDENTIFY") {
+      uci($07, $04)
+      assert(uci_status("21,UNKNOWN COMMAND"), "anything else is rejected")
+    }
+
+    test("unknown-command", "a real target rejects a command it does not know") {
+      uci($01, $7e)
+      assert(uci_status("21,UNKNOWN COMMAND"), "unknown DOS command rejected")
+    }
+
+    ; docs/uci.md, "The exchange": the command bytes arrive in the order they
+    ; were written, target byte first. ECHO is the cheapest way to prove it.
+    test("command-framing", "the command reaches the target byte for byte") {
+      uci($01, $f0, $de, $ad, $be, $ef)
+      assert(uci_status("00,OK"), "ECHO cannot fail")
+      assert(uci_data(0) == $01, "target byte first")
+      assert(uci_data(1) == $f0, "then the command byte")
+      assert(uci_data(2) == $de, "then the arguments, in order")
+      assert(uci_data(3) == $ad, "...")
+      assert(uci_data(4) == $be, "...")
+      assert(uci_data(5) == $ef, "...")
+    }
+
+    test("hwinfo-model", "the control target names the machine") {
+      uci($04, $28, $00)
+      assert(uci_status("00,OK"), "GET_HWINFO succeeded")
+      assert(uci_data(0) != $00, "a model name came back")
+    }
+  }
+}
