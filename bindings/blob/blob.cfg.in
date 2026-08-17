@@ -1,0 +1,16 @@
+# Linker config for the standalone SDK blob.
+#
+# No BSS: with UCI_VARS defined every variable is an equate off the caller's
+# address, so there is nothing for a linker to place. Tasks 1 and 2 are what
+# made that true.
+#
+# SPDX-License-Identifier: MIT
+
+MEMORY {
+    RAM: start = @BASE@, size = $2000, type = rw, file = %O, fill = no;
+}
+SEGMENTS {
+    BLOBHDR: load = RAM, type = ro;
+    CODE:    load = RAM, type = ro;
+    RODATA:  load = RAM, type = ro;
+}
