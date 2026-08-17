@@ -15,7 +15,7 @@ jobs:
         run: |
           python3 tools/gen_protocol.py
           python3 tools/gen_coverage.py
-          git diff --exit-code -- include/uci_protocol.h bindings/asm/uci_protocol.inc docs/generated
+          git diff --exit-code -- include/uci_protocol.h bindings/asm/uci_protocol.inc bindings/kickass/uci_protocol.asm bindings/acme/uci_protocol.a docs/generated
       - name: Fail on an SDK entry point with no test behind it
         run: make coverage
 

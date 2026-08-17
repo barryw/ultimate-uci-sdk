@@ -24,6 +24,7 @@ suites {
     }
 
     test("blob-init", "uci_init through the jump table") {
+      a = $ff
       jsr($c004, stop_on_rts = true, fail_on_brk = true)
       assert(a == $00, "ULTIMATE_OK")
     }
@@ -37,6 +38,7 @@ suites {
       jsr($c004, stop_on_rts = true, fail_on_brk = true)
       a = $37
       jsr($c013, stop_on_rts = true, fail_on_brk = true)
+      a = $00
       jsr($c016, stop_on_rts = true, fail_on_brk = true)
       assert(a == $37, "the budget we set")
     }

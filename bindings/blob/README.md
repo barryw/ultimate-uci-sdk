@@ -35,6 +35,9 @@ against version 5.
 | `+$25` | `ultimate_identify` | `A` = target | `A` = result |
 | `+$28` | `ultimate_get_model` | | `A` = result |
 | `+$2B` | `ultimate_strerror` | `A` = result code | `A`/`X` = PETSCII text |
+| `+$2E` | `uci_req_clear` | | zeroes the request block at `uci_req` |
+| `+$31` | `uci_decode` | `uci_dec_target`/`uci_dec_ptr`/`uci_dec_len` | `A` = result |
+| `+$34` | `uci_status_fmt` | `A` = target | `A` = `UCI_STATUS_FMT_*` |
 
 The signature is checked before calling anything:
 
@@ -59,6 +62,25 @@ At `base+$100`, page-aligned so a BASIC program needs no address arithmetic.
 | `+$29` | filename | 40 |
 | `+$51` | reply buffer | 256 |
 
+## The SDK's variable block
+
+`uci_decode` (`+$31`) reads its arguments from three variables in the SDK's own
+RAM rather than from registers, and `uci_exec_block` (`+$07`) runs whatever is
+in `uci_req`. Both live in the block laid out from `UCI_VARS` (see
+`src/uci/uci_core.s`'s `.ifdef UCI_VARS` branch), not in the jump table or the
+page-aligned parameter block above. For the default build (`VARS=52992`, i.e.
+`UCI_VARS = $CF00`):
+
+| Address | Name | Size |
+|---|---|---|
+| `$CF0E` | `uci_dec_target` | 1 |
+| `$CF0F` | `uci_dec_ptr` | 2 |
+| `$CF11` | `uci_dec_len` | 1 |
+| `$CF42` | `uci_req` | `UCI_REQ_SIZE` (22) |
+
+A build with `VARS=` set to something else shifts all four by the same
+amount: each is `UCI_VARS` plus the fixed offset above minus `$CF00`.
+
 ## Loading it somewhere else
 
 Build it at the address you want — that is free and has no runtime cost. If the
@@ -75,8 +97,8 @@ assemble `reloc.s` into your loader:
 The table is a little-endian count followed by that many 16-bit offsets, each
 naming a byte that holds the high half of an absolute address. It is produced by
 diffing two builds one page apart, so it cannot fall behind the assembler the
-way a hand-written instruction table would. The default build has 86 such
-offsets, a 174-byte table.
+way a hand-written instruction table would. The default build has 89 such
+offsets, a 180-byte table.
 
 `tests/emulator/blob-relocated.suite` moves the blob and then erases the
 original before calling it, which is what turns a missing relocation entry into

@@ -17,6 +17,7 @@
         .import uci_set_timeout_a, uci_get_timeout_a, uci_last_code
         .import ultimate_init, ultimate_available, ultimate_detect
         .import ultimate_identify, ultimate_get_model, ultimate_strerror
+        .import uci_req_clear, uci_decode, uci_status_fmt
 
         .export blob_start
 
@@ -41,6 +42,10 @@ blob_start:
         jmp ultimate_identify           ; +$25
         jmp ultimate_get_model          ; +$28
         jmp ultimate_strerror           ; +$2B
+
+        jmp uci_req_clear               ; +$2E
+        jmp uci_decode                  ; +$31
+        jmp uci_status_fmt              ; +$34
 
 ; ---------------------------------------------------------------------------
 ; The parameter block.
