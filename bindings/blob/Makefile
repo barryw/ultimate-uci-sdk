@@ -30,7 +30,13 @@ OBJ   := $(addprefix $(BUILD)/,$(notdir $(SRC:.s=.o)))
 
 BIN := $(BUILD)/ultimate-$(BASE).bin
 
-all: $(BIN)
+# The relocation table comes from diffing two builds one page apart. Nothing
+# here knows anything about 6502 addressing modes; see tools/gen_reloc.py.
+PROBE_BASE := $(shell printf '%04x' $$(( 0x$(BASE) + 0x100 )))
+
+RELOC := $(BUILD)/ultimate-$(BASE).reloc
+
+all: $(BIN) $(RELOC)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -49,6 +55,16 @@ $(BUILD)/blob-$(BASE).cfg: blob.cfg.in | $(BUILD)
 
 $(BIN): $(OBJ) $(BUILD)/blob-$(BASE).cfg
 	$(LD65) -C $(BUILD)/blob-$(BASE).cfg -o $@ $(OBJ)
+
+$(BUILD)/probe-$(PROBE_BASE).cfg: blob.cfg.in | $(BUILD)
+	sed 's/@BASE@/$$$(PROBE_BASE)/' $< > $@
+
+$(BUILD)/ultimate-$(PROBE_BASE).bin: $(OBJ) $(BUILD)/probe-$(PROBE_BASE).cfg
+	$(LD65) -C $(BUILD)/probe-$(PROBE_BASE).cfg -o $@ $(OBJ)
+
+$(RELOC): $(BIN) $(BUILD)/ultimate-$(PROBE_BASE).bin
+	python3 $(ROOT)/tools/gen_reloc.py $(BIN) \
+	  $(BUILD)/ultimate-$(PROBE_BASE).bin $@
 
 clean:
 	rm -rf $(BUILD)
