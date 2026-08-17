@@ -1,9 +1,15 @@
 ; blob-relocated.suite - the blob moved to a different address, then called.
 ;
 ; A relocation table with a missing entry still passes every test that runs the
-; blob where it was built. This is the only test that catches one: the blob is
-; moved down by $40 pages, so any address the table missed still points into
-; $C0xx and the call lands somewhere else entirely.
+; blob where it was built. reloc-is-complete catches one by comparing against
+; ground truth: it moves the blob from $C000 to $8000 with the runtime
+; relocator, then compares the result byte-for-byte against a second blob the
+; linker built directly for $8000. Every one of the 86 relocated bytes has to
+; match, and so does every byte that must NOT move (the SDK's hardware
+; register addresses), which a test that only calls through the moved jump
+; table could never catch - a handful of untouched entry points can't exercise
+; all 86, and even full coverage wouldn't tell you an address that shouldn't
+; move stayed put.
 ;
 ; SPDX-License-Identifier: MIT
 
@@ -13,6 +19,11 @@ suites {
     symbols("/code/tests/emulator/relocharness.sym")
     load("/code/tests/emulator/relocharness.prg", strip_header = true)
     load("/code/bindings/blob/build/ultimate-c000.bin", address = $c000)
+    ; Ground truth for reloc-is-complete: the same SDK, linked directly for
+    ; $8000 instead of relocated there at runtime. Loaded at $4000 - a scratch
+    ; address clear of the harness ($0801), $8000, and $C000 - so it just sits
+    ; there as a reference to memcmp against, not as anything that gets called.
+    load("/code/bindings/blob/build/ultimate-8000.bin", address = $4000)
 
     test("reloc-init", "the relocated blob still brings the interface up") {
       jsr([t_reloc], stop_on_rts = true, fail_on_brk = true)
@@ -23,14 +34,16 @@ suites {
       assert([result] == $00, "ULTIMATE_OK from $8000")
     }
 
-    ; If any absolute address was missed, the blob at $8000 still reaches back
-    ; into $C0xx. Wiping the original is what turns that into a failure instead
-    ; of an accidental pass.
-    test("reloc-is-complete", "nothing in the moved blob still points at the old address") {
+    ; The completeness gate: relocate $C000 down to $8000 at runtime, then
+    ; compare it byte-for-byte against a blob the linker built for $8000
+    ; directly. A missing table entry leaves a stale byte pointing back into
+    ; $C0xx; a wrongly-included entry shifts a byte that should have held
+    ; still (e.g. the SDK's $DF1B-$DF1F hardware register addresses). Either
+    ; way the two blobs stop matching, so this catches both failure modes -
+    ; not just the ones a call graph happens to reach.
+    test("reloc-is-complete", "the relocated blob matches a from-scratch $8000 build byte-for-byte") {
       jsr([t_reloc], stop_on_rts = true, fail_on_brk = true)
-      memfill($c000, $0c00, $00)
-      jsr([t_call_init], stop_on_rts = true, fail_on_brk = true)
-      assert([result] == $00, "ULTIMATE_OK with the original erased")
+      assert(memcmp($8000, $4000, 2860), "runtime relocation output differs from the $8000 linker build")
     }
   }
 }

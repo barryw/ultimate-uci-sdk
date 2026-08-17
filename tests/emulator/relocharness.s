@@ -1,9 +1,11 @@
 ; relocharness.s - load the blob at one address, move it to another, call it.
 ;
 ; The blob is built for $C000 and lives at $C000 in the test image. This moves
-; it to $8000 and then calls through the jump table there, which is the only
-; way to prove the relocation table is complete: a missing entry leaves an
-; absolute address pointing back into $C0xx and the call goes somewhere wrong.
+; it to $8000 and exposes both t_reloc (the move) and t_call_init (a call
+; through the moved jump table) to the suite. Completeness is proved there,
+; not here: blob-relocated.suite compares the moved blob byte-for-byte against
+; a second blob the linker built directly for $8000, which is what actually
+; catches a missing or wrongly-included relocation entry.
 ;
 ; SPDX-License-Identifier: MIT
 

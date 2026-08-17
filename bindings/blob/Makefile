@@ -36,7 +36,7 @@ PROBE_BASE := $(shell printf '%04x' $$(( 0x$(BASE) + 0x100 )))
 
 RELOC := $(BUILD)/ultimate-$(BASE).reloc
 
-all: $(BIN) $(RELOC)
+all: $(BIN) $(RELOC) $(BUILD)/ultimate-8000.bin
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -65,6 +65,17 @@ $(BUILD)/ultimate-$(PROBE_BASE).bin: $(OBJ) $(BUILD)/probe-$(PROBE_BASE).cfg
 $(RELOC): $(BIN) $(BUILD)/ultimate-$(PROBE_BASE).bin
 	python3 $(ROOT)/tools/gen_reloc.py $(BIN) \
 	  $(BUILD)/ultimate-$(PROBE_BASE).bin $@
+
+# A second full blob, linked at $8000 rather than $(BASE). This is the ground
+# truth tests/emulator/blob-relocated.suite compares a runtime-relocated copy
+# against: the relocator's output must be byte-identical to what the linker
+# itself produces for that address. Same objects, different config - same
+# pattern as the probe build above.
+$(BUILD)/blob-8000.cfg: blob.cfg.in | $(BUILD)
+	sed 's/@BASE@/$$8000/' $< > $@
+
+$(BUILD)/ultimate-8000.bin: $(OBJ) $(BUILD)/blob-8000.cfg
+	$(LD65) -C $(BUILD)/blob-8000.cfg -o $@ $(OBJ)
 
 clean:
 	rm -rf $(BUILD)
