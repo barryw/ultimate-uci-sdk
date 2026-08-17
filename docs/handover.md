@@ -31,7 +31,7 @@ make blob             GREEN     2860 bytes, 89 relocations
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make test             GREEN     38 host unit tests + 82 tests across 7 suites
+make test             GREEN     48 host unit tests + 82 tests across 7 suites
 make hardware-run     GREEN     4/4 scenarios on real hardware, 13 checks each
                                 except uci-disabled, which asserts one clean
                                 failure and is meant to report failed=1
@@ -283,8 +283,16 @@ now: `ARGS` in `tools/gen_protocol.py`, 67 commands, `(kind, spec)` pairs over
 `byte`, `word`, `dword`, `str`, `pstr`, `data` and `lit`. `check_args()` fails
 generation on a shape that cannot be marshalled, the reference gained an
 argument column, and the emitters render the shape instead of repeating it in
-prose. What the wedge still needs is the ~150-byte in-memory table it dispatches
-on, generated from `ARGS` — nothing else has to be decided first.
+prose.
+
+The in-memory table the wedge dispatches on is generated from it, into
+`bindings/asm/uci_argtable.inc`: **98 bytes**, 21 entries, only the commands the
+default rule cannot marshal. It has no consumer until the wedge exists, so CI
+assembles it on its own to stop it rotting quietly.
+
+**Phase 2 is now unblocked with nothing left to decide first.** The wedge is
+next: tokenizer, `ICRNCH`/`IQPLOP`/`IGONE`/`IEVAL` hooks, installer, the
+`basic.suite`.
 
 Every shape was read out of the firmware source rather than transcribed, which
 is worth keeping up as the table grows: it caught two errors the prose had been

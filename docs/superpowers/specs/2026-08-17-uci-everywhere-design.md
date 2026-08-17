@@ -305,10 +305,25 @@ address is one byte and not two. The prose comments are gone; the emitters
 render the shape from `ARGS`, so the C header, the three assembler includes and
 the reference cannot disagree about what a command takes.
 
-Still to do when the wedge lands: emit the in-memory table it dispatches on.
-Only commands with a non-byte numeric or a literal separator need an entry —
-roughly 25 of 101, about 150 bytes. `ARGS` is the source for it; nothing else
-needs deciding first.
+**The in-memory table is generated too**, into `bindings/asm/uci_argtable.inc`.
+It holds only the exceptions: a command earns an entry when its shape has a wide
+numeric, a length-prefixed string, or a literal the caller never types. 21 of the
+67 shaped commands do, and the other 46 cost the 6502 nothing — the default rule
+already marshals them.
+
+Entries are `target, command, count, packed kinds` with two kind nibbles to a
+byte, ordered by target then command so a scan stops as soon as it passes what
+it wants. **98 bytes assembled**, against the 150 budgeted here. Command codes
+repeat across targets (`$04` is `DOS_CMD_READ_DATA` and `NET_CMD_GET_NETADDR`),
+so the target is part of the key; DOS is one command set on two targets, so its
+shapes are stored under `$01` and the lookup folds `$02` onto `$01` instead of
+carrying a second copy.
+
+Every literal in the protocol is `$00` today, so `lit0` is a kind and no byte is
+spent on the value. A non-zero literal fails generation rather than truncating.
+
+ca65 only. The wedge is the one consumer and every other toolchain reaches the
+SDK through the blob, which will carry the table already assembled.
 
 ### Constants
 

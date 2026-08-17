@@ -184,6 +184,114 @@ class TestArgSummary(unittest.TestCase):
         self.assertEqual(gp.arg_note("DOS_CMD_IDENTIFY", "prose"), "prose")
 
 
+def decode_arg_table(rows):
+    """Walk the emitted rows the way the 6502 will, back into shapes.
+
+    Deliberately does not reuse the packing code. A test that packs with the
+    same helper it unpacks with agrees with itself no matter what it emits.
+    """
+    names = {code: kind for kind, code in gp.ARG_CODES.items()}
+    out = {}
+    for target, _command, value, codes in rows:
+        packed = []
+        for i in range(0, len(codes), 2):
+            hi = codes[i]
+            lo = codes[i + 1] if i + 1 < len(codes) else gp.ARG_CODES["end"]
+            packed.append((hi << 4) | lo)
+
+        # From here on, only the bytes an assembler would emit.
+        count = len(codes)
+        kinds = []
+        for i in range(count):
+            byte = packed[i // 2]
+            nibble = (byte >> 4) if i % 2 == 0 else (byte & 0x0F)
+            kinds.append(names[nibble])
+        out[(target, value)] = kinds
+    return out
+
+
+class TestArgTable(unittest.TestCase):
+
+    def setUp(self):
+        self.rows = gp.arg_table_entries()
+        self.values = {n: v for _t, _n, items in gp.GROUPS for n, v, _c in items}
+
+    def test_only_shapes_the_default_rule_cannot_marshal_are_listed(self):
+        # One numeric is one byte and one string is its own bytes, so a shape of
+        # nothing but byte/str/data costs the 6502 no table bytes at all.
+        listed = {name for _t, name, _v, _c in self.rows}
+        for command, shape in gp.ARGS.items():
+            wide = any(k in ("word", "dword", "pstr", "lit") for k, _s in shape)
+            self.assertEqual(command in listed, wide, command)
+
+    def test_every_shape_round_trips_through_the_packing(self):
+        decoded = decode_arg_table(self.rows)
+        for target, command, value, _codes in self.rows:
+            expected = [k if k != "lit" else "lit0"
+                        for k, _spec in gp.ARGS[command]]
+            self.assertEqual(decoded[(target, value)], expected, command)
+
+    def test_a_packing_slip_would_be_caught(self):
+        # Negative control: swap two nibbles and the round trip must notice.
+        rows = [list(r) for r in self.rows]
+        victim = next(r for r in rows if r[1] == "SOFTIEC_CMD_LOAD_SU")
+        victim[3] = list(victim[3])
+        victim[3][0], victim[3][2] = victim[3][2], victim[3][0]
+        decoded = decode_arg_table([tuple(r) for r in rows])
+        self.assertNotEqual(decoded[(0x05, self.values["SOFTIEC_CMD_LOAD_SU"])],
+                            [k for k, _s in gp.ARGS["SOFTIEC_CMD_LOAD_SU"]])
+
+    def test_keys_are_unique(self):
+        # (target, command) is the key. DOS lives on $01 and $02 with one
+        # command set, so a duplicate here would mean two shapes for one call.
+        keys = [(t, v) for t, _n, v, _c in self.rows]
+        self.assertEqual(len(keys), len(set(keys)))
+
+    def test_dos_entries_are_stored_under_dos1_only(self):
+        # The lookup folds $02 onto $01 rather than carrying a second copy.
+        targets = {t for t, _n, _v, _c in self.rows}
+        self.assertIn(0x01, targets)
+        self.assertNotIn(0x02, targets)
+
+    def test_rows_are_sorted_so_a_scan_can_stop_early(self):
+        keys = [(t, v) for t, _n, v, _c in self.rows]
+        self.assertEqual(keys, sorted(keys))
+
+    def test_every_kind_code_fits_in_a_nibble(self):
+        for kind, code in gp.ARG_CODES.items():
+            self.assertTrue(0 <= code <= 0x0F, kind)
+
+    def test_a_non_zero_literal_is_refused_rather_than_truncated(self):
+        real = gp.ARGS
+        try:
+            gp.ARGS = {"DOS_CMD_CHANGE_DIR": [("lit", 0x2C), ("str", "x")]}
+            with self.assertRaises(SystemExit) as caught:
+                gp.arg_table_entries()
+            self.assertIn("only encodes $00 literals", str(caught.exception))
+        finally:
+            gp.ARGS = real
+
+    def test_a_command_with_no_derivable_target_is_refused(self):
+        real = gp.ARGS
+        try:
+            # UCI_CMD_IDENTIFY is common to every target, so it has no single
+            # one. Giving it a wide shape must fail rather than pick a target.
+            gp.ARGS = {"UCI_CMD_IDENTIFY": [("word", "x")]}
+            with self.assertRaises(SystemExit) as caught:
+                gp.arg_table_entries()
+            self.assertIn("target cannot be derived", str(caught.exception))
+        finally:
+            gp.ARGS = real
+
+    def test_the_table_stays_small_enough_to_live_in_the_wedge(self):
+        # 3 header bytes plus one packed byte per two arguments, plus the
+        # terminator. The design budgeted about 150 bytes.
+        size = 1
+        for _t, _n, _v, codes in self.rows:
+            size += 3 + (len(codes) + 1) // 2
+        self.assertLess(size, 150, "argument table grew past its budget")
+
+
 class TestTableHygiene(unittest.TestCase):
 
     def test_every_shaped_command_looks_like_a_command(self):

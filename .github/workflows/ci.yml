@@ -15,7 +15,7 @@ jobs:
         run: |
           python3 tools/gen_protocol.py
           python3 tools/gen_coverage.py
-          git diff --exit-code -- include/uci_protocol.h bindings/asm/uci_protocol.inc bindings/kickass/uci_protocol.asm bindings/acme/uci_protocol.a docs/generated
+          git diff --exit-code -- include/uci_protocol.h bindings/asm/uci_protocol.inc bindings/asm/uci_argtable.inc bindings/kickass/uci_protocol.asm bindings/acme/uci_protocol.a docs/generated
       - name: Fail on an SDK entry point with no test behind it
         run: make coverage
 
@@ -34,6 +34,12 @@ jobs:
           make -C examples/cc65
       - name: Build the hardware test program
         run: make hardware
+      # The generated argument table has no consumer until the BASIC wedge
+      # lands, so nothing else would notice if it stopped assembling.
+      - name: Assemble the generated argument table
+        run: |
+          printf '\t.include "bindings/asm/uci_argtable.inc"\n' > /tmp/argtable.s
+          ca65 -I . -o /tmp/argtable.o /tmp/argtable.s
       - uses: actions/upload-artifact@v4
         with:
           name: prg
