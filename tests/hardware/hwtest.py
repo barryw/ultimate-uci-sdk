@@ -15,16 +15,23 @@ Ctrl-C or an exception. Nothing is written to the Ultimate's flash: the config
 endpoint used here changes the running configuration only, so a power cycle
 restores the machine regardless.
 
+The REST client and the read/restore helpers live in tools/u64_settings.py,
+shared with the settings guard that tests/emulator/Makefile wraps its own
+hardware run with - see that module for the single source of truth on both.
+
 Part of the Ultimate SDK. SPDX-License-Identifier: MIT
 """
 
 import argparse
-import json
+import os
 import sys
 import time
 import urllib.error
-import urllib.parse
-import urllib.request
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(REPO, "tools"))
+
+from u64_settings import Ultimate, read_settings, restore_settings  # noqa: E402
 
 # The result block ucitest.prg publishes into the cassette buffer.
 RESULT_ADDR = 0x033C
@@ -41,53 +48,6 @@ REU = ("C64 and Cartridge Settings", "RAM Expansion Unit")
 IEC_DRIVE = ("SoftIEC Drive Settings", "IEC Drive")
 
 TARGET_SOFTIEC_BIT = 1 << 5
-
-
-class Ultimate:
-    def __init__(self, host, port=80, timeout=15):
-        self.base = "http://%s:%d/v1" % (host, port)
-        self.timeout = timeout
-
-    def _request(self, method, path, data=None, content_type=None):
-        url = self.base + path
-        req = urllib.request.Request(url, data=data, method=method)
-        if content_type:
-            req.add_header("Content-Type", content_type)
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            return resp.read()
-
-    def info(self):
-        return json.loads(self._request("GET", "/info"))
-
-    def get_setting(self, category, item):
-        raw = self._request("GET", "/configs/" + urllib.parse.quote(category))
-        return json.loads(raw)[category][item]
-
-    def set_setting(self, category, item, value):
-        path = "/configs/%s/%s?value=%s" % (
-            urllib.parse.quote(category),
-            urllib.parse.quote(item),
-            urllib.parse.quote(str(value)),
-        )
-        body = json.loads(self._request("PUT", path))
-        errors = body.get("errors") or []
-        if errors:
-            raise RuntimeError("setting %s/%s to %r failed: %s"
-                               % (category, item, value, errors))
-
-    def readmem(self, address, length):
-        return self._request(
-            "GET", "/machine:readmem?address=%x&length=%d" % (address, length))
-
-    def writemem(self, address, data):
-        self._request("POST", "/machine:writemem?address=%x" % address,
-                      data=data, content_type="application/octet-stream")
-
-    def run_prg(self, path):
-        with open(path, "rb") as fh:
-            payload = fh.read()
-        self._request("POST", "/runners:run_prg", data=payload,
-                      content_type="application/octet-stream")
 
 
 def decode_screen(raw):
@@ -269,7 +229,7 @@ def main():
              info.get("fpga_version"), info.get("core_version")))
 
     touched = {CMD_IF, REU, IEC_DRIVE}
-    saved = {key: u.get_setting(*key) for key in touched}
+    saved = read_settings(u, touched)
     print("# saved settings: %s"
           % ", ".join("%s=%s" % (k[1], v) for k, v in saved.items()))
 
@@ -311,12 +271,7 @@ def main():
         if args.keep:
             print("# --keep given: settings left as the last scenario set them")
         else:
-            for key, value in saved.items():
-                try:
-                    u.set_setting(key[0], key[1], value)
-                except Exception as exc:            # noqa: BLE001 - best effort
-                    print("# WARNING: could not restore %s to %r: %s"
-                          % (key[1], value, exc))
+            restore_settings(u, saved, warn=lambda msg: print("# WARNING: %s" % msg))
             print("# settings restored; flash was never written")
 
     return 1 if failures else 0

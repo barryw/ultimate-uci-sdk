@@ -1,6 +1,7 @@
 # Ultimate SDK.
 #
-#   make test        the SDK under sim6502                 (cc65, Docker)
+#   make test        unit tests, then the SDK under sim6502 (Python 3, cc65, Docker)
+#   make unittest    host-side Python unit tests only       (Python 3)
 #   make lib         the cc65 library                      (cc65)
 #   make blob        standalone binary with a jump table    (cc65)
 #   make examples    assembly, cc65 and Oscar64 examples   (cc65, Oscar64)
@@ -19,9 +20,15 @@ OSCAR64 ?= oscar64
 
 all: lib examples emulator
 
-# There is no host test layer: the SDK is 6502 assembly, so the only place its
-# logic can be tested is on a 6502. `make test` runs the emulator suites.
-test: emulator
+# The SDK itself is 6502 assembly, so the only place that logic can be tested
+# is on a 6502 - that is what `emulator` is for. `unittest` covers the one
+# piece of this repo that is ordinary host Python: the settings guard in
+# tools/u64_settings.py. It needs neither Docker nor network, so adding it
+# here does not change what `make test` depends on.
+test: unittest emulator
+
+unittest:
+	python3 -m unittest discover -s tools -p 'test_*.py'
 
 lib:
 	$(MAKE) -C bindings/cc65
@@ -71,4 +78,4 @@ clean:
 	$(MAKE) -C bindings/cc65 clean
 	$(MAKE) -C bindings/blob clean
 
-.PHONY: all test lib blob examples emulator hardware hardware-run protocol coverage clean
+.PHONY: all test unittest lib blob examples emulator hardware hardware-run protocol coverage clean

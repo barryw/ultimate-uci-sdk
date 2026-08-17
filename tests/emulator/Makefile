@@ -135,9 +135,18 @@ run: all
 # Only protocol.suite runs here: the u64 backend carries UCI traffic over the
 # firmware's REST API and has no way to jsr into a loaded program, so sdk.suite
 # stays simulator-only. tests/hardware covers the SDK on real silicon instead.
+#
+# The u64 backend pushes commands through the UCI hardware registers, which
+# only answer when the machine's "Command Interface" setting is Enabled - not
+# its normal state, since the owner's Ultimate is reconfigured constantly by
+# other firmware testing. tools/u64_settings.py reads that setting first,
+# enables it only if it is not already, runs sim6502, and restores exactly
+# what it changed - on success, on failure, and on Ctrl-C alike.
 hardware:
 	@test -n "$(U64_HOST)" || { echo "set U64_HOST=<ip of your Ultimate>"; exit 1; }
-	$(SIM6502) -s /code/tests/emulator/protocol.suite \
+	python3 $(REPO)/tools/u64_settings.py --host $(U64_HOST) \
+	  --require "C64 and Cartridge Settings:Command Interface=Enabled" \
+	  -- $(SIM6502) -s /code/tests/emulator/protocol.suite \
 	  --backend u64 --u64-host $(U64_HOST)
 
 clean:
