@@ -1,8 +1,9 @@
 ; ultimate_strerror.s - result code to printable text.
 ;
-; Its own module because it is 168 bytes of strings that a program which never
-; prints an error should not link. ld65 drops an unreferenced module whole, so
-; the split is the whole mechanism - no build flags.
+; Its own module because splitting it out saves 176 bytes (18 of code, 158 of
+; strings) that a program which never prints an error should not link. ld65
+; drops an unreferenced module whole, so the split is the whole mechanism - no
+; build flags.
 ;
 ; These strings go through ca65's c64 charmap and come out PETSCII, which is
 ; what CHROUT wants. That is the opposite of every other byte in the SDK; see

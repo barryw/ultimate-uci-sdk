@@ -75,12 +75,14 @@ networking, HTTP, machine control.
 
 ```bash
 make lib           # build bindings/cc65/build/ultimate.lib
+make blob          # standalone binary with a jump table, for every other toolchain
 make examples      # assembly and cc65 versions of the same program
 make test          # run the assembled SDK against a simulated Ultimate
 ```
 
-`make lib` and `make examples` need [cc65](https://cc65.github.io/). `make test`
-needs cc65 and Docker; `make emulator` is the same thing under its own name.
+`make lib`, `make blob` and `make examples` need [cc65](https://cc65.github.io/).
+`make test` needs cc65 and Docker; `make emulator` is the same thing under its
+own name.
 
 ## From assembly
 
@@ -195,7 +197,7 @@ public model does not expose them.
 Built for a machine with 38 kilobytes.
 
 - No heap, no hidden buffers. Every byte lands in a buffer you own.
-- 65 bytes of static RAM in total, request block included. No allocation, ever.
+- 88 bytes of static RAM in total, request block included. No allocation, ever.
 - Four bytes of zero page, at an address you choose.
 - No interrupts required, and no interrupt handler installed.
 - Every entry point is bounded: it completes or returns `ULTIMATE_ERR_TIMEOUT`.

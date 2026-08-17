@@ -46,7 +46,8 @@ ULTIMATE_INC = 1
 ; locations the C runtime already owns - see docs/asm-abi.md.
 ; ---------------------------------------------------------------------------
 
-.global uci_req              ; UCI_REQ_SIZE bytes of request block, in BSS
+.global uci_req              ; UCI_REQ_SIZE bytes of request block: in BSS by
+                              ; default, an equate off UCI_VARS if it is defined
 
 .global ultimate_init        ; ->  A = ULTIMATE_OK or an error code
 .global ultimate_available   ; ->  A = 1 when the SDK is up, 0 otherwise
@@ -57,6 +58,17 @@ ULTIMATE_INC = 1
 .global uci_present          ; ->  A = 1 when the signature is on the bus
 .global uci_ident            ; ->  A = raw identification register
 .global uci_last_code        ; ->  A = low, X = high of the raw device code
+
+; These three take more than fits in registers, so the extra parameters go in
+; the shared variable block below - set them before calling. See docs/asm-abi.md.
+.global ultimate_identify    ; A = target, ult_buf/ult_buflen/ult_outlen -> A = result
+.global ultimate_get_model   ; ult_buf/ult_buflen/ult_outlen set -> A = result
+.global ultimate_detect      ; A/X = pointer to a 4-byte capability block -> A = result
+.global ultimate_strerror    ; A = result code -> A/X = pointer to PETSCII text
+
+.global ult_buf, ult_buflen  ; caller's output buffer and its size, for
+.global ult_outlen           ; ultimate_identify / ultimate_get_model; ult_outlen
+                              ; is where the length written is reported, 0 for nowhere
 
 ; The core takes a request block by pointer, so a program with several blocks
 ; can call it directly instead of going through uci_req:

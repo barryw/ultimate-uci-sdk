@@ -2,6 +2,7 @@
 #
 #   make test        the SDK under sim6502                 (cc65, Docker)
 #   make lib         the cc65 library                      (cc65)
+#   make blob        standalone binary with a jump table    (cc65)
 #   make examples    assembly, cc65 and Oscar64 examples   (cc65, Oscar64)
 #   make emulator    the same thing; test is an alias      (cc65, Docker)
 #   make hardware    build the on-device test program      (cc65)
@@ -24,6 +25,11 @@ test: emulator
 
 lib:
 	$(MAKE) -C bindings/cc65
+
+# The SDK as a standalone binary with a jump table, for every toolchain that
+# cannot link a ca65 object. See bindings/blob/README.md.
+blob:
+	$(MAKE) -C bindings/blob
 
 # The Oscar64 example is not built. bindings/oscar64/ultimate.mk lists the C
 # core that the assembly rewrite replaced, so the binding has to be redone -
@@ -63,5 +69,6 @@ clean:
 	$(MAKE) -C examples/cc65 clean
 	$(MAKE) -C examples/oscar64 clean
 	$(MAKE) -C bindings/cc65 clean
+	$(MAKE) -C bindings/blob clean
 
-.PHONY: all test lib examples emulator hardware hardware-run protocol coverage clean
+.PHONY: all test lib blob examples emulator hardware hardware-run protocol coverage clean

@@ -33,7 +33,7 @@ blob_table:
 
 _main:  rts
 
-; Copy $C000..$CFFF down to $8000, then fix up the addresses.
+; Copy $C000..$CBFF down to $8000, then fix up the addresses.
 t_reloc:
         ldx #$00
 @page:  lda BLOB_SRC,x

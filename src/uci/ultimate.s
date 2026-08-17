@@ -365,8 +365,6 @@ ultimate_get_model:
         ldx #$00
         rts
 
-; ---------------------------------------------------------------------------
-
         .rodata
 
 ; The marker is emitted as bytes, never as a string literal: a compiler or an

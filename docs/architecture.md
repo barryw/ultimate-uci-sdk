@@ -39,9 +39,11 @@ Constraints it holds itself to:
 
 - No heap. No hidden buffers. Every byte lands somewhere the caller owns, except
   a four-byte scratch used when the caller wants no status buffer at all.
-- `UCI_VARS_SIZE` (65) bytes of static RAM across the whole SDK: 18 in the
-  transport, 47 in the service layer (16 of which is the buffer capability
-  probing compares against, and 22 its request block).
+- `UCI_VARS_SIZE` (88) bytes of static RAM across the whole SDK: 18 in the
+  transport, 48 in the service layer (16 of which is the buffer capability
+  probing compares against, and 22 its own request block), and 22 more for
+  the caller-facing request block `bindings/asm/ultimate_asm.s` exports as
+  `uci_req`.
 - Four bytes of zero page, and the caller picks the address.
 - No interrupts. The IRQ-on-completion bit exists in the hardware and is exposed
   as a constant, but nothing in the SDK requires an interrupt handler.

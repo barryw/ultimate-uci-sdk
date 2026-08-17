@@ -43,7 +43,7 @@ custom linker script, or an assembler with no segment support at all.
 | Knob | Default | What it places |
 |---|---|---|
 | `UCI_ZP` | `$FB` | `UCI_ZP_SIZE` (4) bytes of zero page |
-| `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (18) bytes of variables |
+| `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (88) bytes of variables |
 | the request block | — | not a knob: `uci_exec` takes it by pointer |
 
 ```
@@ -133,8 +133,10 @@ sharing them.
 
 ## The request block
 
-`uci_req` is `UCI_REQ_SIZE` (22) bytes in BSS, exported by the SDK. Fill it in,
-call `uci_exec_block`, read the results back out.
+`uci_req` is `UCI_REQ_SIZE` (22) bytes, exported by the SDK — in BSS by
+default, or an equate off `UCI_VARS` when that is defined (see "Placing the
+SDK's memory" above). Fill it in, call `uci_exec_block`, read the results back
+out.
 
 | Offset | Constant | Size | Meaning |
 |---|---|---|---|
@@ -235,12 +237,11 @@ The consequence for callers: `ultimate_strerror` returns PETSCII, ready for
 
 ## Assemblers other than ca65
 
-Only ca65 is supported today, because it is the assembler the library is built
-with.
+ca65 links the library directly. Every other assembler uses the standalone
+binary in [bindings/blob](../bindings/blob), which has a jump table at its base
+and needs no linking at all — see [its README](../bindings/blob/README.md).
 
-For ACME, KickAssembler, 64tass and friends, the protocol constants are the part
-worth sharing, and `tools/gen_protocol.py` is a page of Python with the emitters
-kept separate — adding a fourth output format is a small, self-contained change.
-Reaching the *code* from those assemblers needs either a relocatable binary with
-a jump table or a port of `src/uci/*.s` to that assembler's syntax; both are
-open, and `tests/emulator` is what either would have to pass.
+Protocol constants are generated for ca65, KickAssembler and ACME from the same
+source, so they cannot drift: `bindings/asm/uci_protocol.inc`,
+`bindings/kickass/uci_protocol.asm`, `bindings/acme/uci_protocol.a`. Adding a
+fourth format is a page of Python in `tools/gen_protocol.py`.

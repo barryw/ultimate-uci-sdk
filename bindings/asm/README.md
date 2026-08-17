@@ -9,7 +9,9 @@
 Start with [../../docs/asm-abi.md](../../docs/asm-abi.md); it covers the register
 contract, the runtime requirement, and a complete worked call.
 
-Only ca65 is supported today, because it is the assembler that can link the
-compiled core. Adding the constants for another assembler is a small change to
-the generator; reaching the code needs more, and the options are described at the
-end of the ABI document.
+ca65 is the assembler that links the compiled core directly. Every other
+assembler — KickAssembler, ACME, and anything else that can `jsr` an address —
+uses the standalone binary in [../blob](../blob) instead; see
+[docs/asm-abi.md](../../docs/asm-abi.md#assemblers-other-than-ca65) for how
+that fits together and where the generated protocol constants for each
+assembler live.
