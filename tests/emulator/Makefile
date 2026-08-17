@@ -18,6 +18,13 @@ FS_ROOT       := /code/tests/emulator/fixtures/usb0
 
 LIB := $(ROOT)/bindings/cc65/build/ultimate.lib
 
+# The standalone blob (Task 6): the same core, linked with a jump table at a
+# fixed base address, and no symbol file - what blob.suite drives.
+BLOB := $(ROOT)/bindings/blob/build/ultimate-c000.bin
+
+$(BLOB): FORCE
+	$(MAKE) -C $(ROOT)/bindings/blob
+
 # The second harness is the same program with the SDK's RAM moved out of BSS to
 # a fixed address, the way a cartridge project would build it. Running the same
 # suite against both is what makes "placeable" a tested property rather than a
@@ -28,7 +35,8 @@ PLACED_VARS := 52992
 PLACED_ZP   := 163
 PLACED_DEFINES := -D UCI_VARS=$(PLACED_VARS) -D UCI_ZP=$(PLACED_ZP)
 
-all: harness.prg harness.sym harness-placed.prg harness-placed.sym sdk-placed.suite
+all: harness.prg harness.sym harness-placed.prg harness-placed.sym \
+     sdk-placed.suite $(BLOB)
 
 $(LIB): FORCE
 	$(MAKE) -C $(ROOT)/bindings/cc65 TARGET=$(TARGET)
@@ -98,6 +106,8 @@ run: all
 # No --backend: the plain simulator has nothing at $DF1B-$DF1F, which is the
 # only way to test a machine with no Ultimate in it.
 	$(SIM6502) -s /code/tests/emulator/absent.suite
+	$(SIM6502) -s /code/tests/emulator/blob.suite \
+	  --backend u64sim --u64sim-fs-root $(FS_ROOT)
 
 # The same protocol expectations, against a real Ultimate on the network.
 #   make hardware U64_HOST=192.168.1.62
@@ -114,6 +124,7 @@ clean:
 	rm -f harness.prg harness.lbl harness.sym harness.o
 	rm -f harness-placed.prg harness-placed.lbl harness-placed.sym sdk-placed.suite
 	rm -rf $(ROOT)/bindings/cc65/build-placed
+	$(MAKE) -C $(ROOT)/bindings/blob clean
 
 FORCE:
 

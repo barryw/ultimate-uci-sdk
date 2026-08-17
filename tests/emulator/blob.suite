@@ -1,0 +1,72 @@
+; blob.suite - the standalone blob, called through its jump table.
+;
+; No symbols and no harness: this is exactly what a KickAssembler, Oscar64 or
+; BASIC caller sees. If the offsets in this file are wrong, every one of those
+; callers is broken, which is why they are written as literals here rather
+; than read from a symbol file.
+;
+; SPDX-License-Identifier: MIT
+
+suites {
+  suite("the sdk as a standalone blob") {
+    system(c64)
+    load("/code/bindings/blob/build/ultimate-c000.bin", address = $c000)
+
+    test("blob-signature", "the blob identifies itself at its base address") {
+      assert($c000 == $d5, "'U' in PETSCII")
+      assert($c001 == $c3, "'C'")
+      assert($c002 == $c9, "'I'")
+      assert($c003 == $01, "version 1")
+      assert($c004 == $4c, "a jmp at the first entry")
+      ; sim6502 requires a test to execute something; jsr into the entry we
+      ; just verified rather than adding an unrelated instruction.
+      jsr($c004, stop_on_rts = true, fail_on_brk = true)
+    }
+
+    test("blob-init", "uci_init through the jump table") {
+      jsr($c004, stop_on_rts = true, fail_on_brk = true)
+      assert(a == $00, "ULTIMATE_OK")
+    }
+
+    test("blob-present", "uci_present through the jump table") {
+      jsr($c00d, stop_on_rts = true, fail_on_brk = true)
+      assert(a == $01, "the interface is there")
+    }
+
+    test("blob-timeout-roundtrip", "set and get the timeout through the table") {
+      jsr($c004, stop_on_rts = true, fail_on_brk = true)
+      a = $37
+      jsr($c013, stop_on_rts = true, fail_on_brk = true)
+      jsr($c016, stop_on_rts = true, fail_on_brk = true)
+      assert(a == $37, "the budget we set")
+    }
+
+    ; The real proof: a whole exchange, driven only through the table and the
+    ; caller-facing request block, with no symbols at all.
+    test("blob-exec", "a command runs through the table") {
+      jsr($c004, stop_on_rts = true, fail_on_brk = true)
+      assert(a == $00, "init")
+
+      ; uci_req is the first thing in the SDK's variable block after the
+      ; service layer's own 66 bytes: UCI_VARS + 66.
+      $cf42 = $01           ; UCI_REQ_TARGET  = DOS1
+      $cf43 = $f0           ; UCI_REQ_COMMAND = ECHO
+      $cf44 = $0000         ; UCI_REQ_ARGS
+      $cf46 = $0000         ; UCI_REQ_ARGLEN
+      $cf48 = $0000         ; UCI_REQ_PAYLOAD
+      $cf4a = $0000         ; UCI_REQ_PAYLOADLEN
+      $cf4c = $c151         ; UCI_REQ_DATA -> the blob's reply buffer
+      $cf4e = $0100         ; UCI_REQ_DATAMAX
+      $cf50 = $0000         ; UCI_REQ_DATALEN
+      $cf52 = $0000         ; UCI_REQ_STATUS
+      $cf54 = $0000         ; UCI_REQ_STATUSMAX
+      $cf56 = $0000         ; UCI_REQ_STATUSLEN
+
+      jsr($c007, stop_on_rts = true, fail_on_brk = true)
+      assert(a == $00, "ULTIMATE_OK")
+      assert($cf50.w == $0002, "two bytes echoed")
+      assert($c151 == $01, "target byte")
+      assert($c152 == $f0, "command byte")
+    }
+  }
+}
