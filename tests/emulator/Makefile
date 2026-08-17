@@ -36,7 +36,7 @@ PLACED_ZP   := 163
 PLACED_DEFINES := -D UCI_VARS=$(PLACED_VARS) -D UCI_ZP=$(PLACED_ZP)
 
 all: harness.prg harness.sym harness-placed.prg harness-placed.sym \
-     sdk-placed.suite $(BLOB)
+     sdk-placed.suite $(BLOB) relocharness.prg relocharness.sym
 
 $(LIB): FORCE
 	$(MAKE) -C $(ROOT)/bindings/cc65 TARGET=$(TARGET)
@@ -89,6 +89,24 @@ sdk-placed.suite: sdk.suite
 	sed -e 's|harness\.|harness-placed.|g' \
 	    -e 's|ultimate sdk on 6502|ultimate sdk on 6502, memory relocated|' $< > $@
 
+# The relocator test harness (Task 9): loads the blob at $C000, moves it to
+# $8000 with bindings/blob/reloc.s, and calls through the moved jump table -
+# the only way to prove the relocation table has no missing entries.
+RELOCHARNESS_SYMS := t_reloc t_call_init result
+
+relocharness.prg relocharness.lbl: relocharness.s $(LIB) $(BLOB)
+	$(CL65) -t $(TARGET) --asm-include-dir $(ROOT)/bindings/asm \
+	  -I $(ROOT)/bindings/blob \
+	  -Ln relocharness.lbl -o relocharness.prg \
+	  relocharness.s $(ROOT)/bindings/blob/reloc.s $(LIB)
+
+relocharness.sym: relocharness.lbl
+	awk -v want="$(RELOCHARNESS_SYMS)" ' \
+	  BEGIN { n = split(want, a, " "); for (i = 1; i <= n; i++) keep[a[i]] = 1 } \
+	  /^al / { name = $$3; sub(/^\./, "", name); \
+	           if (name in keep) printf ".label %s=$$%s\n", name, tolower(substr($$2, 3)) } \
+	' $< > $@
+
 # The interface latency timeout.suite needs: comfortably longer than the SDK's
 # smallest budget of 256 status polls, so the poll loop gives up first.
 SLOW_LATENCY := 200000
@@ -108,6 +126,8 @@ run: all
 	$(SIM6502) -s /code/tests/emulator/absent.suite
 	$(SIM6502) -s /code/tests/emulator/blob.suite \
 	  --backend u64sim --u64sim-fs-root $(FS_ROOT)
+	$(SIM6502) -s /code/tests/emulator/blob-relocated.suite \
+	  --backend u64sim --u64sim-fs-root $(FS_ROOT)
 
 # The same protocol expectations, against a real Ultimate on the network.
 #   make hardware U64_HOST=192.168.1.62
@@ -123,6 +143,7 @@ hardware:
 clean:
 	rm -f harness.prg harness.lbl harness.sym harness.o
 	rm -f harness-placed.prg harness-placed.lbl harness-placed.sym sdk-placed.suite
+	rm -f relocharness.prg relocharness.lbl relocharness.sym relocharness.o
 	rm -rf $(ROOT)/bindings/cc65/build-placed
 	$(MAKE) -C $(ROOT)/bindings/blob clean
 

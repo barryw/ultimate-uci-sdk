@@ -1,0 +1,36 @@
+; blob-relocated.suite - the blob moved to a different address, then called.
+;
+; A relocation table with a missing entry still passes every test that runs the
+; blob where it was built. This is the only test that catches one: the blob is
+; moved down by $40 pages, so any address the table missed still points into
+; $C0xx and the call lands somewhere else entirely.
+;
+; SPDX-License-Identifier: MIT
+
+suites {
+  suite("the blob, relocated") {
+    system(c64)
+    symbols("/code/tests/emulator/relocharness.sym")
+    load("/code/tests/emulator/relocharness.prg", strip_header = true)
+    load("/code/bindings/blob/build/ultimate-c000.bin", address = $c000)
+
+    test("reloc-init", "the relocated blob still brings the interface up") {
+      jsr([t_reloc], stop_on_rts = true, fail_on_brk = true)
+      assert($8000 == $d5, "the signature moved with it")
+      assert($8004 == $4c, "and so did the jump table")
+
+      jsr([t_call_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK from $8000")
+    }
+
+    ; If any absolute address was missed, the blob at $8000 still reaches back
+    ; into $C0xx. Wiping the original is what turns that into a failure instead
+    ; of an accidental pass.
+    test("reloc-is-complete", "nothing in the moved blob still points at the old address") {
+      jsr([t_reloc], stop_on_rts = true, fail_on_brk = true)
+      memfill($c000, $0c00, $00)
+      jsr([t_call_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK with the original erased")
+    }
+  }
+}
