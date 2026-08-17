@@ -211,7 +211,7 @@ make test         # sim6502 in Docker: the assembled SDK, against a simulated Ul
 make -C tests/hardware && copy ucitest.prg to your Ultimate    # the real thing, TAP output
 ```
 
-Current results: **73 emulator tests, 13 hardware tests, all passing** — the
+Current results: **82 emulator tests, 13 hardware tests, all passing** — the
 last of those on an Ultimate 64 Elite, firmware 3.15.
 
 There is no host layer: the SDK is 6502 assembly, so a host test would have to
