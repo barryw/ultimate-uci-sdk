@@ -82,10 +82,14 @@ time:
   where PETSCII is what you want) and the blob's `"UCI"` signature (compared
   only against itself).
 - **The model name is mixed case**, unlike the uppercase identification strings.
-- **Target `$05` reports present even when the drive is off**
-  ([firmware #794](https://github.com/GideonZ/1541ultimate/issues/794)). A
-  SoftwareIEC service must expect its first real command to fail, and fall back
-  on that failure rather than on detection.
+- **Target `$05` reports present even when the drive is off, and that is
+  intended** ([#794](https://github.com/GideonZ/1541ultimate/issues/794), answered
+  by Gideon). Disabling the drive takes it off the IEC bus, not off UCI — UCI is
+  how the hyperspeed kernal reaches it. So SoftwareIEC over UCI needs no setting
+  from the user, and Phase 3's fast load has nothing to talk them through. A
+  SoftwareIEC service still falls back on its first real command failing rather
+  than on detection, because detection cannot see a mounted image or a valid
+  path either way.
 - **`UCI_CTRL_DMA` and `UCI_CTRL_TRIGGER` are not a fast path.** Both latch into
   `freeze_i` in the FPGA source — the freezer line. See uci.md's closing
   section. The real fast load is `SOFTIEC_CMD_LOAD_SU` then `LOAD_EX` on target

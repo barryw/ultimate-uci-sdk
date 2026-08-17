@@ -90,17 +90,22 @@ the result.
 
 Two things worth knowing about what the probe reports:
 
-- **A present target is not always a usable one.** The documentation says every
-  SoftwareIEC command returns `$05 IEC MODULE NOT LOADED` when no emulated drive
-  sits behind the interface, which would make the target probe reflect whether
-  it is usable. On firmware 3.15 it does not: target `$05` identifies itself and
-  serves commands even with the IEC Drive setting disabled, so
-  `ultimate_has_softiec()` reports it available on a machine where the drive is
-  switched off. Reported upstream as
-  [GideonZ/1541ultimate#794](https://github.com/GideonZ/1541ultimate/issues/794).
-  Until that changes, treat SoftwareIEC availability as "the firmware has the
-  target", not "the drive is ready", and be prepared for the first real command
-  to fail.
+- **`ultimate_has_softiec()` does not track the IEC Drive setting, by design.**
+  The documentation says every SoftwareIEC command returns `$05 IEC MODULE NOT
+  LOADED` when no emulated drive sits behind the interface, which would make the
+  target probe reflect whether the drive is switched on. It does not: target
+  `$05` identifies itself and serves commands with the IEC Drive setting
+  disabled, and
+  [GideonZ/1541ultimate#794](https://github.com/GideonZ/1541ultimate/issues/794)
+  settles that this is intended and permanent. Disabling the drive takes it off
+  the *IEC bus*; UCI is a separate path to the same code, and it is the path the
+  hyperspeed kernal uses.
+
+  The useful consequence: **a program driving SoftwareIEC over UCI does not need
+  the user to enable the IEC drive first.** `ultimate_has_softiec()` means "this
+  firmware has the target", which is the thing you actually need to know. Still
+  fall back on a command failing rather than on the probe — the probe cannot see
+  a mounted image, a valid path, or a full disk.
 - **`ultimate_get_model()` is for humans.** It reads `CTRL_CMD_GET_HWINFO`,
   which needs the control target and returns mixed-case strings —
   `Ultimate 64 Elite`, `Ultimate II+`, `Ultimate 64-II`. Note the case: unlike

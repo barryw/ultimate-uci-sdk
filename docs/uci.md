@@ -281,8 +281,16 @@ disabled, target `$05` still identifies itself *and still serves functional
 commands* — `SOFTIEC_CMD_GET_FATNAME` returns a resolved host path. The
 availability guard tests a pointer that is set unconditionally at boot rather
 than the drive's enable flag, so that status is effectively unreachable.
-Reported upstream as
-[GideonZ/1541ultimate#794](https://github.com/GideonZ/1541ultimate/issues/794).
+
+**This is intended and it is not going to change.** Asked directly in
+[GideonZ/1541ultimate#794](https://github.com/GideonZ/1541ultimate/issues/794),
+Gideon confirmed it: disabling the drive removes it from the *IEC bus*, not from
+UCI, because UCI is exactly the path the hyperspeed kernal uses to reach it. So
+the IEC Drive setting and SoftwareIEC-over-UCI are two independent things, and
+`$05` is reachable whether or not a drive is answering on the bus. Treat the
+`$05` status as documented-but-unreachable rather than as a case to design
+around — the SDK still maps it in `uci_map_binary`, which costs six bytes and
+means a future firmware that does fire it is handled without a change.
 
 **The SoftwareIEC target mixes two status encodings.** `SOFTIEC_CMD_IDENTIFY`
 answers with the firmware's shared ASCII message `00,OK`; every other command on

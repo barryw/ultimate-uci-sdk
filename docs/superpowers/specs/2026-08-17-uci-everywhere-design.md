@@ -387,9 +387,17 @@ Read out of the firmware, not inferred from constant names:
   `ULOAD "X",$4000` is `sec=0, addr=$4000`. The semantics we chose are the
   firmware's own; nothing is invented.
 
-**Fallback triggers on the first command failing, not on detection.** Firmware
-[#794](https://github.com/GideonZ/1541ultimate/issues/794) means target `$05`
-reports present even when the drive is off.
+**Fallback triggers on the first command failing, not on detection.** Target
+`$05` reports present even when the IEC drive is switched off, and
+[#794](https://github.com/GideonZ/1541ultimate/issues/794) settles that this is
+intended and permanent: disabling the drive removes it from the IEC bus, not
+from UCI, which is the path the hyperspeed kernal itself uses.
+
+Two consequences for this phase, both good. **The fast load path does not
+require the user to enable the IEC drive** — `LOAD_SU`/`LOAD_EX` are reachable
+either way, so `ULOAD` has no setting to talk the user through. And detection
+still cannot tell you a *file* is loadable, which is why the fallback hangs off
+the command failing.
 
 ### `reu.s` — the one service that does not go through `uci_exec`
 

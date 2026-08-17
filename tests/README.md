@@ -110,7 +110,7 @@ still decoded and printed when something fails.
 | `uci-disabled` | with the interface switched off the SDK reports no device and returns, rather than hanging or misreading open bus |
 | `uci-enabled` | the baseline, all 13 checks |
 | `uci-with-reu` | the interface overlays the last five REU registers, so an enabled REU must not disturb it |
-| `softiec-detection-is-live` | switching a subsystem on changes what capability detection reports, with no rebuild |
+| `softiec-survives-drive-disabled` | target `$05` stays reachable over UCI with the IEC drive switched off, so the SDK's SoftwareIEC path needs no setting from the user |
 
 Every setting it touches is read first and restored afterwards, including on
 Ctrl-C. Nothing is written to the Ultimate's flash.
@@ -118,4 +118,6 @@ Ctrl-C. Nothing is written to the Ultimate's flash.
 This is the layer that found the SoftwareIEC status-encoding bug: the target
 answers `IDENTIFY` in ASCII and everything else in binary, so decoding by target
 ID alone made capability probing report a working target as absent. It also
-turned up [GideonZ/1541ultimate#794](https://github.com/GideonZ/1541ultimate/issues/794).
+turned up [GideonZ/1541ultimate#794](https://github.com/GideonZ/1541ultimate/issues/794),
+which came back as intended behaviour rather than a bug — and is now a contract
+the SDK can rely on rather than a quirk to route around.

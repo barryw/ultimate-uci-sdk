@@ -136,14 +136,18 @@ def expect_no_device(r, state=None):
 
 
 def record_softiec(r, state):
-    """Baseline step: note whether the target is visible, assert nothing.
+    """Drive off: note whether the target is still visible, assert nothing.
 
-    Absence cannot be asserted here. The firmware registers a UCI target when
-    its subsystem starts and never unregisters it, so a SoftwareIEC target that
-    was switched on earlier in this power cycle keeps answering after the drive
-    is switched off again - /v1/drives reports enabled=false while target $05
-    still returns SOFTWARE IEC TARGET V1.0. Detection is live in one direction
-    only. See docs/compatibility.md.
+    Presence here is the interesting observation, and it is the expected one -
+    GideonZ/1541ultimate#794 confirms that disabling the drive removes it from
+    the IEC bus and not from UCI, because UCI is how the hyperspeed kernal
+    reaches it. /v1/drives reports enabled=false while target $05 still returns
+    SOFTWARE IEC TARGET V1.0.
+
+    It is still not asserted, for one reason: this run cannot prove what a cold
+    boot with the drive already disabled would report, and this bench machine
+    cannot be power cycled remotely. Absence here would be a finding to chase,
+    not a failure to fail on.
     """
     problem = expect_clean_pass(r)
     if problem:
@@ -157,12 +161,12 @@ def expect_softiec_present(r, state):
     if problem:
         return problem
     if not r.targets & TARGET_SOFTIEC_BIT:
-        return ("switching the drive on should make detection see target $05, "
+        return ("detection must see target $05 with the IEC drive enabled, "
                 "targets=$%04x" % r.targets)
     if state.get("softiec_before") is True:
-        state["note"] = ("target $05 was already visible before this step - it "
-                         "was latched by an earlier enable in this power cycle, "
-                         "so this step only confirms it did not disappear")
+        state["note"] = ("target $05 was visible with the drive disabled too, "
+                         "which is the documented intent (#794) - the SDK's "
+                         "SoftwareIEC path needs no drive setting from the user")
     return None
 
 
@@ -191,9 +195,10 @@ SCENARIOS = [
         ],
     },
     {
-        "name": "softiec-detection-is-live",
-        "why": "switching a subsystem on must change what capability detection "
-               "reports, with no rebuild and no reboot of the C64 program",
+        "name": "softiec-survives-drive-disabled",
+        "why": "target $05 must stay reachable over UCI with the IEC drive "
+               "switched off - see #794, it is the path the hyperspeed kernal "
+               "uses, and the SDK's fast load depends on it",
         "steps": [
             ({CMD_IF: "Enabled", REU: "Disabled", IEC_DRIVE: "Disabled"},
              record_softiec),
