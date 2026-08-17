@@ -15,7 +15,7 @@
 
         .import uci_exec, uci_init, uci_present, uci_ident
         .import ult_up, ult_buf, ult_buflen, ult_outlen, ult_caps
-        .import ult_scratch, ult_req
+        .import ult_scratch, ult_req, ult_probe
 
         .export ultimate_init,      _ultimate_init
         .export ultimate_available, _ultimate_available
@@ -287,8 +287,8 @@ _ultimate_detect:
         sta ult_outlen + 1
 
         lda #UCI_TARGET_DOS1
-        sta ult_probe_target
-@next:  lda ult_probe_target
+        sta ult_probe
+@next:  lda ult_probe
         jsr ultimate_identify
         cmp #ULTIMATE_OK
         bne @absent
@@ -302,7 +302,7 @@ _ultimate_detect:
         ; bit always lands in the low byte; the assert below keeps that true if
         ; the probe range ever grows.
         .assert UCI_TARGET_HTTP < 8, error, "the target bitmap needs its high byte"
-        ldx ult_probe_target
+        ldx ult_probe
         lda #$01
 @shift: cpx #$00
         beq @or_lo
@@ -314,8 +314,8 @@ _ultimate_detect:
         sta (uci_ptr),y
 
 @absent:
-        inc ult_probe_target
-        lda ult_probe_target
+        inc ult_probe
+        lda ult_probe
         cmp #UCI_TARGET_HTTP + 1
         bcc @next
 
@@ -382,11 +382,6 @@ _ultimate_strerror:
         tax
         pla
         rts
-
-; ---------------------------------------------------------------------------
-
-        .bss
-ult_probe_target: .res 1
 
 ; ---------------------------------------------------------------------------
 

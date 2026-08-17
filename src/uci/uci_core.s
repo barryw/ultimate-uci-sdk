@@ -35,7 +35,7 @@
 
         ; The service layer's storage lives in the same block; see below.
         .export ult_up, ult_buf, ult_buflen, ult_outlen, ult_caps
-        .export ult_scratch, ult_req
+        .export ult_scratch, ult_req, ult_probe
 
 ; ---------------------------------------------------------------------------
 ; Variables
@@ -84,8 +84,9 @@ ult_outlen      = UCI_VARS + 23 ; where to write the length, 0 for nowhere
 ult_caps        = UCI_VARS + 25 ; caller capability block
 ult_scratch     = UCI_VARS + 27 ; probe buffer, see ultimate.s for why 16
 ult_req         = UCI_VARS + 43 ; the service layer's own request block
+ult_probe       = UCI_VARS + 43 + UCI_REQ_SIZE  ; capability probe cursor
 
-.assert (43 + UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+.assert (44 + UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
 .else
 
@@ -117,6 +118,7 @@ ult_outlen:     .res 2
 ult_caps:       .res 2
 ult_scratch:    .res 16
 ult_req:        .res UCI_REQ_SIZE
+ult_probe:      .res 1
 
 .endif
 
