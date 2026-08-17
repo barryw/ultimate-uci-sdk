@@ -86,7 +86,12 @@ ult_scratch     = UCI_VARS + 27 ; probe buffer, see ultimate.s for why 16
 ult_req         = UCI_VARS + 43 ; the service layer's own request block
 ult_probe       = UCI_VARS + 43 + UCI_REQ_SIZE  ; capability probe cursor
 
-.assert (44 + UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+; --- caller-facing request block (bindings/asm/ultimate_asm.s) ---
+uci_req         = UCI_VARS + 44 + UCI_REQ_SIZE
+
+.assert (44 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+
+        .export uci_req
 
 .else
 

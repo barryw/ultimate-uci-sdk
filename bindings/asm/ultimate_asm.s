@@ -10,15 +10,20 @@
 
         .import uci_exec
 
-        .export uci_req
         .export uci_exec_block
         .export uci_req_clear
 
 
+; With UCI_VARS defined the whole SDK is equates off one address, so the
+; request block comes from uci_core.s and nothing here reserves storage.
+.ifdef UCI_VARS
+        .import uci_req
+.else
+        .export uci_req
         .bss
-
 uci_req:
         .res UCI_REQ_SIZE
+.endif
 
         .code
 
