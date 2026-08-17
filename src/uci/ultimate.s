@@ -22,7 +22,6 @@
         .export ultimate_identify
         .export ultimate_detect,    _ultimate_detect
         .export ultimate_get_model
-        .export ultimate_strerror,  _ultimate_strerror
 
 ; The probe buffer is deliberately small. Detection does not need to read an
 ; identification string, only to tell "NO TARGET" from anything else, and
@@ -367,23 +366,6 @@ ultimate_get_model:
         rts
 
 ; ---------------------------------------------------------------------------
-; ultimate_strerror   A = ULTIMATE_* code  ->  A/X = pointer to the text
-; ---------------------------------------------------------------------------
-ultimate_strerror:
-_ultimate_strerror:
-        cmp #ULT_ERR_COUNT
-        bcc @known
-        lda #ULT_ERR_COUNT      ; the "unknown" entry sits one past the end
-@known: asl a
-        tax
-        lda ult_err_table,x
-        pha
-        lda ult_err_table + 1,x
-        tax
-        pla
-        rts
-
-; ---------------------------------------------------------------------------
 
         .rodata
 
@@ -394,22 +376,3 @@ ult_no_target:
 
 ult_hwinfo_arg:
         .byte CTRL_HWINFO_MODEL
-
-ULT_ERR_COUNT = 10
-
-ult_err_table:
-        .addr ult_e_ok, ult_e_nodev, ult_e_timeout, ult_e_proto
-        .addr ult_e_unsup, ult_e_arg, ult_e_io, ult_e_device
-        .addr ult_e_trunc, ult_e_abort, ult_e_unknown
-
-ult_e_ok:      .byte "OK", 0
-ult_e_nodev:   .byte "NO ULTIMATE FOUND", 0
-ult_e_timeout: .byte "TIMEOUT", 0
-ult_e_proto:   .byte "PROTOCOL ERROR", 0
-ult_e_unsup:   .byte "NOT SUPPORTED", 0
-ult_e_arg:     .byte "INVALID ARGUMENT", 0
-ult_e_io:      .byte "I/O ERROR", 0
-ult_e_device:  .byte "DEVICE ERROR", 0
-ult_e_trunc:   .byte "REPLY TRUNCATED", 0
-ult_e_abort:   .byte "ABORTED", 0
-ult_e_unknown: .byte "UNKNOWN ERROR", 0

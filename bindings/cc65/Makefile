@@ -29,6 +29,7 @@ AFLAGS  := -t $(TARGET) -I $(ROOT)/bindings/asm -I $(ROOT)/src/uci -I $(BUILD) $
 # The whole SDK is assembly; the only C here is a build-time layout check.
 CSRC    := abi_assert.c
 ASRC    := $(ROOT)/src/uci/uci_core.s $(ROOT)/src/uci/ultimate.s \
+           $(ROOT)/src/uci/ultimate_strerror.s \
            $(ROOT)/bindings/asm/ultimate_asm.s ultimate_cc65.s
 
 COBJ    := $(addprefix $(BUILD)/,$(notdir $(CSRC:.c=.o)))
@@ -55,6 +56,9 @@ $(BUILD)/uci_core.o: $(ROOT)/src/uci/uci_core.s | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
 $(BUILD)/ultimate.o: $(ROOT)/src/uci/ultimate.s | $(BUILD)
+	$(CA65) $(AFLAGS) -o $@ $<
+
+$(BUILD)/ultimate_strerror.o: $(ROOT)/src/uci/ultimate_strerror.s | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
 $(BUILD)/ultimate_asm.o: $(ROOT)/bindings/asm/ultimate_asm.s | $(BUILD)
