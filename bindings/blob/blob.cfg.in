@@ -1,16 +1,20 @@
 # Linker config for the standalone SDK blob.
 #
-# No BSS: with UCI_VARS defined every variable is an equate off the caller's
-# address, so there is nothing for a linker to place. Tasks 1 and 2 are what
-# made that true.
+# Three areas: the jump table header, a page-aligned parameter block for
+# POKE/SYS callers, and the code. fill = yes on the first two keeps the file
+# contiguous so every promised offset holds when the whole binary is loaded
+# in one go.
 #
 # SPDX-License-Identifier: MIT
 
 MEMORY {
-    RAM: start = @BASE@, size = $2000, type = rw, file = %O, fill = no;
+    HDR:  start = @BASE@,        size = $0100, type = rw, file = %O, fill = yes;
+    PARM: start = @BASE@ + $100, size = $0200, type = rw, file = %O, fill = yes;
+    MAIN: start = @BASE@ + $300, size = $1D00, type = rw, file = %O, fill = no;
 }
 SEGMENTS {
-    BLOBHDR: load = RAM, type = ro;
-    CODE:    load = RAM, type = ro;
-    RODATA:  load = RAM, type = ro;
+    BLOBHDR:  load = HDR,  type = ro;
+    BLOBPARM: load = PARM, type = rw, define = yes;
+    CODE:     load = MAIN, type = ro;
+    RODATA:   load = MAIN, type = ro;
 }

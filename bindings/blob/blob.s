@@ -41,3 +41,31 @@ blob_start:
         jmp ultimate_identify           ; +$25
         jmp ultimate_get_model          ; +$28
         jmp ultimate_strerror           ; +$2B
+
+; ---------------------------------------------------------------------------
+; The parameter block.
+;
+; Page-aligned so that a BASIC program driving the SDK with POKE and SYS needs
+; no address arithmetic: POKE UCI+256+n, v. That is the only calling convention
+; BASIC can express without a wedge, and it costs assembly and C nothing.
+; ---------------------------------------------------------------------------
+
+        .segment "BLOBPARM"
+
+        .export blob_params
+        .export bp_result, bp_devcode, bp_addr, bp_len, bp_end
+        .export bp_status, bp_name, bp_reply
+
+BP_STATUS_MAX = 32
+BP_NAME_MAX   = 40
+BP_REPLY_MAX  = 256
+
+blob_params:
+bp_result:  .res 1                  ; +$00  ULTIMATE_* result
+bp_devcode: .res 2                  ; +$01  raw device code
+bp_addr:    .res 2                  ; +$03  address argument
+bp_len:     .res 2                  ; +$05  length argument
+bp_end:     .res 2                  ; +$07  end address after a load
+bp_status:  .res BP_STATUS_MAX      ; +$09
+bp_name:    .res BP_NAME_MAX        ; +$29
+bp_reply:   .res BP_REPLY_MAX       ; +$51
