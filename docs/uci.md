@@ -380,6 +380,53 @@ commands `$51`-`$54`; and on the network target, the TCP listener commands
 
 ---
 
+## How big is the RAM expansion?
+
+**No command answers this.** The control target's hardware-info command reports
+the model name and the SID configuration, and that is the whole of it. The
+firmware knows — `REU Size` is a setting, and it offers `128 KB`, `256 KB`,
+`512 KB`, `1 MB`, `2 MB`, `4 MB`, `8 MB`, `16 MB` — but the only way to read it
+is the REST API, which is no use to a program running on the C64.
+
+`REU_STAT_SIZE` (`$10` in `$DF00`) is not the answer either. It is the 1764-era
+bit that separated 128 KB from 256 KB, and on an Ultimate it is measured as
+clear at 128 KB and set at every size above it. One bit cannot distinguish eight
+sizes.
+
+So `ultimate_reu_size()` measures it, and the measurement rests on one fact
+verified across all eight sizes on firmware 3.15: **the expansion aliases.** A
+write past the end lands at the offset modulo the real size, and because every
+boundary worth testing is a power of two at or above that size, it lands exactly
+on offset zero. The first boundary whose write disturbs offset zero is the size.
+
+| configured | measured |
+|---|---|
+| 128 KB | 2 banks |
+| 256 KB | 4 |
+| 512 KB | 8 |
+| 1 MB | 16 |
+| 2 MB | 32 |
+| 4 MB | 64 |
+| 8 MB | 128 |
+| 16 MB | 256 |
+
+**16 MB is the ceiling whatever the machine has**, because `REU_REG_ADDR_LO`,
+`MID` and `HI` are 24 bits between them. A Commodore 64 Ultimate with far more
+RAM than that cannot reach the rest through these registers — there is no fourth
+address byte and no bank register in the documented set.
+
+**The size is reported in 64K banks, and in a word.** 16 MB is 256 banks, which
+does not fit a byte; counted in 256-byte pages it is 65536, which does not fit a
+word. Both of the compact units are one short at exactly the largest machine,
+which is the one nobody has to hand. Banks in a word reach 4 GB.
+
+The probe borrows twelve bytes and puts them back, offset zero last so a wrapped
+write cannot outlive the truth. `tests/hardware` asserts that too: a size probe
+that quietly corrupted offset zero would pass every size check and still be
+wrong.
+
+---
+
 ## Sockets, and what the network target really does
 
 The protocol document gives the argument shapes for target `$03` and stops

@@ -44,6 +44,12 @@ from screen import decode_screen, SCREEN_ADDR, SCREEN_LEN  # noqa: E402
 # Settings this script drives. Category, item.
 CMD_IF = ("C64 and Cartridge Settings", "Command Interface")
 REU = ("C64 and Cartridge Settings", "RAM Expansion Unit")
+REU_SIZE = ("C64 and Cartridge Settings", "REU Size")
+# What each configured size should measure as, in 64K banks. 16 MB is 256, which
+# is why the SDK reports banks in a word: it does not fit a byte, and neither
+# does the same size counted in 256-byte pages fit one.
+REU_BANKS = {"128 KB": 2, "256 KB": 4, "512 KB": 8, "1 MB": 16,
+             "2 MB": 32, "4 MB": 64, "8 MB": 128, "16 MB": 256}
 IEC_DRIVE = ("SoftIEC Drive Settings", "IEC Drive")
 # "Off", "Manual", "U64 Turbo Registers" or "TurboEnable Bit". Only the third
 # gives a program control of $D031; the others leave it reading $FF, which is
@@ -72,6 +78,9 @@ class Result:
         self.net_ran = bool(block[14]) if self.format >= 3 else False
         self.net_sock_ran = bool(block[15]) if self.format >= 3 else False
         self.http_ran = bool(block[16]) if self.format >= 3 else False
+        # The size the C64 measured for itself, in 64K banks.
+        self.reu_banks = (block[17] | (block[18] << 8)) if self.format >= 3 else 0
+        self.reu_probe_clean = bool(block[19]) if self.format >= 3 else False
 
     def __str__(self):
         if not self.valid:
@@ -145,6 +154,30 @@ def expect_clean_pass_with_net(r, state=None):
         state = state if state is not None else {}
         state["note"] = ("skipped for want of a peer: " + ", ".join(missing))
     return None
+
+
+def expect_reu_size(want):
+    """The size the SDK measured must be the size the harness configured.
+
+    Nothing in the protocol reports it, so the SDK finds it by writing past each
+    power-of-two boundary and seeing which one comes back round to offset zero.
+    That is only trustworthy if it agrees with a size set from outside, which is
+    what this does - and it is checked at the top end especially, because 16 MB
+    is the one value that does not fit the obvious compact encodings and so is
+    the one most likely to be got wrong.
+    """
+    def check(r, state=None):
+        problem = expect_clean_pass(r)
+        if problem:
+            return problem
+        if r.reu_banks != REU_BANKS[want]:
+            return ("with the expansion set to %s the SDK should measure %d "
+                    "banks, and it measured %d"
+                    % (want, REU_BANKS[want], r.reu_banks))
+        if not r.reu_probe_clean:
+            return "the size probe changed the bytes it borrowed"
+        return None
+    return check
 
 
 def expect_no_device(r, state=None):
@@ -226,6 +259,23 @@ SCENARIOS = [
         "steps": [
             ({CMD_IF: "Enabled", REU: "Disabled", TURBO: "Off"},
              expect_clean_pass_with_net),
+        ],
+    },
+    {
+        "name": "reu-size-is-measured",
+        "why": "no command reports the expansion's size, so the SDK measures "
+               "it - and the only way to know the measurement is right is to "
+               "set the size from outside and see whether it agrees. The three "
+               "steps are the three structurally different answers: the first "
+               "boundary, a middle one, and the top end that falls through "
+               "every boundary there is",
+        "steps": [
+            ({CMD_IF: "Enabled", REU: "Enabled", TURBO: "Off",
+              REU_SIZE: "128 KB"}, expect_reu_size("128 KB")),
+            ({CMD_IF: "Enabled", REU: "Enabled", TURBO: "Off",
+              REU_SIZE: "2 MB"}, expect_reu_size("2 MB")),
+            ({CMD_IF: "Enabled", REU: "Enabled", TURBO: "Off",
+              REU_SIZE: "16 MB"}, expect_reu_size("16 MB")),
         ],
     },
     {

@@ -99,6 +99,7 @@ well as returning it in `A`.
 | `+$A6` | `http_exchange` | `bp_http`, `bp_body`, `bp_addr`, `bp_len` | `bp_len` = arrived, `bp_result` |
 | `+$A9` | `http_close` | `bp_http` | `bp_result` |
 | `+$AC` | `http_free_all` | | `bp_result` |
+| `+$AF` | `reu_size` | | `bp_len` = size in 64K banks, 0 = none |
 
 A directory walk is one live exchange: `+$55` then `+$58` until it answers
 `ULTIMATE_END` (`10`), with no other command in between. `+$7F` and `+$82` work

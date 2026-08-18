@@ -71,7 +71,7 @@ enable it in the ultimate settings menu.
 | find the Ultimate, and ask what it can do | `ultimate_init`, `ultimate_detect` |
 | files and directories | `chdir`, `getpath`, `opendir`, `readdir`, `open`, `close`, `read`, `write`, `seek`, `delete` |
 | load and save | `load`, `bload`, `save` — the load takes the firmware's fast path when there is one |
-| the RAM expansion | `reu_stash`, `reu_fetch`, and file-to-expansion without the C64 in between |
+| the RAM expansion | `reu_stash`, `reu_fetch`, file-to-expansion without the C64 in between, and `reu_size` to find out how much there is |
 | the running palette | `palette_get`, `palette_set`, `palette_set_color`, `palette_reset` |
 | CPU speed on an Ultimate 64 | `turbo_set`, `turbo_get`, `turbo_badlines` |
 | TCP and UDP sockets | `net_connect`, `net_udp`, `net_read`, `net_write`, `net_close`, and the machine's own address from `net_ipconfig` |

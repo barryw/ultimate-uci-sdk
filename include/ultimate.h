@@ -316,6 +316,30 @@ uint16_t ultimate_last_end(void);
  * ULTIMATE_ERR_NOT_SUPPORTED rather than pretending.
  */
 uint8_t ultimate_reu_available(void);
+
+/*
+ * The expansion's size in 64K banks, or 0 when there is none.
+ *
+ *     128 KB = 2    1 MB = 16     8 MB = 128
+ *     256 KB = 4    2 MB = 32    16 MB = 256
+ *     512 KB = 8    4 MB = 64
+ *
+ * **Banks, not bytes, and a word rather than a byte.** 16 MB is 256 banks,
+ * which will not fit a byte, and 65536 pages of 256, which will not fit a word
+ * either - both compact units are one short at exactly the largest machine.
+ * A bank count in a word reaches 4 GB with no boundary to trip over.
+ *
+ * Nothing in the protocol answers this, so it is measured: the expansion
+ * aliases, and the first power-of-two boundary whose write comes back round to
+ * offset zero is the size. Twelve bytes are saved and restored, so calling it
+ * changes nothing. It costs one small DMA burst per boundary, eight at most,
+ * each with the CPU halted - cheap enough at start-up and not worth caching.
+ *
+ * 16 MB is the ceiling whatever the machine has, because the REU address
+ * registers are 24 bits. A machine with more RAM than that cannot reach the
+ * rest through this interface.
+ */
+uint16_t ultimate_reu_size(void);
 uint8_t ultimate_reu_stash(uint16_t addr, uint32_t reuaddr, uint16_t len);
 uint8_t ultimate_reu_fetch(uint16_t addr, uint32_t reuaddr, uint16_t len);
 uint8_t ultimate_reu_load(uint32_t reuaddr, uint32_t len);

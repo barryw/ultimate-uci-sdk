@@ -27,7 +27,7 @@
         .import ultimate_open, ultimate_close, ultimate_read
         .import ultimate_write, ultimate_seek, ultimate_delete
         .import ultimate_load, ultimate_bload, ultimate_save
-        .import ultimate_reu_available
+        .import ultimate_reu_available, ultimate_reu_size
         .import ultimate_reu_stash, ultimate_reu_fetch
         .import ultimate_reu_load, ultimate_reu_save
         .import ultimate_net_ifcount, ultimate_net_macaddr
@@ -125,6 +125,7 @@ blob_start:
         jmp blob_http_exchange          ; +$A6
         jmp blob_http_close             ; +$A9
         jmp blob_http_free_all          ; +$AC
+        jmp blob_reu_size               ; +$AF
 
 ; ---------------------------------------------------------------------------
 ; The parameter block.
@@ -273,6 +274,15 @@ blob_save:
 
 blob_reu_available:
         jmp ultimate_reu_available
+
+; The size in 64K banks, into bp_len, because 16 MB is 256 banks and will not
+; fit a single byte of the block.
+blob_reu_size:
+        jsr ultimate_reu_size
+        sta bp_len
+        stx bp_len + 1
+        lda #ULTIMATE_OK
+        jmp blob_done
 
 blob_reu_stash:
         jsr blob_set_reu

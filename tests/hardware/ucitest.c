@@ -258,6 +258,8 @@ static uint8_t turbo_ran;
 static uint8_t net_ran;
 static uint8_t net_sock_ran;
 static uint8_t http_ran;
+static uint16_t reu_banks;
+static uint8_t reu_probe_clean;
 
 static void publish(void)
 {
@@ -280,6 +282,11 @@ static void publish(void)
     RESULT_BLOCK[14] = net_ran;
     RESULT_BLOCK[15] = net_sock_ran;
     RESULT_BLOCK[16] = http_ran;
+    /* The expansion's measured size, so the harness can check it against the
+       size it configured rather than against a number this file invents. */
+    RESULT_BLOCK[17] = (uint8_t)reu_banks;
+    RESULT_BLOCK[18] = (uint8_t)(reu_banks >> 8);
+    RESULT_BLOCK[19] = reu_probe_clean;
     RESULT_BLOCK[12] = RESULT_DONE;     /* last, always */
 }
 
@@ -740,6 +747,38 @@ after_write:
                 check("reu-save-cleanup", ULTIMATE_OK,
                       ultimate_delete(scratch_path));
             }
+        }
+
+        /*
+         * How big is it? Nothing in the protocol answers that, so the SDK
+         * measures it - and the harness knows what it configured, so the two
+         * are checked against each other rather than against a constant here.
+         *
+         * The probe writes twelve bytes and puts them back, so the bytes it
+         * touched have to be unchanged afterwards. That is asserted rather
+         * than assumed: a size probe that quietly corrupts offset zero would
+         * pass every size check and still be wrong.
+         */
+        {
+            uint8_t snap[16];
+            uint8_t j;
+
+            ultimate_reu_fetch((uint16_t)snap, 0, sizeof(snap));
+            reu_banks = ultimate_reu_size();
+            check("reu-size-is-not-zero", 1, reu_banks != 0 ? 1 : 0);
+            /* Every legal size is a power of two from 2 banks to 256. */
+            check("reu-size-is-a-power-of-two", 0,
+                  (int)(reu_banks & (reu_banks - 1)));
+            check("reu-size-is-in-range", 1,
+                  (reu_banks >= 2 && reu_banks <= 256) ? 1 : 0);
+            printf("# reu=%u banks (%uk)\n", reu_banks, reu_banks * 64);
+
+            ultimate_reu_fetch((uint16_t)reu_work, 0, sizeof(snap));
+            reu_probe_clean = 1;
+            for (j = 0; j < sizeof(snap); ++j)
+                if (snap[j] != reu_work[j])
+                    reu_probe_clean = 0;
+            check("reu-size-left-nothing-changed", 1, (int)reu_probe_clean);
         }
 
         /* Put the expansion back exactly as it was found. */

@@ -105,6 +105,7 @@ ULTIMATE_INC = 1
 .global ult_end              ; the address after the last byte loaded
 
 .global ultimate_reu_available
+.global ultimate_reu_size    ; -> A/X = size in 64K banks, 0 = none
 .global ultimate_reu_stash, ultimate_reu_fetch
 .global ultimate_reu_load, ultimate_reu_save
 .global ult_reu, ult_reulen  ; REU address, then length: eight bytes, in that

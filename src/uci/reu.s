@@ -56,9 +56,10 @@
 
         .import uci_exec
         .import ult_req, ult_req_clear
-        .import ult_addr, ult_reu, ult_reulen
+        .import ult_addr, ult_reu, ult_reulen, ult_scratch
 
         .export ultimate_reu_available, _ultimate_reu_available
+        .export ultimate_reu_size, _ultimate_reu_size
         .export ultimate_reu_stash
         .export ultimate_reu_fetch
         .export ultimate_reu_load
@@ -177,6 +178,190 @@ reu_transfer:
         lda #ULTIMATE_ERR_IO
         ldx #$00
         rts
+
+; ---------------------------------------------------------------------------
+; ultimate_reu_size  ->  A = low, X = high: the expansion's size in 64K banks,
+;                        or zero when there is none
+;
+;   128 KB = 2      1 MB = 16       8 MB = 128
+;   256 KB = 4      2 MB = 32      16 MB = 256
+;   512 KB = 8      4 MB = 64
+;
+; **Banks rather than bytes, and sixteen bits rather than eight.** 16 MB is 256
+; banks, which does not fit a byte, and it is 65536 pages of 256, which does not
+; fit a word either - both of the compact units are one short at exactly the
+; largest machine, which is the one nobody tests on. A bank count in a word has
+; room for 4 GB and no boundary to trip over.
+;
+; **There is no command that answers this.** The control target's hardware-info
+; command reports the model and the SID configuration and nothing else, and
+; `REU_STAT_SIZE` is the 1764-era bit that only separates 128 KB from everything
+; above it - measured on an Ultimate, where it is set for every size from 256 KB
+; up. So the size is found the way it always was: by writing past a power of two
+; and seeing whether it comes back round to the start.
+;
+; **The expansion aliases, and that is what makes this work.** Measured across
+; four configured sizes on firmware 3.15: a write past the end lands at the
+; offset modulo the real size, and because every boundary here is a power of two
+; at or above that size, it lands exactly on offset zero. The first boundary
+; that disturbs offset zero is the size.
+;
+; **Nothing is left changed.** Twelve bytes are saved before they are written
+; and put back afterwards, offset zero last so that a wrapped write cannot
+; outlive the truth.
+;
+; This costs one DMA burst per boundary - eight at the very most, each of four
+; bytes with the CPU halted - so it is cheap enough to call at start-up and not
+; worth caching.
+; ---------------------------------------------------------------------------
+
+; ult_scratch, divided up: what offset zero held, what the boundary held, what
+; came back, and two bytes of bookkeeping. The markers live in rodata and are
+; sent straight out of it, so nothing has to be built at run time.
+REU_SZ_ORIG  = 0
+REU_SZ_SAVED = 4
+REU_SZ_WORK  = 8
+REU_SZ_BANK  = 12
+REU_SZ_I     = 13
+
+ultimate_reu_size:
+_ultimate_reu_size:
+        jsr ultimate_reu_available
+        cmp #$01
+        beq @there
+        lda #$00                        ; no expansion is no banks
+        tax
+        rts
+
+@there: lda #$00                        ; keep what offset zero holds
+        sta ult_scratch + REU_SZ_BANK
+        lda #<(ult_scratch + REU_SZ_ORIG)
+        ldx #>(ult_scratch + REU_SZ_ORIG)
+        jsr reu_sz_get
+        bcc @none
+
+        lda #<reu_sz_mark_a             ; ...and mark it
+        ldx #>reu_sz_mark_a
+        jsr reu_sz_put
+        bcc @none
+
+        lda #$00
+        sta ult_scratch + REU_SZ_I
+
+@probe: ldy ult_scratch + REU_SZ_I
+        lda reu_sz_banks,y
+        beq @full                       ; out of boundaries: it is the whole 16 MB
+        sta ult_scratch + REU_SZ_BANK
+
+        lda #<(ult_scratch + REU_SZ_SAVED)  ; whatever lives at the boundary,
+        ldx #>(ult_scratch + REU_SZ_SAVED)  ; which may be offset zero already
+        jsr reu_sz_get
+        bcc @restore
+
+        lda #<reu_sz_mark_b
+        ldx #>reu_sz_mark_b
+        jsr reu_sz_put
+        bcc @restore
+
+        lda #$00                        ; did offset zero move?
+        sta ult_scratch + REU_SZ_BANK
+        lda #<(ult_scratch + REU_SZ_WORK)
+        ldx #>(ult_scratch + REU_SZ_WORK)
+        jsr reu_sz_get
+        bcc @restore
+
+        ldx #$03
+@cmp:   lda ult_scratch + REU_SZ_WORK,x
+        cmp reu_sz_mark_b,x
+        bne @distinct
+        dex
+        bpl @cmp
+
+        jsr reu_sz_restore              ; it wrapped, so this boundary is the size
+        ldy ult_scratch + REU_SZ_I
+        lda reu_sz_banks,y
+        ldx #$00
+        rts
+
+@distinct:
+        ldy ult_scratch + REU_SZ_I      ; a real location; put it back
+        lda reu_sz_banks,y
+        sta ult_scratch + REU_SZ_BANK
+        lda #<(ult_scratch + REU_SZ_SAVED)
+        ldx #>(ult_scratch + REU_SZ_SAVED)
+        jsr reu_sz_put
+        inc ult_scratch + REU_SZ_I
+        bne @probe                      ; always
+
+@full:  jsr reu_sz_restore
+        lda #$00                        ; 256 banks: 16 MB, which is also the
+        ldx #$01                        ; ceiling a 24-bit address can reach
+        rts
+
+@restore:
+        jsr reu_sz_restore
+@none:  lda #$00
+        tax
+        rts
+
+; Offset zero, back as it was. Nothing else needs restoring by then: a write
+; that wrapped can only have landed here.
+reu_sz_restore:
+        lda #$00
+        sta ult_scratch + REU_SZ_BANK
+        lda #<(ult_scratch + REU_SZ_ORIG)
+        ldx #>(ult_scratch + REU_SZ_ORIG)
+        jmp reu_sz_put
+
+; A/X = the C64 end, REU_SZ_BANK = which bank. Four bytes either way, and carry
+; set on success, which is all a probe needs to know.
+reu_sz_get:
+        jsr reu_sz_setup
+        jsr ultimate_reu_fetch
+        jmp reu_sz_flag
+
+reu_sz_put:
+        jsr reu_sz_setup
+        jsr ultimate_reu_stash
+        jmp reu_sz_flag
+
+reu_sz_setup:
+        sta ult_addr
+        stx ult_addr + 1
+        lda #$00                        ; a boundary is a whole bank, so only
+        sta ult_reu                     ; the high byte of the address is set
+        sta ult_reu + 1
+        lda ult_scratch + REU_SZ_BANK
+        sta ult_reu + 2
+        lda #$00
+        sta ult_reu + 3
+        lda #$04
+        sta ult_reulen
+        lda #$00
+        sta ult_reulen + 1
+        sta ult_reulen + 2
+        sta ult_reulen + 3
+        rts
+
+reu_sz_flag:
+        cmp #ULTIMATE_OK
+        beq @ok
+        clc
+        rts
+@ok:    sec
+        rts
+
+        .rodata
+; Where each size ends, in 64K banks. 16 MB is absent on purpose: 256 does not
+; fit the high address byte, so it is what is left when nothing else aliased.
+reu_sz_banks:
+        .byte 2, 4, 8, 16, 32, 64, 128, 0
+; Two patterns that cannot be mistaken for each other or for plausible data.
+reu_sz_mark_a:
+        .byte $A5, $5A, $C3, $3C
+reu_sz_mark_b:
+        .byte $1F, $E0, $77, $88
+        uci_code
 
 ; ---------------------------------------------------------------------------
 ; ultimate_reu_load   ult_reu = REU address, ult_reulen = length
