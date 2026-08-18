@@ -37,8 +37,10 @@ make blob             GREEN     3959 bytes, 160 relocations. The 4K at $C000
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make wedge            GREEN     uci.prg 3153 bytes, uci.crt 8272; the resident
-                                wedge + SDK at $C000 is 3581, of 4096
+make wedge            GREEN     uci.prg 3402 bytes, uci.crt 8272. The wedge
+                                holds 2078 of the 4K at $C000, and the SDK runs
+                                at $A000 under BASIC ROM: 1595 of 8K, reached
+                                through the stubs in src/basic/bank.s
 make test             GREEN     100 host unit tests + 151 tests across 8 suites
 make basic-run        GREEN     13/13 from the .prg and 13/13 from the .crt, the
                                 same checks typed at a real C64. The cartridge
@@ -171,6 +173,34 @@ link.
 
 When a service wraps a command, add it to `WRAPPED` in `tools/gen_coverage.py`.
 `make coverage` then **fails** until a test sends it.
+
+**The SDK runs at `$A000`, under BASIC ROM, in both wedge builds.** Phase 3 took
+the wedge and the SDK together past the 4K at `$C000`, so the wedge kept the
+block and the SDK moved. It costs one twelve-byte stub per entry point -
+`src/basic/bank.s` - because the SDK is never called by BASIC ROM and calls no
+BASIC routine, which is the whole difference between moving it and moving the
+hook handlers. It buys 2018 free bytes at `$C000` and 6597 at `$A000`, and it
+costs BASIC nothing either way: both regions are outside BASIC's RAM.
+
+Three things about that arrangement worth knowing before touching it:
+
+- **Only the code moved.** RODATA and BSS stay at `$C000`, because `$C000` is
+  RAM whatever `$01` says and data is read rather than executed. One copy loop
+  became two, not three.
+- **The copy banks nothing.** A 6510 write always goes to RAM; only a read sees
+  ROM. So `wedge_copy` writes the SDK into `$A000-$BFFF` with the machine
+  exactly as BASIC left it.
+- **Interrupts stay on.** `$36` leaves the KERNAL and I/O mapped, so `$EA31` is
+  still there and still works. There is no `sei` in the stubs on purpose: a
+  `uci_exec` can poll for a long time, and stopping the jiffy clock for it would
+  be the worse bargain.
+
+Segment order in the linker configs is load-bearing: `wedge_copy` moves CODE and
+RODATA as one span, so anything placed between them is copied instead of the
+RODATA. `UCICODE` was, briefly, and the symptom was a command that ran
+perfectly and came back `ULTIMATE_ERR_DEVICE` - the status decoder reading its
+digit-weight tables out of whatever had landed on them. `install.s` asserts the
+adjacency now.
 
 **Two services do not go through `uci_exec`, and the list is closed.** The test
 that admits one is the same both times: does the operation exist on the UCI at

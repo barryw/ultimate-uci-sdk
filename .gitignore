@@ -10,6 +10,7 @@ build/
 # cc65 intermediate assembly emitted next to the objects
 bindings/cc65/build/
 bindings/cc65/build-placed/
+bindings/cc65/build-banked/
 
 # Python bytecode
 __pycache__/

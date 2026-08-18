@@ -5,7 +5,8 @@ toolchain a C64 programmer might use, in the smallest and most reusable form
 that can be built.
 
 Status: agreed in design. **Phases 1 and 2 are done** — the blob, and the BASIC
-wedge in both its deliveries. Phase 3, the service layer, is not started.
+wedge in both its deliveries. **Phase 3 is under way**: `dos.s` is built and
+tested, and the `$A000` move §8 predicted has happened.
 
 Where this document and the code disagree, the code won and the section says so.
 Two keyword names changed in §4 for reasons that only showed up once the ROM's
@@ -153,7 +154,7 @@ mechanisms exist and are tested.
 | how it starts | `LOAD "UCI",8` then `RUN` | power on, nothing to type |
 | BASIC RAM | 38911 bytes | 30719 bytes — the cartridge holds `$8000-$9FFF` |
 | survives reset | no | yes |
-| room | ~4K at `$C000`; phase 3 needs the `$A000` move | 8K of ROM, all three phases fit |
+| room | 4K at `$C000` for the wedge, 8K at `$A000` for the SDK | 8K of ROM, all three phases fit |
 
 The cartridge is the `.prg` payload plus a `CBM80` signature and a cold-start
 vector. Both are built from the same source.
@@ -211,6 +212,15 @@ the **SDK alone** moves to `$A000` and the wedge keeps the block. That is a
 different proposition from putting the hooks there: the SDK is never called by
 BASIC ROM, so it needs one shared trampoline rather than banking discipline
 throughout. Relocation makes it a link-time choice.
+
+**Done, in Phase 3.** `src/basic/bank.s` is the trampoline - twelve bytes per
+entry point rather than one shared stub, because the argument and the result
+both live in `A` and a shared one would need the target address somewhere else.
+`ca65 -D UCI_BANKED` puts the SDK's code in a `UCICODE` segment (see
+`src/uci/uci_seg.inc`), the wedge links a second flavour of the library built
+with it, and both the `.prg` and the cartridge run it at `$A000`. The wedge
+went from 3581 bytes of the 4K to 2078, and the SDK has 6597 free where it now
+lives.
 
 ### The keyword set
 
@@ -662,7 +672,11 @@ There are two escapes, and both are cheap.
 three phases with 4K spare, and costs no C64 RAM for code. Phase 3 fits there
 today.
 
-**The `.prg` build moves the SDK to `$A000`.** Transport plus services under
+**The `.prg` build moves the SDK to `$A000`. This has now happened**, in both
+builds rather than only the `.prg`: keeping one layout is what lets
+`tools/test_make_crt.py` keep comparing the two deliveries byte for byte.
+
+**The original note:** Transport plus services under
 BASIC ROM, wedge left at `$C000`. The banking objection from §4 does not apply
 here: it was about putting the *hook handlers* under ROM, where `IGONE` cannot
 reach them. The SDK is never called by BASIC ROM and calls no BASIC routine, so

@@ -17,6 +17,7 @@
 ; SPDX-License-Identifier: MIT
 
         .include "uci_protocol.inc"
+        .include "uci_seg.inc"
         .include "uci_zp.inc"
 
 ; ---------------------------------------------------------------------------
@@ -155,7 +156,7 @@ ult_num:        .res 4          ; seek's 32-bit position, read's 16-bit length
 
 ; ---------------------------------------------------------------------------
 
-        .code
+        uci_code
 
 ; ---------------------------------------------------------------------------
 ; uci_ident  ->  A = the raw identification register
@@ -1141,7 +1142,7 @@ uci_hundreds_lo:
         .byte <0, <100, <200, <300, <400, <500, <600, <700, <800, <900
 uci_hundreds_hi:
         .byte >0, >100, >200, >300, >400, >500, >600, >700, >800, >900
-        .code
+        uci_code
 
 ; ---------------------------------------------------------------------------
 ; Internal: carry set when A holds an ASCII digit.

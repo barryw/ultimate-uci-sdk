@@ -37,13 +37,14 @@
 ; SPDX-License-Identifier: MIT
 
         .include "uci_protocol.inc"
+        .include "uci_seg.inc"
 
         .export ultimate_turbo_available, _ultimate_turbo_available
         .export ultimate_turbo_get,       _ultimate_turbo_get
         .export ultimate_turbo_set,       _ultimate_turbo_set
         .export ultimate_turbo_badlines,  _ultimate_turbo_badlines
 
-        .code
+        uci_code
 
 ; ---------------------------------------------------------------------------
 ; ultimate_turbo_available  ->  A = 1 when the turbo registers answer, 0 when not

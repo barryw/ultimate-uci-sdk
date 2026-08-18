@@ -26,6 +26,7 @@
 ; SPDX-License-Identifier: MIT
 
         .include "uci_protocol.inc"
+        .include "uci_seg.inc"
         .include "uci_zp.inc"
 
         .import uci_exec, uci_exec_first, uci_exec_next, uci_more
@@ -43,7 +44,7 @@
         .export ultimate_write
         .export ultimate_seek
 
-        .code
+        uci_code
 
 ; ---------------------------------------------------------------------------
 ; ultimate_chdir   ult_buf = NUL-terminated path  ->  A = ULTIMATE_* result

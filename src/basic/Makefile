@@ -17,8 +17,12 @@ LD65   ?= ld65
 
 ASMINC := $(ROOT)/bindings/asm
 
-COMMON := install.o wedge.o dispatch.o
-LIB    := $(ROOT)/bindings/cc65/build/ultimate.lib
+COMMON := install.o wedge.o dispatch.o bank.o
+
+# The SDK runs at $A000 under BASIC ROM, so the wedge links a second flavour of
+# the library whose code is in its own segment - see uci-wedge.cfg and bank.s.
+# Same sources, same objects, one ca65 flag apart.
+LIB    := $(ROOT)/bindings/cc65/build-banked/ultimate.lib
 
 all: uci.prg uci.crt
 
@@ -34,8 +38,9 @@ GENERATED := $(ASMINC)/uci_protocol.inc $(ASMINC)/uci_keywords.inc \
 %.o: %.s $(GENERATED) c64rom.inc
 	$(CA65) -t c64 -g -I . -I $(ASMINC) -o $@ $<
 
-$(LIB):
-	$(MAKE) -C $(ROOT)/bindings/cc65
+$(LIB): FORCE
+	$(MAKE) -C $(ROOT)/bindings/cc65 BUILD=build-banked \
+	  ASM_DEFINES="-D UCI_BANKED"
 
 uci.prg uci.lbl: loader.o $(COMMON) uci-wedge.cfg $(LIB)
 	$(LD65) -C uci-wedge.cfg -o uci.prg -Ln uci.lbl loader.o $(COMMON) $(LIB)
@@ -48,6 +53,9 @@ uci.crt: uci-cart.bin
 
 clean:
 	rm -f loader.o cart.o $(COMMON)
+	rm -rf $(ROOT)/bindings/cc65/build-banked
 	rm -f uci.prg uci.lbl uci-cart.bin uci-cart.lbl uci.crt
 
-.PHONY: all clean
+FORCE:
+
+.PHONY: all clean FORCE

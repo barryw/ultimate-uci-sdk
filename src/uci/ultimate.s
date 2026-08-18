@@ -11,6 +11,7 @@
 ; SPDX-License-Identifier: MIT
 
         .include "uci_protocol.inc"
+        .include "uci_seg.inc"
         .include "uci_zp.inc"
 
         .import uci_exec, uci_init, uci_present, uci_ident
@@ -32,7 +33,7 @@
 ; it.
 ULT_SCRATCH_LEN = 16
 
-        .code
+        uci_code
 
 ; ---------------------------------------------------------------------------
 ; ultimate_init  ->  A = ULTIMATE_* result

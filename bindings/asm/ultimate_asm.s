@@ -7,6 +7,7 @@
 ; SPDX-License-Identifier: MIT
 
         .include "ultimate.inc"
+        .include "uci_seg.inc"
 
         .import uci_exec
 
@@ -25,7 +26,7 @@ uci_req:
         .res UCI_REQ_SIZE
 .endif
 
-        .code
+        uci_code
 
 ; Run the command described by uci_req. A = ULTIMATE_* result.
 uci_exec_block:

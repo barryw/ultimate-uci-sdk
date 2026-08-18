@@ -12,10 +12,11 @@
 ; SPDX-License-Identifier: MIT
 
         .include "uci_protocol.inc"
+        .include "uci_seg.inc"
 
         .export ultimate_strerror, _ultimate_strerror
 
-        .code
+        uci_code
 
 ; ultimate_strerror   A = ULTIMATE_* code  ->  A/X = pointer to the text
 ultimate_strerror:

@@ -19,9 +19,14 @@ AR65    ?= ar65
 # -Osir turns on the optimiser plus inlining and register variables. The core
 # is small and hot; this is what keeps it that way.
 CFLAGS  := -t $(TARGET) -Osir -W error -I $(ROOT)/include -I $(ROOT)/src/uci
-# ASM_DEFINES lets a caller place the SDK's memory:
-#   make ASM_DEFINES="-D UCI_VARS=52992 -D UCI_ZP=163"    ($CF00, $A3)
-# See docs/asm-abi.md. Cartridge projects need this; nothing else does.
+# ASM_DEFINES is extra ca65 flags. Two callers use it, both building a second
+# flavour of the same library next to the first:
+#   make ASM_DEFINES="-D UCI_VARS=52992 -D UCI_ZP=163"    place the SDK's memory
+#   make ASM_DEFINES="--code-name UCICODE"                put its code in another
+#                                                         segment, which is how
+#                                                         the wedge runs the SDK
+#                                                         under BASIC ROM
+# See docs/asm-abi.md.
 ASM_DEFINES ?=
 AFLAGS  := -t $(TARGET) -I $(ROOT)/bindings/asm -I $(ROOT)/src/uci -I $(BUILD) $(ASM_DEFINES)
 

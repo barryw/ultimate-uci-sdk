@@ -21,6 +21,7 @@
 ; SPDX-License-Identifier: MIT
 
         .include "uci_protocol.inc"
+        .include "uci_seg.inc"
         .include "uci_zp.inc"
 
         .import uci_exec
@@ -32,7 +33,7 @@
         .export ultimate_palette_reset, _ultimate_palette_reset
         .export ultimate_palette_set_color
 
-        .code
+        uci_code
 
 ; ---------------------------------------------------------------------------
 ; ultimate_palette_get   A/X = pointer to UCI_PALETTE_BYTES bytes

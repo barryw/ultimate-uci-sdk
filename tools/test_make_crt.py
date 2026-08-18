@@ -36,11 +36,22 @@ def labels(path):
 
 
 def payload(image, lbl, base, header):
-    """The relocated bytes: CODE and RODATA, which are contiguous."""
+    """The relocated bytes: CODE and RODATA at $C000, then UCICODE at $A000.
+
+    Three segments, two destinations, one claim: the cartridge carries the same
+    bytes as the .prg. UCICODE is the SDK, which runs under BASIC ROM - it has
+    to be compared too, or half the shipped code would sit outside the one test
+    that says the two deliveries are the same thing.
+    """
     start = lbl["__CODE_LOAD__"]
     size = lbl["__CODE_SIZE__"] + lbl["__RODATA_SIZE__"]
     offset = header + (start - base)
-    return image[offset:offset + size]
+    wedge = image[offset:offset + size]
+
+    start = lbl["__UCICODE_LOAD__"]
+    size = lbl["__UCICODE_SIZE__"]
+    offset = header + (start - base)
+    return wedge + image[offset:offset + size]
 
 
 class TestContainer(unittest.TestCase):

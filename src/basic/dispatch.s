@@ -22,8 +22,12 @@
         .include "uci_keywords.inc"
         .include "uci_argtable.inc"
 
-        .import uci_init, uci_exec, uci_abort, uci_last_code, uci_req
-        .import ultimate_turbo_set, ultimate_turbo_get
+; Every call into the SDK goes through bank.s, because the SDK runs at $A000
+; under BASIC ROM. uci_req is a variable rather than code - BSS at $C000 - so it
+; is reached directly like any other.
+        .import uci_req
+        .import bank_uci_init, bank_uci_exec, bank_uci_abort
+        .import bank_uci_last_code, bank_turbo_set, bank_turbo_get
 
         .export wedge_gone, wedge_eval, wedge_do_uci, wedge_do_turbo
         .export wedge_sdk_init
@@ -56,7 +60,7 @@ wedge_sdk_init:
         sta uci_req + UCI_REQ_DATALEN + 1
         sta uci_req + UCI_REQ_STATUSLEN
         sta uci_req + UCI_REQ_STATUSLEN + 1
-        jmp uci_init
+        jmp bank_uci_init
 
 ; ---------------------------------------------------------------------------
 ; IGONE - statement dispatch.
@@ -106,7 +110,7 @@ wedge_do_uci:
 
         jsr CHRGET              ; past the token, onto the first argument
         bne @args
-        jmp uci_abort           ; bare UCI
+        jmp bank_uci_abort           ; bare UCI
 
 @args:  jsr GETBYT              ; target
         stx wedge_target
@@ -153,7 +157,7 @@ wedge_do_turbo:
         jsr GETBYT              ; X = index. Nothing there is the ROM's own
                                 ; ?SYNTAX ERROR, which is the right one.
         txa
-        jsr ultimate_turbo_set
+        jsr bank_turbo_set
         sta wedge_err
         rts
 
@@ -409,7 +413,7 @@ wedge_exec:
 
         lda #<uci_req
         ldx #>uci_req
-        jsr uci_exec
+        jsr bank_uci_exec
         sta wedge_err
         rts
 
@@ -477,11 +481,11 @@ wedge_eval:
 ; bits - so the two can never be confused, and a program can test for it.
 @uturbo:
         jsr CHRGET
-        jsr ultimate_turbo_get
+        jsr bank_turbo_get
         jmp wedge_ret_byte
 
 @udev:  jsr CHRGET
-        jsr uci_last_code       ; A = low, X = high
+        jsr bank_uci_last_code       ; A = low, X = high
         tay
         txa
         jmp GIVAYF

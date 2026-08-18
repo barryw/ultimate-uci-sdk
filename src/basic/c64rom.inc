@@ -78,3 +78,9 @@ NGONE1          = $A7E7         ; the ROM's statement path, after its own CHRGET
 QINT            = $BC9B         ; FAC1 -> 32-bit signed in FACHO..FACHO+3, MSB first
 PUTNEW          = $B4CA         ; make the descriptor in DSCTMP the current
                                 ; temporary string, and set VALTYP
+
+; ---------------------------------------------------------------------------
+; The 6510's own port. Only bank.s touches it, to swap BASIC ROM for the RAM
+; underneath while it calls the SDK.
+; ---------------------------------------------------------------------------
+CPU_PORT = $01

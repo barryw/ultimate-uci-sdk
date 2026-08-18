@@ -100,13 +100,23 @@ The resident wedge plus SDK is 3,581 bytes of the same 4K, with 515 left, and
 it does not link `dos.s` at all - cc65 drops an unreferenced module whole, which
 is exactly why the service layer is one module per service.
 
-**So the decision the design's §8 describes is now due, and it is a real
-choice.** The SDK alone moves to `$A000` under the BASIC ROM, needing one shared
-trampoline rather than banking discipline throughout, because the SDK is never
-called by BASIC ROM; the wedge keeps `$C000`. Relocation makes it a link-time
-choice. The blob's own default base is a separate question with the same shape:
-`make -C bindings/blob BASE=8000 VARS=53144` gives the code 19K today and
-changes no jump-table offset, since those are all relative to the base.
+**The decision the design's §8 describes has been taken: the SDK moved to
+`$A000`, under BASIC ROM, and the wedge kept the block.** `src/basic/bank.s`
+holds the trampolines, `ca65 -D UCI_BANKED` puts the SDK's code in its own
+segment, and both the `.prg` and the cartridge run it there. `make basic-run`
+passes 13/13 from each on real hardware, which is the only place the banking is
+actually proved.
+
+It cost twelve bytes per entry point and bought a lot of room: the wedge holds
+2078 of the 4K at `$C000` with 2018 free, and the SDK has 6597 free at `$A000`.
+It costs BASIC nothing - 38911 bytes free from the `.prg`, unchanged - because
+both regions are outside BASIC's RAM.
+
+**The blob is a separate question and is still on 33 bytes.** It is a different
+delivery: its caller picks the base and cannot be asked to bank, so `$A000` is
+the wrong answer for it. `make -C bindings/blob BASE=8000 VARS=53144` gives the
+code 19K today and changes no jump-table offset, since those are all relative to
+the base. `file.s` will force that choice; the link fails loudly when it does.
 
 ### Two hardware facts worth keeping
 
