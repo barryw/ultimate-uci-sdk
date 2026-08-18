@@ -316,6 +316,8 @@ ULTIMATE_ERR_IO               = 6  ; File system / network I/O failure
 ULTIMATE_ERR_DEVICE           = 7  ; Target reported a failure status
 ULTIMATE_ERR_TRUNCATED        = 8  ; Reply did not fit in the caller's buffer
 ULTIMATE_ERR_ABORTED          = 9  ; Command was aborted
+ULTIMATE_END                  = 10  ; No more entries: the end of a directory, not a failure
+ULTIMATE_ERR_COUNT            = 11  ; Number of codes above, for a table that maps them
 
 ; ---- Request block layout ----
 ; Byte offsets into a uci_request. The assembly core is the authority on
@@ -339,7 +341,7 @@ UCI_REQ_SIZE       = $16  ; total size of the block
 ; How much RAM the core needs, and where. All of it is placeable: see
 ; UCI_ZP and UCI_VARS in docs/asm-abi.md.
 UCI_ZP_SIZE   = $04  ; zero page bytes the core needs
-UCI_VARS_SIZE = $5C  ; non-zero-page bytes the whole SDK needs
+UCI_VARS_SIZE = $63  ; non-zero-page bytes the whole SDK needs
 
 ; ---- ASCII literals ----
 ; Bytes that come off the wire are always written numerically. An

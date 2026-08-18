@@ -8,9 +8,17 @@ can use it — with no linking at all.
     make -C bindings/blob BASE=a000       # at $A000
     make -C bindings/blob BASE=8000 VARS=49152 ZP=163
 
-The default build is 2,860 bytes: the 256-byte jump table page and the
+The default build is 3,959 bytes: the 256-byte jump table page and the
 512-byte parameter block, fixed at those sizes so every offset below holds
 regardless of how little of them is used, plus the code itself.
+
+**The 4K at `$C000` is nearly full.** The default `VARS=53144` puts the SDK's
+variables at `$CF98`, at the very top of that region, which leaves about thirty
+bytes between the end of the code and the start of them. The link fails rather
+than overlapping - `blob.cfg.in` sizes the code area from `VARS` - so the next
+module to land will say so instead of quietly producing a blob whose first
+command overwrites its own request block. Build somewhere with more room if you
+have it: `make -C bindings/blob BASE=8000 VARS=53144` gives the code 19K.
 
 ## The jump table
 
@@ -76,19 +84,20 @@ At `base+$100`, page-aligned so a BASIC program needs no address arithmetic.
 RAM rather than from registers, and `uci_exec_block` (`+$07`) runs whatever is
 in `uci_req`. Both live in the block laid out from `UCI_VARS` (see
 `src/uci/uci_core.s`'s `.ifdef UCI_VARS` branch), not in the jump table or the
-page-aligned parameter block above. For the default build (`VARS=52992`, i.e.
-`UCI_VARS = $CF00`):
+page-aligned parameter block above.
+
+For the default build (`VARS=53144`, i.e. `UCI_VARS = $CF98`):
 
 | Address | Name | Size |
 |---|---|---|
-| `$CF0E` | `uci_dec_target` | 1 |
-| `$CF0F` | `uci_dec_ptr` | 2 |
-| `$CF11` | `uci_dec_len` | 1 |
-| `$CF42` | `uci_req` | `UCI_REQ_SIZE` (22) |
-| `$CF58` | `ult_color` | 4 — index, r, g, b for `+$3D` |
+| `$CFA6` | `uci_dec_target` | 1 |
+| `$CFA7` | `uci_dec_ptr` | 2 |
+| `$CFA9` | `uci_dec_len` | 1 |
+| `$CFDA` | `uci_req` | `UCI_REQ_SIZE` (22) |
+| `$CFF0` | `ult_color` | 4 — index, r, g, b for `+$3D` |
 
 A build with `VARS=` set to something else shifts all five by the same
-amount: each is `UCI_VARS` plus the fixed offset above minus `$CF00`.
+amount: each is `UCI_VARS` plus the fixed offset above minus `$CF98`.
 
 New variables are appended to the end of the block, never inserted, so the
 addresses above do not move when the SDK grows.
@@ -109,8 +118,8 @@ assemble `reloc.s` into your loader:
 The table is a little-endian count followed by that many 16-bit offsets, each
 naming a byte that holds the high half of an absolute address. It is produced by
 diffing two builds one page apart, so it cannot fall behind the assembler the
-way a hand-written instruction table would. The default build has 89 such
-offsets, a 180-byte table.
+way a hand-written instruction table would. The default build has 160 such
+offsets, a 322-byte table.
 
 `tests/emulator/blob-relocated.suite` moves the blob and then erases the
 original before calling it, which is what turns a missing relocation entry into

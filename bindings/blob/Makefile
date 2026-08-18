@@ -12,8 +12,16 @@ CA65   ?= ca65
 LD65   ?= ld65
 
 # Where the code goes, as four hex digits, and where its RAM goes, in decimal.
+#
+# **The 4K at $C000 is now nearly full.** The default puts the variables at the
+# very top of it ($CF98) because the code below them is 3191 bytes and the
+# header and parameter pages take another 768, which leaves about thirty bytes
+# spare. The link fails rather than overlaps - see blob.cfg.in - so the next
+# module to land will say so loudly instead of corrupting its own request
+# block, but the honest reading is that the SDK has outgrown one 4K region and
+# the base or the layout has to move. docs/handover-next.md has the decision.
 BASE ?= c000
-VARS ?= 52992
+VARS ?= 53144
 ZP   ?= 251
 
 AFLAGS := -t $(TARGET) -I $(ROOT)/bindings/asm -I $(ROOT)/src/uci \
@@ -51,14 +59,19 @@ $(BUILD)/ultimate_asm.o: $(ROOT)/bindings/asm/ultimate_asm.s | $(BUILD)
 $(BUILD)/blob.o: blob.s | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
-$(BUILD)/blob-$(BASE).cfg: blob.cfg.in | $(BUILD)
-	sed 's/@BASE@/$$$(BASE)/' $< > $@
+# Where the code may run to: the start of the SDK's variables, less the header
+# and parameter pages that sit in front of it. ld65 then refuses a build whose
+# code would reach the variables instead of quietly producing one that does.
+MAINSIZE = $(shell printf '$$%04x' $$(( $(VARS) - 0x$(BASE) - 0x300 )))
+
+$(BUILD)/blob-$(BASE).cfg: blob.cfg.in Makefile | $(BUILD)
+	sed -e 's/@BASE@/$$$(BASE)/' -e 's/@MAINSIZE@/$(MAINSIZE)/' $< > $@
 
 $(BIN): $(OBJ) $(BUILD)/blob-$(BASE).cfg
 	$(LD65) -C $(BUILD)/blob-$(BASE).cfg -o $@ $(OBJ)
 
-$(BUILD)/probe-$(PROBE_BASE).cfg: blob.cfg.in | $(BUILD)
-	sed 's/@BASE@/$$$(PROBE_BASE)/' $< > $@
+$(BUILD)/probe-$(PROBE_BASE).cfg: blob.cfg.in Makefile | $(BUILD)
+	sed -e 's/@BASE@/$$$(PROBE_BASE)/' -e 's/@MAINSIZE@/$(MAINSIZE)/' $< > $@
 
 $(BUILD)/ultimate-$(PROBE_BASE).bin: $(OBJ) $(BUILD)/probe-$(PROBE_BASE).cfg
 	$(LD65) -C $(BUILD)/probe-$(PROBE_BASE).cfg -o $@ $(OBJ)
@@ -72,8 +85,8 @@ $(RELOC): $(BIN) $(BUILD)/ultimate-$(PROBE_BASE).bin
 # against: the relocator's output must be byte-identical to what the linker
 # itself produces for that address. Same objects, different config - same
 # pattern as the probe build above.
-$(BUILD)/blob-8000.cfg: blob.cfg.in | $(BUILD)
-	sed 's/@BASE@/$$8000/' $< > $@
+$(BUILD)/blob-8000.cfg: blob.cfg.in Makefile | $(BUILD)
+	sed -e 's/@BASE@/$$8000/' -e 's/@MAINSIZE@/$(MAINSIZE)/' $< > $@
 
 $(BUILD)/ultimate-8000.bin: $(OBJ) $(BUILD)/blob-8000.cfg
 	$(LD65) -C $(BUILD)/blob-8000.cfg -o $@ $(OBJ)

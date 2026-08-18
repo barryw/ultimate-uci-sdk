@@ -49,24 +49,25 @@ suites {
       jsr($c004, stop_on_rts = true, fail_on_brk = true)
       assert(a == $00, "init")
 
-      ; uci_req is the first thing in the SDK's variable block after the
-      ; service layer's own 66 bytes: UCI_VARS + 66.
-      $cf42 = $01           ; UCI_REQ_TARGET  = DOS1
-      $cf43 = $f0           ; UCI_REQ_COMMAND = ECHO
-      $cf44 = $0000         ; UCI_REQ_ARGS
-      $cf46 = $0000         ; UCI_REQ_ARGLEN
-      $cf48 = $0000         ; UCI_REQ_PAYLOAD
-      $cf4a = $0000         ; UCI_REQ_PAYLOADLEN
-      $cf4c = $c151         ; UCI_REQ_DATA -> the blob's reply buffer
-      $cf4e = $0100         ; UCI_REQ_DATAMAX
-      $cf50 = $0000         ; UCI_REQ_DATALEN
-      $cf52 = $0000         ; UCI_REQ_STATUS
-      $cf54 = $0000         ; UCI_REQ_STATUSMAX
-      $cf56 = $0000         ; UCI_REQ_STATUSLEN
+      ; uci_req sits 66 bytes into the SDK's variable block, after the service
+      ; layer's own storage. The default VARS is $CF98 - the top of the 4K, see
+      ; bindings/blob/README.md - so the block is at $CFDA.
+      $cfda = $01           ; UCI_REQ_TARGET  = DOS1
+      $cfdb = $f0           ; UCI_REQ_COMMAND = ECHO
+      $cfdc = $0000         ; UCI_REQ_ARGS
+      $cfde = $0000         ; UCI_REQ_ARGLEN
+      $cfe0 = $0000         ; UCI_REQ_PAYLOAD
+      $cfe2 = $0000         ; UCI_REQ_PAYLOADLEN
+      $cfe4 = $c151         ; UCI_REQ_DATA -> the blob's reply buffer
+      $cfe6 = $0100         ; UCI_REQ_DATAMAX
+      $cfe8 = $0000         ; UCI_REQ_DATALEN
+      $cfea = $0000         ; UCI_REQ_STATUS
+      $cfec = $0000         ; UCI_REQ_STATUSMAX
+      $cfee = $0000         ; UCI_REQ_STATUSLEN
 
       jsr($c007, stop_on_rts = true, fail_on_brk = true)
       assert(a == $00, "ULTIMATE_OK")
-      assert($cf50.w == $0002, "two bytes echoed")
+      assert($cfe8.w == $0002, "two bytes echoed")
       assert($c151 == $01, "target byte")
       assert($c152 == $f0, "command byte")
     }

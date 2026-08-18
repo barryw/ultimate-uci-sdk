@@ -41,6 +41,10 @@
         .import ultimate_palette_set_color, ultimate_palette_reset
         .import ultimate_turbo_available, ultimate_turbo_get
         .import ultimate_turbo_set, ultimate_turbo_badlines
+        .import ultimate_chdir, ultimate_getpath
+        .import ultimate_opendir, ultimate_readdir
+        .import ultimate_open, ultimate_close, ultimate_read
+        .import ult_attrib
         .import ult_buf, ult_buflen, ult_outlen, ult_color
 
         ; --- entry points ---
@@ -60,6 +64,9 @@
         .export t_palette_get_null, t_palette_set_null
         .export t_turbo_available, t_turbo_get
         .export t_turbo_set, t_turbo_badlines
+        .export t_chdir, t_getpath, t_opendir, t_readdir
+        .export t_open, t_close, t_read
+        .export dir_attrib
         .export t_req_reset
         .export t_exec
         .export t_decode
@@ -129,6 +136,7 @@ err_text:     .res ERR_TEXT_MAX
 timeout_val:  .res 1
 pal_index:    .res 1
 turbo_arg:    .res 1
+dir_attrib:   .res 1
 
 req:         .res UCI_REQ_SIZE
 buf_args:    .res ARGS_MAX
@@ -343,6 +351,66 @@ t_turbo_set:
 t_turbo_badlines:
         lda turbo_arg
         jsr ultimate_turbo_badlines
+        sta result
+        rts
+
+; --- the DOS service ---
+;
+; u64sim implements the read-only half of Ultimate DOS against a real directory
+; tree (tests/emulator/fixtures/usb0), so unlike the palette these run for real
+; in CI rather than proving only that a rejection is reported cleanly.
+;
+; `reply` is the buffer throughout, and ident_buflen sizes it, so the suite sets
+; the same two fields it already sets for identify.
+
+t_chdir:
+        jsr set_ult_buf
+        lda #<reply             ; the path was put in `reply` by the suite
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        jsr ultimate_chdir
+        sta result
+        rts
+
+t_getpath:
+        jsr set_ult_buf
+        jsr ultimate_getpath
+        sta result
+        rts
+
+t_opendir:
+        jsr ultimate_opendir
+        sta result
+        rts
+
+t_readdir:
+        jsr set_ult_buf
+        jsr ultimate_readdir
+        sta result
+        lda ult_attrib
+        sta dir_attrib
+        rts
+
+t_open:
+        jsr set_ult_buf
+        lda #<reply             ; the name was put in `reply` by the suite
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda #DOS_FA_READ
+        jsr ultimate_open
+        sta result
+        rts
+
+t_close:
+        jsr ultimate_close
+        sta result
+        rts
+
+t_read:
+        jsr set_ult_buf
+        jsr ultimate_read
         sta result
         rts
 

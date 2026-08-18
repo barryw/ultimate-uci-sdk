@@ -323,6 +323,8 @@
 .label ULTIMATE_ERR_DEVICE        = $07  // Target reported a failure status
 .label ULTIMATE_ERR_TRUNCATED     = $08  // Reply did not fit in the caller's buffer
 .label ULTIMATE_ERR_ABORTED       = $09  // Command was aborted
+.label ULTIMATE_END               = $0A  // No more entries: the end of a directory, not a failure
+.label ULTIMATE_ERR_COUNT         = $0B  // Number of codes above, for a table that maps them
 
 // ---- Request block layout ----
 // Byte offsets into a uci_request. The assembly core is the authority on
@@ -346,7 +348,7 @@
 // How much RAM the core needs, and where. All of it is placeable: see
 // UCI_ZP and UCI_VARS in docs/asm-abi.md.
 .label UCI_ZP_SIZE                = $04  // zero page bytes the core needs
-.label UCI_VARS_SIZE              = $5C  // non-zero-page bytes the whole SDK needs
+.label UCI_VARS_SIZE              = $63  // non-zero-page bytes the whole SDK needs
 
 // ---- ASCII literals ----
 // Bytes that come off the wire are always written numerically. An

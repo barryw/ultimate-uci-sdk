@@ -39,7 +39,7 @@ Constraints it holds itself to:
 
 - No heap. No hidden buffers. Every byte lands somewhere the caller owns, except
   a four-byte scratch used when the caller wants no status buffer at all.
-- `UCI_VARS_SIZE` (92) bytes of static RAM across the whole SDK: 18 in the
+- `UCI_VARS_SIZE` (99) bytes of static RAM across the whole SDK: 18 in the
   transport, 48 in the service layer (16 of which is the buffer capability
   probing compares against, and 22 its own request block), and 22 more for
   the caller-facing request block `bindings/asm/ultimate_asm.s` exports as

@@ -20,9 +20,9 @@
 ; ultimate_strerror   A = ULTIMATE_* code  ->  A/X = pointer to the text
 ultimate_strerror:
 _ultimate_strerror:
-        cmp #ULT_ERR_COUNT
+        cmp #ULTIMATE_ERR_COUNT
         bcc @known
-        lda #ULT_ERR_COUNT      ; the "unknown" entry sits one past the end
+        lda #ULTIMATE_ERR_COUNT ; the "unknown" entry sits one past the end
 @known: asl a
         tax
         lda ult_err_table,x
@@ -34,8 +34,6 @@ _ultimate_strerror:
 
         .rodata
 
-ULT_ERR_COUNT = 10
-
 ; **The strings are lowercase in the source and print as uppercase.**
 ;
 ; ca65's c64 charmap maps source 'A'-'Z' to PETSCII $C1-$DA, and CHROUT turns
@@ -46,7 +44,13 @@ ULT_ERR_COUNT = 10
 ult_err_table:
         .addr ult_e_ok, ult_e_nodev, ult_e_timeout, ult_e_proto
         .addr ult_e_unsup, ult_e_arg, ult_e_io, ult_e_device
-        .addr ult_e_trunc, ult_e_abort, ult_e_unknown
+        .addr ult_e_trunc, ult_e_abort, ult_e_end, ult_e_unknown
+
+; The count is generated with the codes themselves, and the table is asserted
+; against it here. It used to be a hand-written 10 sitting beside ten generated
+; codes, so an eleventh would have printed "unknown error" for ever with nothing
+; failing - which is exactly what ULTIMATE_END would have done.
+.assert (* - ult_err_table) = 2 * (ULTIMATE_ERR_COUNT + 1), error, "the strerror table and ULTIMATE_ERR_COUNT have drifted apart"
 
 ult_e_ok:      .byte "ok", 0
 ult_e_nodev:   .byte "no ultimate found", 0
@@ -58,4 +62,5 @@ ult_e_io:      .byte "i/o error", 0
 ult_e_device:  .byte "device error", 0
 ult_e_trunc:   .byte "reply truncated", 0
 ult_e_abort:   .byte "aborted", 0
+ult_e_end:     .byte "no more entries", 0
 ult_e_unknown: .byte "unknown error", 0

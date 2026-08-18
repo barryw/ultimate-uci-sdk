@@ -22,6 +22,9 @@
 ; ---------------------------------------------------------------------------
 
         .export uci_exec,      _uci_exec
+        .export uci_exec_first, _uci_exec_first
+        .export uci_exec_next,  _uci_exec_next
+        .export uci_more,      _uci_more_blocks
         .export uci_init,      _uci_init
         .export uci_abort,     _uci_abort
         .export uci_present,   _uci_signature_present
@@ -36,6 +39,7 @@
         ; The service layer's storage lives in the same block; see below.
         .export ult_up, ult_buf, ult_buflen, ult_outlen, ult_caps
         .export ult_scratch, ult_req, ult_probe, ult_color
+        .export ult_attrib, ult_dir, ult_num
 
 ; ---------------------------------------------------------------------------
 ; Variables
@@ -93,8 +97,14 @@ uci_req         = UCI_VARS + 44 + UCI_REQ_SIZE
 ; the addresses bindings/blob/README.md publishes stay where they are. Anything
 ; added later goes on the end for the same reason.
 ult_color       = UCI_VARS + 44 + 2 * UCI_REQ_SIZE  ; index, r, g, b for the palette
+uci_more        = UCI_VARS + 48 + 2 * UCI_REQ_SIZE  ; another reply block follows
 
-.assert (48 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+; --- dos service (src/uci/dos.s) ---
+ult_attrib      = UCI_VARS + 49 + 2 * UCI_REQ_SIZE  ; open's mask in, readdir's out
+ult_dir         = UCI_VARS + 50 + 2 * UCI_REQ_SIZE  ; where a directory walk is up to
+ult_num         = UCI_VARS + 51 + 2 * UCI_REQ_SIZE  ; seek's dword, read's word
+
+.assert (55 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
         .export uci_req
 
@@ -132,6 +142,14 @@ ult_probe:      .res 1
 
 ; --- palette service (src/uci/palette.s) ---
 ult_color:      .res 4          ; index, r, g, b
+
+; Set by the data phase: another reply block follows. See uci_exec_first.
+uci_more:       .res 1
+
+; --- dos service (src/uci/dos.s) ---
+ult_attrib:     .res 1          ; open's DOS_FA_* mask in, readdir's attributes out
+ult_dir:        .res 1          ; where a directory walk is up to
+ult_num:        .res 4          ; seek's 32-bit position, read's 16-bit length
 
 .endif
 
@@ -370,8 +388,104 @@ uci_write_span:
 ; ---------------------------------------------------------------------------
 ; uci_exec   A/X = pointer to a request block  ->  A = ULTIMATE_* result
 ; ---------------------------------------------------------------------------
+; uci_exec runs the whole exchange: send, then drain every block of the reply
+; into one buffer. That is what almost every command wants.
+;
+; uci_exec_first / uci_exec_next are the same exchange stopped at each block
+; boundary, for the commands where the boundaries carry meaning. DOS_CMD_READ_DIR
+; is the reason they exist: the firmware sends one directory entry per block, as
+; <attrib> <name> with no terminator and no length, so stitching the blocks
+; together destroys the only thing separating one entry from the next. A
+; filename containing a space is genuinely indistinguishable from an entry
+; boundary in the stitched stream - this is not a theoretical worry, it is why
+; `readdir` could not be written against uci_exec.
 uci_exec:
 _uci_exec:
+        jsr uci_exec_send
+        cmp #ULTIMATE_OK
+        bne @out
+        lda uci_more
+        beq @out_ok             ; fire-and-forget: no data phase, no status
+@collect_all:
+        jsr uci_collect_one
+        cmp #ULTIMATE_OK
+        bne @out
+        lda uci_more
+        bne @collect_all
+        jmp uci_translate
+@out_ok:
+        lda #ULTIMATE_OK
+@out:   ldx #$00
+        rts
+
+; ---------------------------------------------------------------------------
+; uci_exec_first   A/X = pointer to a request block  ->  A = ULTIMATE_* result
+; uci_exec_next                                      ->  A = ULTIMATE_* result
+;
+; One block per call. req.datalen is reset each time, so it is this block's
+; length and nothing else; uci_more is 1 while another block follows. The call
+; that returns with uci_more clear is the one that decodes the device status,
+; so a caller loops until it clears and reads the result of that last call.
+;
+;       lda #<req
+;       ldx #>req
+;       jsr uci_exec_first
+;   loop:
+;       ...use req.data, req.datalen...
+;       lda uci_more
+;       beq done
+;       jsr uci_exec_next
+;       jmp loop
+; ---------------------------------------------------------------------------
+uci_exec_first:
+_uci_exec_first:
+        jsr uci_exec_send
+        cmp #ULTIMATE_OK
+        bne @out
+        lda uci_more
+        beq @out_ok
+        jmp uci_block_fresh
+@out_ok:
+        lda #ULTIMATE_OK
+@out:   ldx #$00
+        rts
+
+uci_exec_next:
+_uci_exec_next:
+        jmp uci_block_fresh
+
+; uci_more_blocks  ->  A = 1 while another reply block follows
+_uci_more_blocks:
+        lda uci_more
+        ldx #$00
+        rts
+
+; Internal: one block, into an empty buffer, decoding the status when it turns
+; out to have been the last.
+uci_block_fresh:
+        lda #$00
+        ldy #UCI_REQ_DATALEN
+        sta (uci_rq),y
+        iny
+        sta (uci_rq),y
+        jsr uci_collect_one
+        cmp #ULTIMATE_OK
+        bne @out
+        lda uci_more
+        bne @out_ok
+        jmp uci_translate
+@out_ok:
+        lda #ULTIMATE_OK
+@out:   ldx #$00
+        rts
+
+; ---------------------------------------------------------------------------
+; Internal: validate the request, wait for idle, put the command on the wire.
+;
+; -> A = ULTIMATE_* result. On success uci_more is 1 when a data phase follows
+;    and 0 when the command was fire-and-forget and there is nothing more to do.
+; ---------------------------------------------------------------------------
+uci_exec_send:
         sta uci_rq
         stx uci_rq + 1
 
@@ -536,33 +650,47 @@ _uci_exec:
         rts
 
 @sent:  ; --- fire and forget ---
+        lda #$01
+        sta uci_more            ; a data phase follows unless told otherwise
         ldy #UCI_REQ_TARGET
         lda (uci_rq),y
         and #UCI_TARGET_NO_REPLY
-        beq @collect
+        beq @ok_sent
         jsr uci_poll_idle
         bcc @ok_noreply
         lda #ULTIMATE_ERR_TIMEOUT
         ldx #$00
         rts
 @ok_noreply:
+        lda #$00
+        sta uci_more            ; nothing to collect, and no status to decode
+@ok_sent:
         lda #ULTIMATE_OK
         ldx #$00
         rts
 
-        ; --- collect the reply, one block at a time ---
-@collect:
+; ---------------------------------------------------------------------------
+; Internal: one block of the reply into the caller's buffer.
+;
+; -> A = ULTIMATE_* result, uci_more = 1 when another block follows.
+;
+; The block is released with DATA_ACC only after both queues have been read,
+; because releasing it resets them.
+; ---------------------------------------------------------------------------
+uci_collect_one:
+        lda #$00
+        sta uci_more
         jsr uci_poll_reply
         bcc @have_state
         jsr uci_abort
         lda #ULTIMATE_ERR_TIMEOUT
-        ldx #$00
         rts
 
 @have_state:
         and #UCI_STAT_STATE
         bne @block
-        jmp @translate          ; back to idle with no data phase at all
+        lda #ULTIMATE_OK        ; back to idle with no data phase at all
+        rts
 
 @block: pha                     ; remember whether more blocks follow
         jsr uci_read_block
@@ -570,10 +698,17 @@ _uci_exec:
         sta UCI_REG_CONTROL
         pla
         cmp #UCI_STATE_DATA_LAST
-        beq @translate
-        jmp @collect
+        beq @last
+        lda #$01
+        sta uci_more
+@last:  lda #ULTIMATE_OK
+        rts
 
-@translate:
+; ---------------------------------------------------------------------------
+; Internal: decode the captured status into an ULTIMATE_* result, folding in a
+; truncation the data phase reported. The end of every exchange.
+; ---------------------------------------------------------------------------
+uci_translate:
         lda uci_statlen
         sta uci_dec_len
         lda #<uci_stat

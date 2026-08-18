@@ -197,7 +197,7 @@ public model does not expose them.
 Built for a machine with 38 kilobytes.
 
 - No heap, no hidden buffers. Every byte lands in a buffer you own.
-- 92 bytes of static RAM in total, request block included. No allocation, ever.
+- 99 bytes of static RAM in total, request block included. No allocation, ever.
 - Four bytes of zero page, at an address you choose.
 - No interrupts required, and no interrupt handler installed.
 - Every entry point is bounded: it completes or returns `ULTIMATE_ERR_TIMEOUT`.

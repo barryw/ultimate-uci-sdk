@@ -45,7 +45,7 @@ custom linker script, or an assembler with no segment support at all.
 | Knob | Default | What it places |
 |---|---|---|
 | `UCI_ZP` | `$FB` | `UCI_ZP_SIZE` (4) bytes of zero page |
-| `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (92) bytes of variables |
+| `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (99) bytes of variables |
 | the request block | — | not a knob: `uci_exec` takes it by pointer |
 
 ```
@@ -131,6 +131,17 @@ sharing them.
 | `ultimate_turbo_get` | — | `A` = speed index, or `$FF` when unavailable |
 | `ultimate_turbo_set` | `A` = speed index 0-15 | `A` = result code |
 | `ultimate_turbo_badlines` | `A` = 0 for none, non-zero for normal | `A` = result code |
+| `ultimate_chdir` | `ult_buf` = path | `A` = result code |
+| `ultimate_getpath` | `ult_buf`, `ult_buflen`, `ult_outlen` | `A` = result code |
+| `ultimate_opendir` | — | `A` = result code |
+| `ultimate_readdir` | `ult_buf`, `ult_buflen` | `A` = result, `ult_attrib` = attributes |
+| `ultimate_open` | `A` = `DOS_FA_*` mask, `ult_buf` = name | `A` = result code |
+| `ultimate_close` | — | `A` = result code |
+| `ultimate_read` | `ult_buf`, `ult_buflen`, `ult_outlen` | `A` = result code |
+| `ultimate_write` | `ult_buf`, `ult_buflen` | `A` = result code |
+| `ultimate_seek` | `ult_num` = 32-bit position | `A` = result code |
+| `uci_exec_first` | `A`/`X` = request block | `A` = result, one block |
+| `uci_exec_next` | — | `A` = result, the next block |
 | `uci_present` | — | `A` = 1 when the signature is on the bus |
 | `uci_ident` | — | `A` = the raw identification register |
 | `uci_req_clear` | — | zeroes the request block |

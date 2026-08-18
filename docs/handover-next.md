@@ -76,13 +76,37 @@ that would catch a regression is `make basic-run` typing `PRINT 2+3` at a real
 machine, because the ROM path that exposes it ends in the direct-mode loop and
 never returns to a test harness.
 
-### Phase 3 will outgrow the `$C000` block
+### ~~Phase 3 will outgrow the `$C000` block~~ — it has, for the blob
 
-The resident wedge plus SDK is 3464 bytes of the 4K at `$C000`, so 632 are left. The design's §8
-says Phase 3 pushes past it, at which point **the SDK alone** moves to `$A000`
-under the BASIC ROM — which needs one shared trampoline, not banking discipline
-throughout, because the SDK is never called by BASIC ROM. The wedge keeps
-`$C000`. Relocation makes it a link-time choice.
+**This has stopped being a prediction.** `dos.s` took the standalone blob to
+3,959 bytes, and with the 256-byte jump table page and the 512-byte parameter
+block in front of it there is no longer room for the SDK's variables at
+`$CF00`: the code ran straight through them. The link *succeeded*, and the
+resulting blob overwrote its own request block with its own code, so every
+command came back `ULTIMATE_ERR_INVALID_ARGUMENT` while init, present and the
+timeout accessors all still passed. `blob.suite` caught it; nothing else would
+have.
+
+Two things came out of that, and the second is the one that matters:
+
+- The default `VARS` moved to `$CF98`, the top of the 4K. That is a stopgap
+  with about **thirty bytes of headroom** - `file.s` will not fit, never mind
+  `reu.s`.
+- `blob.cfg.in` now sizes the code area from `VARS`, so the link **fails**
+  instead of overlapping. That is the part worth keeping: a build that cannot
+  fit should not produce a binary that looks fine.
+
+The resident wedge plus SDK is 3,581 bytes of the same 4K, with 515 left, and
+it does not link `dos.s` at all - cc65 drops an unreferenced module whole, which
+is exactly why the service layer is one module per service.
+
+**So the decision the design's §8 describes is now due, and it is a real
+choice.** The SDK alone moves to `$A000` under the BASIC ROM, needing one shared
+trampoline rather than banking discipline throughout, because the SDK is never
+called by BASIC ROM; the wedge keeps `$C000`. Relocation makes it a link-time
+choice. The blob's own default base is a separate question with the same shape:
+`make -C bindings/blob BASE=8000 VARS=53144` gives the code 19K today and
+changes no jump-table offset, since those are all relative to the base.
 
 ### Two hardware facts worth keeping
 
@@ -349,8 +373,28 @@ buys — do it last.
    token `$DB`) and the blob (`+$43`..`+$4C`), with the speed change measured
    against the raster on real hardware: 3.99x at index 3, and 6.3% back from
    turning badlines off.
-5. Phase 3 proper: `dos.s`, `file.s`, the SoftwareIEC fast path, `reu.s`, and
-   `ULOAD`/`USAVE`/`UDIR` in all three languages at once.
+5. Phase 3 proper. **Started**: `dos.s` is built and tested - chdir, getpath,
+   opendir, readdir, open, close, read, write, seek - and it needed a transport
+   change to exist at all (see below). Still to come: `file.s` with the
+   SoftwareIEC fast path, `reu.s`, and `ULOAD`/`UBLOAD`/`USAVE`/`UDIR`/
+   `USTASH`/`UFETCH` in all three languages.
+
+   **`uci_exec_first` / `uci_exec_next` are new, and `dos.s` is why.**
+   `DOS_CMD_READ_DIR` answers with one reply block per directory entry, each
+   `<attrib> <name>` with no terminator and no length, so the block boundary is
+   the only separator there is. `uci_exec` stitches the chain into one buffer,
+   which for every other command is exactly right and for this one destroys the
+   answer: an attribute byte of `$20` is a space, so a filename containing one
+   is indistinguishable from the start of the next entry. This was checked
+   against the firmware source *and* against the wire before any code was
+   written - `READ_DIR` on the fixture tree returns 13 bytes,
+   `$10 "data" $20 "big.bin"`, concatenated.
+
+   `ULTIMATE_END` is new for the same reason: `readdir` needs "no more entries"
+   to be a result rather than an error. Adding it also cleared the
+   `ULT_ERR_COUNT = 10` debt - the count is generated now and `strerror`
+   asserts its table against it, which is what an eleventh code would otherwise
+   have walked straight into.
 
 The boing ball is a good forcing function for Phase 3, incidentally: it needs to
 load its own sprite data, which is exactly `ULOAD`.

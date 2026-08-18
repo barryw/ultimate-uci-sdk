@@ -56,6 +56,8 @@ HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_available \
                 t_palette_get_null t_palette_set_null pal_index \
                 t_turbo_available t_turbo_get t_turbo_set t_turbo_badlines \
                 turbo_arg \
+                t_chdir t_getpath t_opendir t_readdir \
+                t_open t_close t_read dir_attrib \
                 t_decode t_status_fmt t_strerror t_set_timeout t_get_timeout \
                 result devcode reply reply_len reply0 reply1 reply2 reply3 \
                 caps caps_present caps_ident caps_targets_lo caps_targets_hi \

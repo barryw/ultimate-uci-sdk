@@ -186,6 +186,68 @@ uint8_t ultimate_turbo_set(uint8_t index);
  */
 uint8_t ultimate_turbo_badlines(uint8_t on);
 
+/*
+ * Files and directories, on the Ultimate's own filesystem.
+ *
+ * Target $01 throughout. Buffers belong to the caller, as everywhere else in
+ * this header: nothing is allocated and nothing is retained after the call.
+ *
+ * Names go on the wire exactly as given. The Ultimate speaks ASCII and a C64
+ * program usually holds PETSCII, and converting here would be the SDK guessing
+ * which one it had been handed.
+ */
+
+/* Change directory. Absolute or relative, as the firmware understands it. */
+uint8_t ultimate_chdir(const char *path);
+
+/*
+ * The current directory, NUL-terminated. At most buflen-1 bytes are stored;
+ * a path too long for the buffer is clipped and still ULTIMATE_OK, because a
+ * clipped path is still the answer to "where am I". outlen may be NULL.
+ */
+uint8_t ultimate_getpath(char *buf, uint16_t buflen, uint16_t *outlen);
+
+/* Open the current directory for reading. */
+uint8_t ultimate_opendir(void);
+
+/*
+ * One directory entry per call, NUL-terminated in name, with the DOS_ATTR_*
+ * bits in *attrib. attrib may be NULL.
+ *
+ * Returns ULTIMATE_END when the directory is finished. That is a result, not a
+ * failure, and it is a code of its own so that a caller never has to tell "no
+ * more entries" apart from "something broke".
+ *
+ * **Issue no other command between calls.** A directory walk is one live
+ * exchange with the Ultimate - the firmware sends an entry per reply block -
+ * and any other command in the middle of it ends the walk.
+ *
+ *     if (ultimate_opendir() == ULTIMATE_OK)
+ *         while (ultimate_readdir(name, sizeof(name), &attrib) == ULTIMATE_OK)
+ *             puts(name);
+ */
+uint8_t ultimate_readdir(char *name, uint16_t namelen, uint8_t *attrib);
+
+/* Open a file. attrib is a DOS_FA_* mask: DOS_FA_READ, DOS_FA_WRITE, ... */
+uint8_t ultimate_open(const char *name, uint8_t attrib);
+
+/* Close whatever is open. Harmless when nothing is. */
+uint8_t ultimate_close(void);
+
+/*
+ * Read up to len bytes. Fewer than asked for is the end of the file rather
+ * than an error, so *outlen is the answer and the result stays ULTIMATE_OK.
+ * outlen may be NULL. The firmware answers in 512-byte blocks; the SDK walks
+ * the chain, so a caller asks for what it wants and gets it whole.
+ */
+uint8_t ultimate_read(uint8_t *buf, uint16_t len, uint16_t *outlen);
+
+/* Write len bytes to the open file. */
+uint8_t ultimate_write(const uint8_t *buf, uint16_t len);
+
+/* Seek to an absolute byte position in the open file. */
+uint8_t ultimate_seek(uint32_t pos);
+
 /* A short, stable, English description of an ULTIMATE_* code. Never NULL. */
 const char *ultimate_strerror(uint8_t err);
 

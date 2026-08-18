@@ -5,12 +5,21 @@
 # contiguous so every promised offset holds when the whole binary is loaded
 # in one go.
 #
+# MAIN stops where the SDK's variables begin, and @MAINSIZE@ is computed from
+# VARS by the Makefile rather than written here. It used to be a flat $1D00,
+# which is 7K of nothing in particular: the code was free to grow straight
+# through the variable block, and when it did - the moment dos.s landed - the
+# link still succeeded and the blob spent its first instruction overwriting its
+# own request block. Everything still "worked" except that no command could be
+# issued. A size that says where the variables are turns that into a link
+# error.
+#
 # SPDX-License-Identifier: MIT
 
 MEMORY {
     HDR:  start = @BASE@,        size = $0100, type = rw, file = %O, fill = yes;
     PARM: start = @BASE@ + $100, size = $0200, type = rw, file = %O, fill = yes;
-    MAIN: start = @BASE@ + $300, size = $1D00, type = rw, file = %O, fill = no;
+    MAIN: start = @BASE@ + $300, size = @MAINSIZE@, type = rw, file = %O, fill = no;
 }
 SEGMENTS {
     BLOBHDR:  load = HDR,  type = ro;

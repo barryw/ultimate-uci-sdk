@@ -104,6 +104,37 @@ uint8_t uci_init(void);
 uint8_t uci_exec(uci_request *req);
 
 /*
+ * The same exchange, stopped at each reply-block boundary.
+ *
+ * uci_exec() drains every block of a reply into one buffer, which is what
+ * almost every command wants. These two exist for the commands where the
+ * boundaries carry meaning - and DOS_CMD_READ_DIR is why: the firmware sends
+ * one directory entry per block, each of them <attrib> <name> with no
+ * terminator and no length, so stitching them together destroys the only thing
+ * separating one entry from the next.
+ *
+ * req->datalen is reset per call, so it is this block's length and nothing
+ * else. Call uci_more_blocks() afterwards to find out whether another follows;
+ * the call that returns with it clear is the one that decodes the device
+ * status, so a loop reads the result of that last call.
+ *
+ *     err = uci_exec_first(&req);
+ *     while (err == ULTIMATE_OK) {
+ *         ...use req.data, req.datalen...
+ *         if (!uci_more_blocks())
+ *             break;
+ *         err = uci_exec_next(&req);
+ *     }
+ *
+ * Issue no other command in the middle: the walk is one live exchange.
+ */
+uint8_t uci_exec_first(uci_request *req);
+uint8_t uci_exec_next(uci_request *req);
+
+/* 1 while another reply block follows the one just collected. */
+uint8_t uci_more_blocks(void);
+
+/*
  * Ask the Ultimate to abandon the exchange in progress and force the transport
  * back to idle. Safe to call at any time; bounded like everything else.
  */

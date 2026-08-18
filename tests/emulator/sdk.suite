@@ -915,5 +915,151 @@ suites {
       assert([result] == $00, "the last real index is accepted")
       assert($d031 == $0f, "and written")
     }
+
+    ; --- the DOS service ---
+    ;
+    ; u64sim implements the read-only half of Ultimate DOS against a real
+    ; directory tree, tests/emulator/fixtures/usb0, so these run the commands
+    ; for real rather than proving a rejection is reported cleanly. The tree
+    ; holds one directory, `data`, and one file, `big.bin`.
+
+    test("sdk-getpath", "the current directory comes back as a string") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [result] = $ff
+      jsr([t_getpath], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([reply0] == $2f, "'/' - a path, and an absolute one")
+    }
+
+    ; The whole reason uci_exec_first and uci_exec_next exist. READ_DIR answers
+    ; with one reply block per entry, <attrib> <name> with no terminator and no
+    ; length, so the block boundary is the only separator there is. Draining the
+    ; chain into one buffer - which is what uci_exec does and what every other
+    ; command wants - would hand back "\x10data\x20big.bin" with nothing to say
+    ; where the first name ended.
+    test("sdk-readdir", "one entry per call, name and attributes separated") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [result] = $ff
+      jsr([t_opendir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "OPEN_DIR succeeded")
+
+      [result] = $ff
+      [dir_attrib] = $00
+      jsr([t_readdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "an entry")
+      assert([dir_attrib] == $10, "DOS_ATTR_DIR: it is the `data` directory")
+      assert([reply0] == $64, "'d' - the attribute byte is gone from the name")
+      assert([reply1] == $61, "'a'")
+      assert([reply2] == $74, "'t'")
+      assert([reply3] == $61, "'a'")
+      assert(([reply0] + $04).b == $00, "and the name is terminated")
+
+      [result] = $ff
+      jsr([t_readdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the second entry")
+      assert([reply0] == $62, "'b' of big.bin")
+      assert(([reply0] + $03).b == $2e, "'.' - the whole name, not a prefix")
+      assert(([reply0] + $07).b == $00, "terminated after seven characters")
+
+      ; The directory has two entries, so the third call is the end - and the
+      ; end has a code of its own, so a caller never confuses it with a failure.
+      [result] = $ff
+      jsr([t_readdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $0a, "ULTIMATE_END")
+    }
+
+    test("sdk-readdir-without-opendir", "a walk that was never started is over") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [result] = $ff
+      jsr([t_readdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $0a, "ULTIMATE_END, not a device error")
+    }
+
+    ; chdir, then getpath, so the second command proves the first did something
+    ; rather than merely returning OK.
+    test("sdk-chdir", "changing directory moves the current path") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $64            ; "data", in ASCII: the wire's character set
+      [reply1] = $61
+      [reply2] = $74
+      [reply3] = $61
+      [reply0] + $04 = $00
+      [result] = $ff
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "CHANGE_DIR succeeded")
+
+      [result] = $ff
+      jsr([t_getpath], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and the path came back")
+      ; The fixture tree is mounted at /Usb0, so the path is /Usb0/data - which
+      ; is worth asserting in full rather than guessing at a prefix.
+      assert([reply0] == $2f, "'/'")
+      assert(([reply0] + $06).b == $64, "'d'")
+      assert(([reply0] + $07).b == $61, "'a'")
+      assert(([reply0] + $08).b == $74, "'t'")
+      assert(([reply0] + $09).b == $61, "'a'")
+    }
+
+    ; Open, read, close. big.bin is the fixture with known contents, and the
+    ; read goes through DOS_CMD_READ_DATA's 512-byte block chain, which uci_exec
+    ; walks - so this is also the test that the chain still stitches now that
+    ; the collect loop has been split.
+    test("sdk-open-read-close", "a file opens, reads and closes") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      ; Back to the root first: the test above moved the current directory, and
+      ; a test that only passes in the order it happens to sit in is not a test.
+      [reply0] = $2f            ; "/Usb0"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $00
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "back at the root")
+
+      [reply0] = $62            ; "big.bin"
+      [reply1] = $69
+      [reply2] = $67
+      [reply3] = $2e
+      [reply0] + $04 = $62
+      [reply0] + $05 = $69
+      [reply0] + $06 = $6e
+      [reply0] + $07 = $00
+      [result] = $ff
+      jsr([t_open], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "OPEN_FILE succeeded")
+
+      [reply_len] = $ff
+      [reply_len] + $01 = $ff
+      [result] = $ff
+      jsr([t_read], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "READ_DATA succeeded")
+      assert([reply_len] == $40, "64 bytes, which is what was asked for")
+      assert(([reply_len] + $01).b == $00, "...and no more")
+
+      [result] = $ff
+      jsr([t_close], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "CLOSE_FILE succeeded")
+    }
   }
 }
