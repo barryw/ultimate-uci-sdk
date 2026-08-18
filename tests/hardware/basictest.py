@@ -43,8 +43,10 @@ from keyboard import type_line    # noqa: E402
 
 CMD_IF = ("C64 and Cartridge Settings", "Command Interface")
 
-WEDGE_PRG = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         "..", "..", "src", "basic", "uci.prg")
+BASIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "..", "..", "src", "basic")
+WEDGE_PRG = os.path.join(BASIC_DIR, "uci.prg")
+WEDGE_CRT = os.path.join(BASIC_DIR, "uci.crt")
 
 # (line to type, what has to appear on the screen afterwards, why)
 CHECKS = [
@@ -72,7 +74,21 @@ CHECKS = [
 ]
 
 
-def run(host, port, verbose):
+def install(u, as_crt):
+    """Get the wedge onto the machine, and say how much BASIC RAM is left.
+
+    The .prg is loaded and RUN; the cartridge autostarts on the CBM80 signature
+    with nothing typed at all. Either way the banner is the proof it is in.
+    """
+    if as_crt:
+        u.run_crt(os.path.normpath(WEDGE_CRT))
+    else:
+        u.run_prg(os.path.normpath(WEDGE_PRG))
+    time.sleep(6)
+    return decode_screen(u.readmem(0x0400, 1000))
+
+
+def run(host, port, verbose, as_crt):
     u = Ultimate(host, port)
     info = u.info()
     print("# %s, firmware %s (fpga %s, core %s)"
@@ -85,17 +101,18 @@ def run(host, port, verbose):
               % ", ".join("%s=%s" % (k[1], v) for k, v in changed.items()))
     failures = 0
     try:
-        print("# installing the wedge")
-        u.run_prg(os.path.normpath(WEDGE_PRG))
-        time.sleep(5)
-
-        screen = decode_screen(u.readmem(0x0400, 1000))
+        print("# installing the wedge from the %s"
+              % ("cartridge" if as_crt else ".prg"))
+        screen = install(u, as_crt)
         if not any("ULTIMATE UCI BASIC WEDGE INSTALLED." in line for line in screen):
             print("not ok 1 - the wedge did not install")
             print("#   the banner never appeared. Screen:")
             for line in screen[-6:]:
                 print("#   |", line)
             return 1
+        free = [t for t in screen if "BASIC BYTES FREE" in t]
+        if free:
+            print("# %s" % free[0].strip())
         print("ok 1 - wedge installed, banner readable")
 
         for index, (line, expected, why) in enumerate(CHECKS, start=2):
@@ -127,6 +144,13 @@ def run(host, port, verbose):
                 for text in tail:
                     print("#   |", text)
     finally:
+        if as_crt:
+            # The cartridge stays mapped until something else starts the
+            # machine, and a reset would just run it again. Leave the bench
+            # the way it was found.
+            print("# unmapping the cartridge")
+            u.run_prg(os.path.normpath(WEDGE_PRG))
+            time.sleep(5)
         restore_settings(u, changed)
         print("# settings restored; flash was never written")
 
@@ -141,8 +165,13 @@ def main():
     ap.add_argument("--host", required=True)
     ap.add_argument("--port", type=int, default=80)
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--crt", action="store_true",
+                    help="install from uci.crt instead of uci.prg. The same "
+                         "checks run either way, which is the point: the "
+                         "cartridge is a delivery mechanism, not a second "
+                         "implementation")
     args = ap.parse_args()
-    sys.exit(run(args.host, args.port, args.verbose))
+    sys.exit(run(args.host, args.port, args.verbose, args.crt))
 
 
 if __name__ == "__main__":

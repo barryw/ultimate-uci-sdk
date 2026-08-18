@@ -85,6 +85,18 @@ class Ultimate:
         self._request("POST", "/runners:run_prg", data=payload,
                       content_type="application/octet-stream")
 
+    def run_crt(self, path):
+        """Load a .crt into cartridge ROM and start the machine on it.
+
+        The cartridge stays mapped afterwards, so a reset runs it again. Going
+        back to a machine without one means run_prg, which starts the C64 with
+        no cartridge - or a power cycle.
+        """
+        with open(path, "rb") as fh:
+            payload = fh.read()
+        self._request("POST", "/runners:run_crt", data=payload,
+                      content_type="application/octet-stream")
+
 
 def read_settings(u, keys):
     """keys: iterable of (category, item). -> {(category, item): value}."""

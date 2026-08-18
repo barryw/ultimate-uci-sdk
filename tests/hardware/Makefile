@@ -29,10 +29,14 @@ run: ucitest.prg
 
 # The BASIC wedge, typed at a real C64.
 #   make basic-run U64_HOST=192.168.1.62
+# Both deliveries, one after the other. The .crt runs the same checks as the
+# .prg, which is the only way to show the cartridge is a delivery mechanism
+# rather than a second implementation.
 basic-run:
 	@test -n "$(U64_HOST)" || { echo "set U64_HOST=<ip of your Ultimate>"; exit 1; }
 	$(MAKE) -C $(ROOT)/src/basic
 	python3 basictest.py --host $(U64_HOST) $(BASICTEST_ARGS)
+	python3 basictest.py --host $(U64_HOST) --crt $(BASICTEST_ARGS)
 
 clean:
 	rm -f ucitest.prg ucitest.o

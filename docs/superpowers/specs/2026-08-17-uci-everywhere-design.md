@@ -151,7 +151,7 @@ mechanisms exist and are tested.
 | | `.prg` | `.crt` |
 |---|---|---|
 | how it starts | `LOAD "UCI",8` then `RUN` | power on, nothing to type |
-| BASIC RAM | 38K, unchanged | 28K — the cartridge banks out `$8000-$9FFF` |
+| BASIC RAM | 38911 bytes | 30719 bytes — the cartridge holds `$8000-$9FFF` |
 | survives reset | no | yes |
 | room | ~4K at `$C000`; phase 3 needs the `$A000` move | 8K of ROM, all three phases fit |
 
@@ -674,10 +674,10 @@ is usable rather than merely defined.
   no problem, and the `.prg` build moves the SDK alone to `$A000` behind one
   small trampoline. Sized in §8; measure again at the end of phase 2 rather than
   trusting the estimate.
-- **The cartridge costs BASIC 10K of program space** — 38K down to 28K, because
-  `$8000-$9FFF` is banked out while it is resident. That is the price of
-  autostart and surviving a reset. Shipping both builds is what keeps it a
-  choice rather than a tax.
+- **The cartridge costs BASIC 8K of program space** — 38911 bytes down to
+  30719, measured on the bench rather than estimated; this document said 10K
+  until the cartridge was actually booted. That is the price of autostart and
+  surviving a reset. Shipping both builds keeps it a choice rather than a tax.
 - **The argument shape table can drift from firmware.** `UW()` and `UL()` are
   the escape, which is why they are not optional.
 - **Structured argument shapes are real work** across ~50 commands, and were on

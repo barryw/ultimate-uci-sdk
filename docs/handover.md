@@ -35,7 +35,9 @@ make hardware         GREEN
 make wedge            GREEN     uci.prg 2940 bytes, uci.crt 8272; the resident
                                 wedge + SDK at $C000 is 3159
 make test             GREEN     97 host unit tests + 118 tests across 8 suites
-make basic-run        GREEN     8/8 - the wedge typed at a real C64
+make basic-run        GREEN     8/8 from the .prg and 8/8 from the .crt, the
+                                same checks typed at a real C64. The cartridge
+                                costs BASIC 8K: 38911 bytes free becomes 30719
 make hardware-run     GREEN     4/4 scenarios on real hardware, 13 checks each
                                 except uci-disabled, which asserts one clean
                                 failure and is meant to report failed=1
