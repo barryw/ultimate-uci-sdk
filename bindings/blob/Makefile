@@ -19,11 +19,12 @@ ZP   ?= 251
 AFLAGS := -t $(TARGET) -I $(ROOT)/bindings/asm -I $(ROOT)/src/uci \
           -D UCI_VARS=$(VARS) -D UCI_ZP=$(ZP)
 
-SRC := $(ROOT)/src/uci/uci_core.s \
-       $(ROOT)/src/uci/ultimate.s \
-       $(ROOT)/src/uci/ultimate_strerror.s \
-       $(ROOT)/bindings/asm/ultimate_asm.s \
-       blob.s
+# The module list is shared with bindings/cc65 - see src/uci/sources.mk. The
+# blob is not a port: it is the library's own object files linked differently,
+# so the two must never be able to drift apart.
+include $(ROOT)/src/uci/sources.mk
+
+SRC := $(addprefix $(ROOT)/,$(UCI_SRC)) blob.s
 
 BUILD := build
 OBJ   := $(addprefix $(BUILD)/,$(notdir $(SRC:.s=.o)))

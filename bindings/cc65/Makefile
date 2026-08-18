@@ -25,12 +25,12 @@ CFLAGS  := -t $(TARGET) -Osir -W error -I $(ROOT)/include -I $(ROOT)/src/uci
 ASM_DEFINES ?=
 AFLAGS  := -t $(TARGET) -I $(ROOT)/bindings/asm -I $(ROOT)/src/uci -I $(BUILD) $(ASM_DEFINES)
 
-# The protocol core is assembly; only the service layer is C.
 # The whole SDK is assembly; the only C here is a build-time layout check.
+# The module list is shared with bindings/blob - see src/uci/sources.mk.
+include $(ROOT)/src/uci/sources.mk
+
 CSRC    := abi_assert.c
-ASRC    := $(ROOT)/src/uci/uci_core.s $(ROOT)/src/uci/ultimate.s \
-           $(ROOT)/src/uci/ultimate_strerror.s \
-           $(ROOT)/bindings/asm/ultimate_asm.s ultimate_cc65.s
+ASRC    := $(addprefix $(ROOT)/,$(UCI_SRC)) ultimate_cc65.s
 
 COBJ    := $(addprefix $(BUILD)/,$(notdir $(CSRC:.c=.o)))
 AOBJ    := $(addprefix $(BUILD)/,$(notdir $(ASRC:.s=.o)))
@@ -42,23 +42,13 @@ all: $(LIB)
 $(BUILD):
 	mkdir -p $(BUILD)
 
-# The generated protocol include lives in bindings/asm; ca65 needs it on its
-# search path, which AFLAGS already covers.
-$(BUILD)/%.o: $(ROOT)/src/uci/%.c | $(BUILD)
-	$(CC65) $(CFLAGS) -o $(BUILD)/$*.s $<
-	$(CA65) $(AFLAGS) -o $@ $(BUILD)/$*.s
-
 $(BUILD)/abi_assert.o: abi_assert.c | $(BUILD)
 	$(CC65) $(CFLAGS) -o $(BUILD)/abi_assert.s $<
 	$(CA65) $(AFLAGS) -o $@ $(BUILD)/abi_assert.s
 
-$(BUILD)/uci_core.o: $(ROOT)/src/uci/uci_core.s | $(BUILD)
-	$(CA65) $(AFLAGS) -o $@ $<
-
-$(BUILD)/ultimate.o: $(ROOT)/src/uci/ultimate.s | $(BUILD)
-	$(CA65) $(AFLAGS) -o $@ $<
-
-$(BUILD)/ultimate_strerror.o: $(ROOT)/src/uci/ultimate_strerror.s | $(BUILD)
+# One rule for every module in sources.mk. The generated protocol include lives
+# in bindings/asm; ca65 needs it on its search path, which AFLAGS already covers.
+$(BUILD)/%.o: $(ROOT)/src/uci/%.s | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
 $(BUILD)/ultimate_asm.o: $(ROOT)/bindings/asm/ultimate_asm.s | $(BUILD)

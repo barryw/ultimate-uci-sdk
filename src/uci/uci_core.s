@@ -35,7 +35,7 @@
 
         ; The service layer's storage lives in the same block; see below.
         .export ult_up, ult_buf, ult_buflen, ult_outlen, ult_caps
-        .export ult_scratch, ult_req, ult_probe
+        .export ult_scratch, ult_req, ult_probe, ult_color
 
 ; ---------------------------------------------------------------------------
 ; Variables
@@ -89,7 +89,12 @@ ult_probe       = UCI_VARS + 43 + UCI_REQ_SIZE  ; capability probe cursor
 ; --- caller-facing request block (bindings/asm/ultimate_asm.s) ---
 uci_req         = UCI_VARS + 44 + UCI_REQ_SIZE
 
-.assert (44 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+; Appended after uci_req rather than beside the other service variables, so that
+; the addresses bindings/blob/README.md publishes stay where they are. Anything
+; added later goes on the end for the same reason.
+ult_color       = UCI_VARS + 44 + 2 * UCI_REQ_SIZE  ; index, r, g, b for the palette
+
+.assert (48 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
         .export uci_req
 
@@ -124,6 +129,9 @@ ult_caps:       .res 2
 ult_scratch:    .res 16
 ult_req:        .res UCI_REQ_SIZE
 ult_probe:      .res 1
+
+; --- palette service (src/uci/palette.s) ---
+ult_color:      .res 4          ; index, r, g, b
 
 .endif
 

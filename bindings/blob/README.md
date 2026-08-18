@@ -38,6 +38,10 @@ against version 5.
 | `+$2E` | `uci_req_clear` | | zeroes the request block at `uci_req` |
 | `+$31` | `uci_decode` | `uci_dec_target`/`uci_dec_ptr`/`uci_dec_len` | `A` = result |
 | `+$34` | `uci_status_fmt` | `A` = target | `A` = `UCI_STATUS_FMT_*` |
+| `+$37` | `ultimate_palette_get` | `A`/`X` = 48-byte buffer | `A` = result |
+| `+$3A` | `ultimate_palette_set` | `A`/`X` = 48 bytes of RGB | `A` = result |
+| `+$3D` | `ultimate_palette_set_color` | `ult_color` = index, r, g, b | `A` = result |
+| `+$40` | `ultimate_palette_reset` | | `A` = result |
 
 The signature is checked before calling anything:
 
@@ -77,9 +81,13 @@ page-aligned parameter block above. For the default build (`VARS=52992`, i.e.
 | `$CF0F` | `uci_dec_ptr` | 2 |
 | `$CF11` | `uci_dec_len` | 1 |
 | `$CF42` | `uci_req` | `UCI_REQ_SIZE` (22) |
+| `$CF58` | `ult_color` | 4 — index, r, g, b for `+$3D` |
 
-A build with `VARS=` set to something else shifts all four by the same
+A build with `VARS=` set to something else shifts all five by the same
 amount: each is `UCI_VARS` plus the fixed offset above minus `$CF00`.
+
+New variables are appended to the end of the block, never inserted, so the
+addresses above do not move when the SDK grows.
 
 ## Loading it somewhere else
 

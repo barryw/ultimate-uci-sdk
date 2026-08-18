@@ -49,11 +49,13 @@ _uci_decode_status:
 ; ---------------------------------------------------------------------------
 
         .import ultimate_identify, ultimate_get_model
-        .import ult_buf, ult_buflen, ult_outlen
+        .import ultimate_palette_set_color
+        .import ult_buf, ult_buflen, ult_outlen, ult_color
         .import incsp4, incsp5
 
         .export _ultimate_identify
         .export _ultimate_get_model
+        .export _ultimate_palette_set_color
 
 ; uint8_t ultimate_identify(uint8_t target, char *buf, uint16_t buflen,
 ;                           uint16_t *outlen);
@@ -103,5 +105,28 @@ _ultimate_get_model:
         sta ult_buf + 1
         jsr incsp4
         jsr ultimate_get_model
+        ldx #$00
+        rts
+
+; uint8_t ultimate_palette_set_color(uint8_t index, uint8_t r, uint8_t g,
+;                                    uint8_t b);
+;
+; A holds b; cc65 pushes the other three as single bytes, so the C stack holds
+; g at 0, r at 1 and index at 2. The other three palette entry points take one
+; argument or none, which is already cc65's convention, so they export their C
+; names straight out of palette.s and cost nothing here.
+_ultimate_palette_set_color:
+        sta ult_color + 3       ; b
+        ldy #$00
+        lda (c_sp),y
+        sta ult_color + 2       ; g
+        iny
+        lda (c_sp),y
+        sta ult_color + 1       ; r
+        iny
+        lda (c_sp),y
+        sta ult_color           ; index
+        jsr incsp3
+        jsr ultimate_palette_set_color
         ldx #$00
         rts

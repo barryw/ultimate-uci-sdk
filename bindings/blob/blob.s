@@ -18,6 +18,8 @@
         .import ultimate_init, ultimate_available, ultimate_detect
         .import ultimate_identify, ultimate_get_model, ultimate_strerror
         .import uci_req_clear, uci_decode, uci_status_fmt
+        .import ultimate_palette_get, ultimate_palette_set
+        .import ultimate_palette_set_color, ultimate_palette_reset
 
         .export blob_start
 
@@ -46,6 +48,11 @@ blob_start:
         jmp uci_req_clear               ; +$2E
         jmp uci_decode                  ; +$31
         jmp uci_status_fmt              ; +$34
+
+        jmp ultimate_palette_get        ; +$37
+        jmp ultimate_palette_set        ; +$3A
+        jmp ultimate_palette_set_color  ; +$3D
+        jmp ultimate_palette_reset      ; +$40
 
 ; ---------------------------------------------------------------------------
 ; The parameter block.

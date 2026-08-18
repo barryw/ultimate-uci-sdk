@@ -10,6 +10,11 @@
 ; SPDX-License-Identifier: MIT
 
         .include "ultimate.inc"
+; BLOB_SIZE, written by tests/emulator/Makefile from the binary it just built.
+; The copy below used to be twelve unrolled pages, hard-wired: the blob reached
+; 3060 bytes the moment the palette service landed, twelve bytes short of
+; silently copying less than the whole thing.
+        .include "blobsize.inc"
 
         .forceimport __STARTUP__
         .export _main
@@ -20,6 +25,7 @@
 
 BLOB_SRC = $C000
 BLOB_DST = $8000
+BLOB_PAGES = (BLOB_SIZE + $FF) / $100
 
         .bss
 result: .res 1
@@ -33,33 +39,16 @@ blob_table:
 
 _main:  rts
 
-; Copy $C000..$CBFF down to $8000, then fix up the addresses.
+; Copy the whole blob down to $8000, then fix up the addresses. One unrolled
+; page per page of the built binary, rounded up, so this cannot fall behind the
+; SDK the way a fixed count did.
 t_reloc:
         ldx #$00
-@page:  lda BLOB_SRC,x
-        sta BLOB_DST,x
-        lda BLOB_SRC + $100,x
-        sta BLOB_DST + $100,x
-        lda BLOB_SRC + $200,x
-        sta BLOB_DST + $200,x
-        lda BLOB_SRC + $300,x
-        sta BLOB_DST + $300,x
-        lda BLOB_SRC + $400,x
-        sta BLOB_DST + $400,x
-        lda BLOB_SRC + $500,x
-        sta BLOB_DST + $500,x
-        lda BLOB_SRC + $600,x
-        sta BLOB_DST + $600,x
-        lda BLOB_SRC + $700,x
-        sta BLOB_DST + $700,x
-        lda BLOB_SRC + $800,x
-        sta BLOB_DST + $800,x
-        lda BLOB_SRC + $900,x
-        sta BLOB_DST + $900,x
-        lda BLOB_SRC + $A00,x
-        sta BLOB_DST + $A00,x
-        lda BLOB_SRC + $B00,x
-        sta BLOB_DST + $B00,x
+@page:
+        .repeat BLOB_PAGES, page
+        lda BLOB_SRC + page * $100,x
+        sta BLOB_DST + page * $100,x
+        .endrepeat
         inx
         bne @page
 

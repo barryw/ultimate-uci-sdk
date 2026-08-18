@@ -373,7 +373,7 @@ GROUPS = [
     ("SDK memory footprint", "How much RAM the core needs, and where. All of it "
                              "is placeable: see UCI_ZP and UCI_VARS in docs/asm-abi.md.", [
         ("UCI_ZP_SIZE",   4,  "zero page bytes the core needs"),
-        ("UCI_VARS_SIZE", 88, "non-zero-page bytes the whole SDK needs"),
+        ("UCI_VARS_SIZE", 92, "non-zero-page bytes the whole SDK needs"),
     ]),
 
     ("ASCII literals", "Bytes that come off the wire are always written "

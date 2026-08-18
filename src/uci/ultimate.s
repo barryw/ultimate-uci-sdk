@@ -22,6 +22,7 @@
         .export ultimate_identify
         .export ultimate_detect,    _ultimate_detect
         .export ultimate_get_model
+        .export ult_req_clear       ; shared with the other service modules
 
 ; The probe buffer is deliberately small. Detection does not need to read an
 ; identification string, only to tell "NO TARGET" from anything else, and

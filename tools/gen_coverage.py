@@ -25,11 +25,22 @@ import gen_protocol as protocol
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Commands the SDK exposes an API for. Add to this when a service lands, and the
-# --check gate will insist on a test to go with it.
+# Commands the SDK exposes an API for, and the entry points that send them. Add
+# to this when a service lands, and the --check gate will insist on a test to go
+# with it.
+#
+# The entry points matter because a wrapper is the whole point of wrapping: a
+# test written against the SDK calls ultimate_palette_get(), and the command
+# byte never appears in its source at all. Scanning for the byte alone would
+# report every wrapped command as untested for ever, which is the opposite of
+# what this file is for.
 WRAPPED = {
-    "UCI_CMD_IDENTIFY",       # ultimate_identify, ultimate_detect
-    "CTRL_CMD_GET_HWINFO",    # ultimate_get_model
+    "UCI_CMD_IDENTIFY":           ("ultimate_identify", "ultimate_detect"),
+    "CTRL_CMD_GET_HWINFO":        ("ultimate_get_model",),
+    "CTRL_CMD_GET_PALETTE":       ("ultimate_palette_get",),
+    "CTRL_CMD_SET_PALETTE":       ("ultimate_palette_set",),
+    "CTRL_CMD_SET_PALETTE_COLOR": ("ultimate_palette_set_color",),
+    "CTRL_CMD_RESET_PALETTE":     ("ultimate_palette_reset",),
 }
 
 # Where a test could plausibly send a command from.
@@ -46,6 +57,17 @@ TEST_FILES = [
 # leaving as a mystery gap in the table.
 SIMULATED_TARGETS = {"Ultimate DOS commands", "Control commands",
                      "Commands common to every target"}
+
+# Commands inside an otherwise-simulated family that u64sim does not implement.
+# The palette four are newer than firmware 3.15 and u64sim answers them with
+# "21,UNKNOWN COMMAND" - which tests/emulator/sdk.suite pins deliberately, as
+# the case an old machine presents, rather than as coverage of what they do.
+HARDWARE_ONLY = {
+    "CTRL_CMD_GET_PALETTE",
+    "CTRL_CMD_SET_PALETTE",
+    "CTRL_CMD_SET_PALETTE_COLOR",
+    "CTRL_CMD_RESET_PALETTE",
+}
 
 
 # Sub-command bytes are arguments, not commands: counting them would inflate
@@ -83,6 +105,20 @@ def target_values():
     return {}
 
 
+def strip_comments(text):
+    """Comments out, before anything is scanned.
+
+    A test file that *describes* a command it does not send would otherwise be
+    credited with sending it, and a coverage report that over-reports is worse
+    than none. Only whole-line `;` comments go: the sim6502 DSL uses `;` and
+    nothing else on the line matters, while a mid-line strip would risk eating
+    code.
+    """
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    text = re.sub(r"//[^\n]*", " ", text)
+    return re.sub(r"(?m)^[ \t]*;[^\n]*", " ", text)
+
+
 def test_corpus():
     text = ""
     for path in TEST_FILES:
@@ -90,7 +126,14 @@ def test_corpus():
         if os.path.exists(full):
             with open(full) as fh:
                 text += fh.read() + "\n"
-    return text
+    return strip_comments(text)
+
+
+def called_entry_points(corpus):
+    """SDK entry points the tests actually call, as `name(`."""
+    wanted = {name for points in WRAPPED.values() for name in points}
+    return {m for m in re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", corpus)
+            if m in wanted}
 
 
 # The three ways a test names a target or a command, in the order they appear:
@@ -161,6 +204,7 @@ def main():
     check = "--check" in sys.argv
     corpus = test_corpus()
     sent_names, sent_pairs = sent_commands(corpus)
+    called = called_entry_points(corpus)
 
     rows = []
     totals = {"total": 0, "covered": 0, "gap": 0}
@@ -172,7 +216,8 @@ def main():
         for name, value, _comment in items:
             covered = name in sent_names or any(
                 cmd == value and (not targets or tgt is None or tgt in targets)
-                for tgt, cmd in sent_pairs)
+                for tgt, cmd in sent_pairs) or any(
+                point in called for point in WRAPPED.get(name, ()))
             totals["total"] += 1
             if covered:
                 totals["covered"] += 1
@@ -183,7 +228,9 @@ def main():
                 totals["gap"] += 1
             else:
                 status = "no API yet"
-            where = "simulator + hardware" if family in SIMULATED_TARGETS else "hardware only"
+            where = ("simulator + hardware"
+                     if family in SIMULATED_TARGETS and name not in HARDWARE_ONLY
+                     else "hardware only")
             rows.append((family, name, value, status, where))
 
     out = [

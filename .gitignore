@@ -29,6 +29,10 @@ __pycache__/
 # Generated from sdk.suite for the relocated-memory build
 tests/emulator/sdk-placed.suite
 
+# Generated from the built blob's size, so neither can be stale
+tests/emulator/blob-relocated.suite
+tests/emulator/blobsize.inc
+
 # C64 ROM images for the BASIC suite. Commodore's, not ours - never committed.
 # Point C64_ROMS at a directory holding basic.bin and kernal.bin, or drop them
 # here; tests/emulator/Makefile skips the suite when they are absent.

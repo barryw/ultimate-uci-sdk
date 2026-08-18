@@ -20,7 +20,8 @@ lists its own keywords; what is left of it is dispatch.
 |---|---|
 | Layer 1 — UCI transport | complete, assembly |
 | Layer 2 — bring-up, detection, identity | complete, assembly |
-| Layer 2 — dos, file, network, http, control, reu | **not started** — Phase 3 |
+| Layer 2 — the palette, on the control target | complete, assembly — `src/uci/palette.s` |
+| Layer 2 — dos, file, network, http, reu | **not started** — Phase 3 |
 | Layer 3 — ca65 / cc65 bindings | working |
 | Layer 3 — the blob (any toolchain, no linking) | **working** — Phase 1, done |
 | Layer 3 — BASIC wedge | **Phase 2 complete** — `.prg` and `.crt`, 33 tests |
@@ -28,13 +29,13 @@ lists its own keywords; what is left of it is dispatch.
 
 ```
 make lib              GREEN
-make blob             GREEN     2860 bytes, 89 relocations
+make blob             GREEN     3060 bytes, 108 relocations
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
 make wedge            GREEN     uci.prg 2940 bytes, uci.crt 8272; the resident
                                 wedge + SDK at $C000 is 3159
-make test             GREEN     100 host unit tests + 118 tests across 8 suites
+make test             GREEN     100 host unit tests + 126 tests across 8 suites
 make basic-run        GREEN     8/8 from the .prg and 8/8 from the .crt, the
                                 same checks typed at a real C64. The cartridge
                                 costs BASIC 8K: 38911 bytes free becomes 30719
@@ -138,6 +139,13 @@ Every service is `uci_exec` plus argument marshalling. No service touches
 `$DF1B-$DF1F` or the handshake. If you find yourself writing `sta
 UCI_REG_CONTROL` in a service, stop.
 
+**`src/uci/palette.s` is the worked example to copy from** — it is the newest and
+smallest complete service: four commands, its own module because cc65 links whole
+object files and folding it into `ultimate.s` would charge every program for
+palette code it never calls, and it reuses `ult_req_clear` from `ultimate.s`
+rather than growing a second copy. Add the module to `src/uci/sources.mk` and
+both bindings pick it up.
+
 The pattern is in `src/uci/ultimate.s`, `ultimate_get_model`. Wider parameters go
 in the shared variable block rather than on any stack.
 
@@ -227,18 +235,20 @@ are in [handover-next.md](handover-next.md) §3.
 These came out of the Phase 1 reviews. Each is real and each has a location.
 Ordered by when they need doing.
 
-**Before Phase 3:**
+**Two of them are now cleared,** both by the palette service, which is what made
+them bite:
 
-- `tests/emulator/blob-relocated.suite` hardcodes `memcmp(..., 2860)` and
-  `relocharness.s` copies a fixed 12 pages (3072 bytes). Phase 3 grows the blob
-  past that and **both relocation tests silently start under-verifying.** Derive
-  both from the built size, or fail the build when the binary outgrows the copy.
+- The blob's size is no longer written down anywhere by hand.
+  `tests/emulator/Makefile` generates `blobsize.inc` and `blob-relocated.suite`
+  from the binary it just built, so `relocharness.s` copies as many pages as
+  there are and the suite compares as many bytes as exist. The old hand-written
+  2860 was twelve bytes from going wrong: adding the palette took the blob to
+  3060 against a 3072-byte copy.
+- `bindings/cc65` and `bindings/blob` share one module list,
+  `src/uci/sources.mk`. `palette.s` was the fifth module the old note warned
+  about.
 
 **Whenever the relevant file is next touched:**
-
-- `bindings/cc65/Makefile` and `bindings/blob/Makefile` keep two hand-maintained
-  lists of the same modules. A fifth module added to the library would silently
-  never reach the blob. Share one `sources.mk`.
 - `ULT_ERR_COUNT = 10` in `ultimate_strerror.s` is hand-written beside ten
   generated `ULTIMATE_ERR_*` codes. An eleventh code silently prints "UNKNOWN
   ERROR". Emit the count, or `.assert` the table length.

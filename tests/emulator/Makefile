@@ -36,7 +36,8 @@ PLACED_ZP   := 163
 PLACED_DEFINES := -D UCI_VARS=$(PLACED_VARS) -D UCI_ZP=$(PLACED_ZP)
 
 all: harness.prg harness.sym harness-placed.prg harness-placed.sym \
-     sdk-placed.suite $(BLOB) relocharness.prg relocharness.sym
+     sdk-placed.suite $(BLOB) relocharness.prg relocharness.sym \
+     blob-relocated.suite
 
 $(LIB): FORCE
 	$(MAKE) -C $(ROOT)/bindings/cc65 TARGET=$(TARGET)
@@ -51,6 +52,8 @@ harness.prg harness.lbl: harness.s $(LIB)
 HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_available \
                 t_identify_dos1 t_identify_absent t_detect \
                 t_identify t_get_model t_req_reset t_exec t_wedge \
+                t_palette_get t_palette_set t_palette_color t_palette_reset \
+                t_palette_get_null t_palette_set_null pal_index \
                 t_decode t_status_fmt t_strerror t_set_timeout t_get_timeout \
                 result devcode reply reply_len reply0 reply1 reply2 reply3 \
                 caps caps_present caps_ident caps_targets_lo caps_targets_hi \
@@ -94,7 +97,19 @@ sdk-placed.suite: sdk.suite
 # the only way to prove the relocation table has no missing entries.
 RELOCHARNESS_SYMS := t_reloc t_call_init result
 
-relocharness.prg relocharness.lbl: relocharness.s $(LIB) $(BLOB)
+# How big the blob actually is, in two places that both used to guess. The
+# harness copies that many pages and the suite compares that many bytes; both
+# were hard-wired to the 2860-byte blob of the day, and the SDK growing past it
+# would have quietly narrowed what either of them verified rather than failing.
+blobsize.inc: $(BLOB)
+	printf 'BLOB_SIZE = %d\n' $$(wc -c < $<) > $@
+
+# tr strips the leading spaces BSD wc pads its output with; without it the
+# substitution splits into two shell words and sed silently writes nothing.
+blob-relocated.suite: blob-relocated.suite.in $(BLOB)
+	sed "s/@BLOBSIZE@/$$(wc -c < $(BLOB) | tr -d ' ')/" $< > $@
+
+relocharness.prg relocharness.lbl: relocharness.s blobsize.inc $(LIB) $(BLOB)
 	$(CL65) -t $(TARGET) --asm-include-dir $(ROOT)/bindings/asm \
 	  -I $(ROOT)/bindings/blob \
 	  -Ln relocharness.lbl -o relocharness.prg \
@@ -199,6 +214,7 @@ clean:
 	rm -f harness.prg harness.lbl harness.sym harness.o
 	rm -f harness-placed.prg harness-placed.lbl harness-placed.sym sdk-placed.suite
 	rm -f relocharness.prg relocharness.lbl relocharness.sym relocharness.o
+	rm -f blobsize.inc blob-relocated.suite
 	rm -rf $(ROOT)/bindings/cc65/build-placed
 	$(MAKE) -C $(ROOT)/bindings/blob clean
 

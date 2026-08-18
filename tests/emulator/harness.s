@@ -37,7 +37,9 @@
         .import uci_last_code
         .import ultimate_available, ultimate_identify, ultimate_get_model
         .import ultimate_strerror
-        .import ult_buf, ult_buflen, ult_outlen
+        .import ultimate_palette_get, ultimate_palette_set
+        .import ultimate_palette_set_color, ultimate_palette_reset
+        .import ult_buf, ult_buflen, ult_outlen, ult_color
 
         ; --- entry points ---
         .export boot
@@ -51,6 +53,9 @@
         .export t_detect
         .export t_identify
         .export t_get_model
+        .export t_palette_get, t_palette_set
+        .export t_palette_color, t_palette_reset
+        .export t_palette_get_null, t_palette_set_null
         .export t_req_reset
         .export t_exec
         .export t_decode
@@ -73,6 +78,7 @@
         .export fmt_target
         .export err_code, err_text
         .export timeout_val
+        .export pal_index
 
         ; --- the request block and the buffers it points at ---
         .export req
@@ -116,6 +122,7 @@ fmt_target:   .res 1
 err_code:     .res 1
 err_text:     .res ERR_TEXT_MAX
 timeout_val:  .res 1
+pal_index:    .res 1
 
 req:         .res UCI_REQ_SIZE
 buf_args:    .res ARGS_MAX
@@ -243,6 +250,62 @@ t_identify:
 t_get_model:
         jsr set_ult_buf
         jsr ultimate_get_model
+        sta result
+        rts
+
+; --- the palette service ---
+;
+; The simulated Ultimate does not implement these four commands, so what can be
+; proved here is the half that does not need firmware: the argument checks, and
+; that a firmware which rejects the command is reported as unsupported rather
+; than hanging or being mistaken for success. `reply` is 64 bytes, comfortably
+; the 48 a palette needs. The rest is hardware only - tests/hardware/ucitest.c.
+
+t_palette_get:
+        lda #<reply
+        ldx #>reply
+        jsr ultimate_palette_get
+        sta result
+        rts
+
+t_palette_set:
+        lda #<reply
+        ldx #>reply
+        jsr ultimate_palette_set
+        sta result
+        rts
+
+; A null buffer is a caller bug, and must be refused before anything reaches
+; the wire rather than read from page zero.
+t_palette_get_null:
+        lda #$00
+        ldx #$00
+        jsr ultimate_palette_get
+        sta result
+        rts
+
+t_palette_set_null:
+        lda #$00
+        ldx #$00
+        jsr ultimate_palette_set
+        sta result
+        rts
+
+t_palette_color:
+        lda pal_index
+        sta ult_color
+        lda #$11
+        sta ult_color + 1
+        lda #$22
+        sta ult_color + 2
+        lda #$33
+        sta ult_color + 3
+        jsr ultimate_palette_set_color
+        sta result
+        rts
+
+t_palette_reset:
+        jsr ultimate_palette_reset
         sta result
         rts
 

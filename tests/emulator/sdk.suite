@@ -711,5 +711,93 @@ suites {
       assert([err_text] == $55, "'U' of UNKNOWN ERROR")
       assert(([err_text] + $01).b == $4e, "'N'")
     }
+
+    ; --- the palette service ---
+    ;
+    ; The simulated Ultimate does not implement CTRL_CMD_GET_PALETTE and its
+    ; three siblings: they are newer than firmware 3.15 and u64sim answers
+    ; "21,UNKNOWN COMMAND". That is not a gap to apologise for, it is the case
+    ; every program shipping to other people will meet on an older machine, and
+    ; it is worth pinning here. What the palette actually does is proved on
+    ; hardware, in tests/hardware/ucitest.c.
+    ;
+    ; [result] is set to $ff before each call so that an entry point which never
+    ; ran cannot pass by leaving a zero behind.
+
+    test("sdk-palette-unsupported", "a firmware without the palette commands says so") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+
+      [result] = $ff
+      jsr([t_palette_get], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED, not a hang and not OK")
+
+      [result] = $ff
+      jsr([t_palette_set], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+
+      [result] = $ff
+      [pal_index] = $00
+      jsr([t_palette_color], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+
+      [result] = $ff
+      jsr([t_palette_reset], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+    }
+
+    ; The point of the previous test is only worth anything if the transport
+    ; survives four rejections in a row, which is what a program probing for the
+    ; palette on old firmware does before carrying on without it.
+    test("sdk-palette-recovers", "the interface still works after the rejections") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_palette_reset], stop_on_rts = true, fail_on_brk = true)
+
+      [result] = $ff
+      [ident_target] = $01
+      [ident_buflen] = $18
+      [ident_buflen] + $01 = $00
+      jsr([t_identify], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK from the next command")
+      assert([reply0] == $55, "'U' of ULTIMATE - a real reply, not leftovers")
+    }
+
+    ; Argument checks happen before anything reaches the wire, so these are the
+    ; part of the palette service the simulator can prove completely.
+    test("sdk-palette-rejects-null", "a null buffer is refused, not read from page zero") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+
+      [result] = $ff
+      jsr([t_palette_get_null], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+
+      [result] = $ff
+      jsr([t_palette_set_null], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    test("sdk-palette-rejects-bad-index", "colour 16 does not exist, and never reaches the wire") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+
+      [result] = $ff
+      [pal_index] = $10
+      jsr([t_palette_color], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+
+      [result] = $ff
+      [pal_index] = $ff
+      jsr([t_palette_color], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+
+      ; ...and the last valid one is still accepted, so the bound is off-by-one
+      ; proof rather than "everything is rejected".
+      [result] = $ff
+      [pal_index] = $0f
+      jsr([t_palette_color], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "reached the firmware: ULTIMATE_ERR_NOT_SUPPORTED")
+    }
   }
 }

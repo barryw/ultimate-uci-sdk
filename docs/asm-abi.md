@@ -28,10 +28,12 @@ cartridge image or a custom loader can `jsr ultimate_init` with no start-up at
 all.
 
 The one place a C runtime does appear is the C API. `ultimate_identify()`,
-`ultimate_get_model()` and `uci_decode_status()` take more arguments than fit in
-registers, so their `_`-prefixed C entry points in `bindings/cc65` unpack
-cc65's software stack. Assembly callers use the unprefixed names and the
-variable block instead, and never touch it.
+`ultimate_get_model()`, `ultimate_palette_set_color()` and
+`uci_decode_status()` take more arguments than fit in registers, so their
+`_`-prefixed C entry points in `bindings/cc65` unpack cc65's software stack.
+Assembly callers use the unprefixed names and the variable block instead, and
+never touch it — for the palette that means filling `ult_color` with the index
+and the three colour components before the call.
 
 ## Placing the SDK's memory
 
@@ -43,7 +45,7 @@ custom linker script, or an assembler with no segment support at all.
 | Knob | Default | What it places |
 |---|---|---|
 | `UCI_ZP` | `$FB` | `UCI_ZP_SIZE` (4) bytes of zero page |
-| `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (88) bytes of variables |
+| `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (92) bytes of variables |
 | the request block | — | not a knob: `uci_exec` takes it by pointer |
 
 ```
@@ -121,6 +123,10 @@ sharing them.
 | `ultimate_get_model` | `ult_buf`, `ult_buflen`, `ult_outlen` | `A` = result code |
 | `ultimate_detect` | `A`/`X` = pointer to a 4-byte capability block | `A` = result code |
 | `ultimate_strerror` | `A` = result code | `A`/`X` = pointer to the text, in PETSCII |
+| `ultimate_palette_get` | `A`/`X` = pointer to 48 bytes | `A` = result code |
+| `ultimate_palette_set` | `A`/`X` = pointer to 48 bytes of RGB | `A` = result code |
+| `ultimate_palette_set_color` | `ult_color` = index, r, g, b | `A` = result code |
+| `ultimate_palette_reset` | — | `A` = result code |
 | `uci_present` | — | `A` = 1 when the signature is on the bus |
 | `uci_ident` | — | `A` = the raw identification register |
 | `uci_req_clear` | — | zeroes the request block |

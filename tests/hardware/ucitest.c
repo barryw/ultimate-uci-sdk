@@ -71,6 +71,8 @@ static void check(const char *name, int expected, int actual)
 
 static char scratch[64];
 static ultimate_capabilities caps;
+static uint8_t saved[UCI_PALETTE_BYTES];
+static uint8_t readback[UCI_PALETTE_BYTES];
 
 /*
  * Machine-readable result block, for a host driver that reads memory over the
@@ -242,6 +244,57 @@ int main(void)
     } else {
         skip("identify-control", "no control target on this firmware");
     }
+
+    /*
+     * 14-19: the palette. The simulator does not implement these four commands
+     * at all - they are newer than firmware 3.15 - so this is the only place
+     * they run.
+     *
+     * Not destructive, by construction. The live palette is read first and
+     * written back last, so the machine ends exactly as it started; the only
+     * window where it differs is the few milliseconds between the probe write
+     * and the restore. Nothing goes near flash or a VPL file: these commands
+     * change the running palette only, and a power cycle would undo them even
+     * if this program died halfway through.
+     *
+     * The probe write is the point. Reading the palette and writing back the
+     * same bytes proves nothing - it passes whether or not the write works - so
+     * one colour is changed to a value it demonstrably did not have, read back,
+     * and only then restored.
+     */
+    if (!ultimate_has_control(&caps)) {
+        skip("palette-get", "no control target on this firmware");
+    } else {
+        err = ultimate_palette_get(saved);
+        if (err == ULTIMATE_ERR_NOT_SUPPORTED) {
+            skip("palette-get", "palette commands need firmware after 3.15");
+        } else {
+            uint8_t probe;
+
+            check("palette-get", ULTIMATE_OK, err);
+
+            /* colour 15's red component, inverted: certainly not what it was */
+            probe = (uint8_t)(saved[45] ^ 0xFF);
+            check("palette-set-color", ULTIMATE_OK,
+                  ultimate_palette_set_color(15, probe, saved[46], saved[47]));
+
+            check("palette-get-after-set", ULTIMATE_OK,
+                  ultimate_palette_get(readback));
+            check("palette-color-took-effect", (int)probe, (int)readback[45]);
+
+            check("palette-reset", ULTIMATE_OK, ultimate_palette_reset());
+
+            /* and put the machine's own palette back, which is also the test */
+            check("palette-set", ULTIMATE_OK, ultimate_palette_set(saved));
+            ultimate_palette_get(readback);
+            check("palette-restored", 0,
+                  memcmp(saved, readback, UCI_PALETTE_BYTES));
+        }
+    }
+
+    /* 20: an index past the sixteenth colour never reaches the wire. */
+    check("palette-rejects-bad-index", ULTIMATE_ERR_INVALID_ARGUMENT,
+          ultimate_palette_set_color(16, 0, 0, 0));
 
     printf("1..%u\n", test_no);
     printf("# %u passed, %u failed, %u skipped\n", passed, failed, skipped);

@@ -100,6 +100,44 @@ uint8_t ultimate_identify(uint8_t target, char *buf, uint16_t buflen, uint16_t *
  */
 uint8_t ultimate_get_model(char *buf, uint16_t buflen, uint16_t *outlen);
 
+/*
+ * The VIC-II palette: what each of the sixteen colour indices actually looks
+ * like. Requires the control target and firmware newer than 3.15; older
+ * firmware answers ULTIMATE_ERR_NOT_SUPPORTED, and there is no version number
+ * to test beforehand that can be trusted - the REST API reports a post-3.15
+ * development build as "3.15". Call one and look at the result.
+ *
+ * These change the **live palette only**. Nothing is written to flash or to a
+ * VPL file, so a program that dies mid-cycle cannot leave the machine looking
+ * wrong permanently, and ultimate_palette_reset() always puts it back.
+ *
+ * A whole-palette write costs about a quarter of a frame on a 1MHz C64 and a
+ * single colour about an eighth, so cycling the palette per frame is
+ * comfortable. `make time-run` measures it on your machine.
+ */
+#define ULTIMATE_PALETTE_COLORS UCI_PALETTE_COLORS   /* 16 */
+#define ULTIMATE_PALETTE_BYTES  UCI_PALETTE_BYTES    /* 48: 16 * RGB */
+
+/*
+ * Read all sixteen colours into palette[48], as R, G, B per colour.
+ *
+ * Returns ULTIMATE_ERR_PROTOCOL if the firmware answers with anything other
+ * than exactly 48 bytes: a half-written palette looks like a working one.
+ */
+uint8_t ultimate_palette_get(uint8_t *palette);
+
+/* Write all sixteen colours from palette[48]. One command, one round trip. */
+uint8_t ultimate_palette_set(const uint8_t *palette);
+
+/*
+ * Write one colour. index is 0..15; anything else is
+ * ULTIMATE_ERR_INVALID_ARGUMENT and never reaches the wire.
+ */
+uint8_t ultimate_palette_set_color(uint8_t index, uint8_t r, uint8_t g, uint8_t b);
+
+/* Back to the machine's built-in palette. */
+uint8_t ultimate_palette_reset(void);
+
 /* A short, stable, English description of an ULTIMATE_* code. Never NULL. */
 const char *ultimate_strerror(uint8_t err);
 

@@ -241,9 +241,36 @@ Two things about the method, because they are what make the number trustworthy:
 phase and costs about half as much. Fine for a palette write, which has nothing
 to say back.
 
-**None of the palette commands is wrapped or tested.** `make coverage` reports
-9/101 wrapped; the palette four are reachable through the generic form only.
-Wrapping them is small and would earn `ULOAD`-style sugar in the wedge.
+**~~None of the palette commands is wrapped or tested.~~ All four are, now** —
+`src/uci/palette.s`, and `make coverage` reports 13/101:
+
+```c
+uint8_t ultimate_palette_get(uint8_t *palette);          /* 48 bytes */
+uint8_t ultimate_palette_set(const uint8_t *palette);
+uint8_t ultimate_palette_set_color(uint8_t index, uint8_t r, uint8_t g, uint8_t b);
+uint8_t ultimate_palette_reset(void);
+```
+
+Also on the blob's jump table at `+$37`..`+$40`, with `ult_color` at `$CF58` for
+the four bytes `set_color` takes. Not in the BASIC wedge yet — that is a keyword,
+and `gen_keywords.py` is append-only, so it is a deliberate decision rather than
+an oversight.
+
+Two things about how they are tested, because the split is the interesting part:
+
+- **The simulator cannot cover them at all.** u64sim answers all four with
+  `21,UNKNOWN COMMAND`. `sdk.suite` pins that on purpose — it is what a program
+  meets on an older machine — plus the argument checks, which never reach the
+  wire and so are fully provable there: a null buffer, colour 16, and colour 15
+  still being accepted so the bound is proved off-by-one rather than
+  "everything is rejected".
+- **The hardware test is not decorative.** `ucitest.c` reads the live palette,
+  changes one colour to a value it demonstrably did not have, reads it back,
+  resets, writes the saved palette and compares — so the machine ends exactly
+  as it started, and a write that silently did nothing still fails. It caught a
+  real bug on its first run: `ultimate_palette_get` returned `48`, the reply
+  length left in `A`, instead of `ULTIMATE_OK`. No emulator test could have
+  reached that path, because u64sim never gets far enough to have a length.
 
 **The bench machine's firmware string lies about the palette commands.** It
 reports `firmware 3.15`, the palette four are annotated `FW > 3.15`, and they
@@ -288,7 +315,9 @@ buys — do it last.
 2. ~~Measure a UCI round trip in frames.~~ **Done** — a whole-palette rotation
    is a quarter of a frame, so the demo's shape is the simple one. `make
    time-run U64_HOST=<ip>`.
-3. Wrap the palette commands and add `make coverage` entries.
+3. ~~Wrap the palette commands and add `make coverage` entries.~~ **Done** —
+   `src/uci/palette.s`, coverage 9/101 → 13/101. A `UPAL` wedge keyword is the
+   obvious next sugar, and is not done.
 4. Build `turbo.s` and its three exposures. The registers are known now; what
    is left is the module, and proving on hardware that the speed really changes.
 5. Phase 3 proper: `dos.s`, `file.s`, the SoftwareIEC fast path, `reu.s`, and

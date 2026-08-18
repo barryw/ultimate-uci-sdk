@@ -82,10 +82,10 @@ commands as tested that no test has ever sent.
 | Control commands | `CTRL_CMD_GET_DRIVE_B_POWER` | `$35` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_GET_RAMDISKINFO` | `$40` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_LOAD_CONFIG` | `$50` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_GET_PALETTE` | `$51` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_SET_PALETTE` | `$52` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_SET_PALETTE_COLOR` | `$53` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_RESET_PALETTE` | `$54` | no API yet | simulator + hardware |
+| Control commands | `CTRL_CMD_GET_PALETTE` | `$51` | tested | hardware only |
+| Control commands | `CTRL_CMD_SET_PALETTE` | `$52` | tested | hardware only |
+| Control commands | `CTRL_CMD_SET_PALETTE_COLOR` | `$53` | tested | hardware only |
+| Control commands | `CTRL_CMD_RESET_PALETTE` | `$54` | tested | hardware only |
 | SoftwareIEC commands | `SOFTIEC_CMD_IDENTIFY` | `$01` | no API yet | hardware only |
 | SoftwareIEC commands | `SOFTIEC_CMD_LOAD_SU` | `$10` | no API yet | hardware only |
 | SoftwareIEC commands | `SOFTIEC_CMD_LOAD_EX` | `$11` | no API yet | hardware only |
@@ -127,7 +127,7 @@ commands as tested that no test has ever sent.
 | | |
 | --- | --- |
 | commands defined | 101 |
-| exercised by a test | 9 (8%) |
+| exercised by a test | 13 (12%) |
 | wrapped but untested | 0 |
 
 The low figure is expected while the SDK is still a vertical slice:
