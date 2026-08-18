@@ -6,6 +6,10 @@ the traps that have already cost debugging time; the second is the loose ends
 and the boing ball. This one is Phase 3: what it delivered, what it found out,
 and what the next person should not have to rediscover.
 
+**A cleanup pass came after it**, and it is in
+[handover-cleanup.md](handover-cleanup.md): a bug in `uci_abort`, the
+documentation the figures below live in, and the order of what is next.
+
 **Verify with `git log` rather than trusting the counts here.**
 
 ---

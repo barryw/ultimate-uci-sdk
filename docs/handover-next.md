@@ -1,12 +1,13 @@
 # Handover: loose ends, and the boing ball
 
 Written to be picked up cold, alongside [handover.md](handover.md), which is the
-state of the SDK, and [handover-phase3.md](handover-phase3.md), which is where
-Phase 3 stands and what to do next. This one is what was left over from Phase 2
-and what the next interesting thing looks like.
+state of the SDK, [handover-phase3.md](handover-phase3.md), which is what Phase
+3 delivered, and [handover-cleanup.md](handover-cleanup.md), which is the most
+recent work and the order of what is next. This one is what was left over from
+Phase 2 and what the next interesting thing looks like.
 
-Phases 1 and 2 are done and proven on hardware. `make basic-run` types at a real
-C64 and passes 13/13 from the `.prg` and 13/13 from the `.crt`.
+Phases 1, 2 and 3 are done and proven on hardware. `make basic-run` types at a
+real C64 and passes 32/32 from the `.prg` and 32/32 from the `.crt`.
 
 ---
 

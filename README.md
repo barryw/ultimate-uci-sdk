@@ -285,7 +285,8 @@ simulated Ultimate found it in minutes.
 | [docs/generated/command-coverage.md](docs/generated/command-coverage.md) | which UCI commands the tests actually send |
 | [docs/generated/basic-keywords.md](docs/generated/basic-keywords.md) | every wedge keyword, its token, and what CRUNCH does to it |
 | [bindings/blob/README.md](bindings/blob/README.md) | the jump table and parameter block, for toolchains that cannot link |
-| [docs/handover.md](docs/handover.md) | picking up the service layers: state, traps, order of work |
+| [docs/handover.md](docs/handover.md) | picking the SDK up cold: state, traps, ground truth |
+| [docs/handover-cleanup.md](docs/handover-cleanup.md) | the most recent work, and what is next in the order it should be done |
 
 ## Credits
 

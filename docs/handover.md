@@ -367,11 +367,12 @@ generic form only, so issuing it is always deliberate.
 
 ## 7. What to do next
 
-**Three files, and they do different jobs.** This one is the state of the SDK
+**Four files, and they do different jobs.** This one is the state of the SDK
 and the traps that have already cost debugging time.
-[handover-phase3.md](handover-phase3.md) is what Phase 3 delivered and what it
-found out — start there. [handover-next.md](handover-next.md) is the loose ends, the
-turbo measurements and the boing ball.
+[handover-cleanup.md](handover-cleanup.md) is the most recent work and the order
+of what is next — start there. [handover-phase3.md](handover-phase3.md) is what
+Phase 3 delivered and what it found out. [handover-next.md](handover-next.md) is
+the loose ends, the turbo measurements and the boing ball.
 
 
 The design is written and agreed: **[docs/superpowers/specs/2026-08-17-uci-everywhere-design.md](superpowers/specs/2026-08-17-uci-everywhere-design.md)**.
