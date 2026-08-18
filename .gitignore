@@ -43,3 +43,12 @@ tests/emulator/roms/
 src/basic/uci.prg
 src/basic/uci.crt
 src/basic/uci-cart.bin
+
+# The guide builds a PDF and a pile of TeX litter.
+guide/*.aux
+guide/*.log
+guide/*.out
+guide/*.toc
+guide/*.fls
+guide/*.fdb_latexmk
+guide/chapters/*.aux

@@ -1,0 +1,145 @@
+% guide.tex - the Ultimate SDK Programmer's Reference Guide.
+%
+% Build:  make -C guide        (or: latexmk -pdf guide.tex)
+%
+% The chapters are separate files under chapters/, and the order here is the
+% order of the book. Front matter first, then getting started, then one chapter
+% per language, then the services, then the appendices.
+%
+% SPDX-License-Identifier: MIT
+
+\documentclass[10pt,openany]{book}
+
+% A small page, close to the original's trim. A narrow measure is most of why
+% the Commodore guides are easy to read, and it is worth keeping even though a
+% programmer's book carries wider code than a user's guide does.
+\usepackage[papersize={6.0in,9.0in},
+            top=0.85in,bottom=0.85in,inner=0.80in,outer=0.65in]{geometry}
+
+\usepackage{ultimatesdk}
+\usepackage[hidelinks,pdfusetitle]{hyperref}
+
+\title{Ultimate SDK Programmer's Reference Guide}
+\author{}
+\date{}
+
+\begin{document}
+
+% ---------------------------------------------------------------------------
+% Title page: the blue cover of the original, set plainly.
+% ---------------------------------------------------------------------------
+\frontmatter
+\thispagestyle{empty}
+\AddToShipoutPictureBG*{\AtPageLowerLeft{%
+  \color{guideblue}\rule{\paperwidth}{\paperheight}}}
+\null\vspace*{0.20\paperheight}
+{\color{white}\headingfont\centering
+ {\fontsize{30}{34}\selectfont ULTIMATE SDK}\\[0.9\baselineskip]
+ {\fontsize{20}{24}\selectfont PROGRAMMER'S}\\[0.25\baselineskip]
+ {\fontsize{20}{24}\selectfont REFERENCE GUIDE}\par}
+\vfill
+{\color{white}\centering\normalfont\small
+ For the 1541 Ultimate-II, Ultimate 64, Ultimate 64 Elite\\
+ and the Commodore 64 Ultimate\par}
+\vspace{0.10\paperheight}
+\clearpage
+
+\thispagestyle{empty}
+\null\vfill
+\noindent\small
+First edition.\\[0.4\baselineskip]
+This guide documents the Ultimate SDK, a software development kit for the
+Commodore~64 and the Ultimate family of cartridges and machines.\\[0.6\baselineskip]
+Every figure, timing and behaviour in this book was measured against real
+hardware running firmware 3.15 unless it says otherwise. Where the firmware
+does something other than its documentation describes, this guide follows the
+firmware and says so.\\[0.6\baselineskip]
+Released under the MIT licence. Commodore, the Commodore logo and Commodore~64
+are trademarks of their respective owners; this guide is not affiliated with or
+endorsed by them.
+\clearpage
+
+\tableofcontents
+
+% ---------------------------------------------------------------------------
+\cleardoublepage
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+
+Welcome. If you have an Ultimate cartridge or an Ultimate~64, you own a
+Commodore~64 that can reach a great deal more than a Commodore~64 ever could
+--- files on a USB stick, sixteen megabytes of RAM expansion, a processor that
+runs up to forty-eight times faster than the one Commodore shipped, and a
+network connection to the rest of the world. This guide is about writing
+programs that use all of it.
+
+The \sdk{} is a library, and it comes in the language you already write in.
+If you write BASIC, it arrives as new keywords you type at the \bas{ready.}
+prompt. If you write C with cc65, it is a header and a library to link. If you
+write assembly, it is a set of entry points and a documented calling
+convention. And if you use a toolchain that cannot link any of those, there is
+a standalone binary with a jump table that any assembler can call.
+
+The four routes are not four implementations. They are one implementation,
+reached four ways, and every one of them is tested against the same hardware.
+
+\subsection*{What is in it}
+
+The SDK started as a wrapper around the Ultimate Command Interface --- the
+hardware mailbox at \cmd{\$DF1C} that a program uses to ask the cartridge to do
+something --- and it has grown past that. Three of the things it does are not
+command-interface operations at all, because the machine offers them a
+different way:
+
+\begin{itemize}[leftmargin=1.4em,itemsep=0.25em,topsep=0.4em]
+  \item \textbf{Files and directories}, over the command interface.
+  \item \textbf{Loading and saving}, taking the firmware's fast path when
+        there is one.
+  \item \textbf{The RAM expansion}, both by direct memory access --- which is
+        not a command at all, it is the REU's own registers --- and file to
+        expansion without the bytes passing through the C64.
+  \item \textbf{Processor speed} on an Ultimate~64, which is memory-mapped I/O
+        and has no command behind it either.
+  \item \textbf{The screen palette}, all sixteen colours, live.
+  \item \textbf{Network sockets and HTTP}, so a C64 can fetch a file from a
+        web server.
+\end{itemize}
+
+\subsection*{How to read this}
+
+Chapter~1 gets you running something in the next ten minutes, whichever
+language you write in. Chapters~2 to~5 take one language each --- BASIC, C,
+assembly, and everything else --- and are meant to be read start to finish once
+and then dipped into. The chapters after that take one service each and can be
+read in any order, or not at all until you need them.
+
+Everything is small enough to type in. The programs in this book are short on
+purpose: a listing you can enter in a minute and watch work teaches more than
+one you copy from a disk and take on trust.
+
+\begin{note}
+This guide describes behaviour that was measured, not behaviour that was
+assumed. Where a figure appears --- how many cycles something costs, how long a
+connection takes to fail --- it came off a real machine, and the guide says
+which one.
+\end{note}
+
+\subsection*{A word about the name}
+
+The library is called the Ultimate SDK rather than the Ultimate~64 SDK because
+most of it works on every Ultimate from the 1541~Ultimate-II upward, and not
+only on the Ultimate~64. Where something needs a particular machine --- the
+turbo registers need an Ultimate~64 --- the guide says so at the point it
+matters, and the SDK itself tells you at run time rather than guessing.
+
+\mainmatter
+
+\input{chapters/getting-started}
+\input{chapters/basic}
+\input{chapters/c}
+\input{chapters/assembly}
+\input{chapters/other-toolchains}
+\input{chapters/services}
+\input{chapters/appendices}
+
+\end{document}

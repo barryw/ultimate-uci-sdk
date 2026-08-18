@@ -1,0 +1,250 @@
+% Chapter 2 - BASIC.
+
+\guidechapter{PROGRAMMING IN BASIC}{%
+  \item Installing the wedge
+  \item The twenty-three keywords
+  \item Files and directories
+  \item The RAM expansion
+  \item Turbo
+  \item Talking to the Ultimate directly
+  \item What BASIC cannot do
+}
+
+\section{Installing The Wedge}
+
+The wedge comes two ways, and they are the same program.
+
+\textbf{As a program.} \bas{load"uci",8} then \bas{run}. It installs itself
+into the 4K block at \cmd{\$C000}, which BASIC does not use, and leaves your
+38911 bytes free exactly as they were.
+
+\textbf{As a cartridge.} Mount \cmd{uci.crt} from the Ultimate's menu and the
+wedge is there the moment the machine starts, with nothing to load. The
+cartridge costs BASIC its 8K: you get 30719 bytes free instead of 38911.
+
+Either way the machine greets you and the keywords are live. They survive
+\bas{new}, they survive \bas{run/stop}~+~\key{restore}, and they survive a
+program crashing. They do not survive a reset.
+
+\begin{note}
+The wedge takes over four of BASIC's own vectors --- the ones for tokenising,
+listing, statement dispatch and expression evaluation. Every other wedge and
+fast-loader that does the same thing will fight with it. If you use one, load
+the SDK's wedge last.
+\end{note}
+
+\section{The Twenty-Three Keywords}
+
+They fall into four groups, and you can ignore three of them until you need
+them.
+
+\subsection*{Asking how things went}
+
+Nothing in this wedge stops your program with an error. A command that fails
+sets a result code and returns, because a demo dropping to \bas{ready.} in the
+middle of a part is worse than one that quietly did nothing. So every command
+is followed, when it matters, by a look at \bas{uerr}.
+
+\begin{reftable}{lp{0.62\linewidth}}
+\bas{uerr} & the result of the last command. \bas{0} is success \\
+\bas{udev} & the raw code the Ultimate reported, for diagnosis \\
+\bas{ulen} & how many bytes came back \\
+\bas{ust\$} & the status text, exactly as the Ultimate sent it \\
+\bas{udat\$} & the reply as a string, up to 255 bytes \\
+\bas{ubyte(n)} & byte \bas{n} of the reply, or \bas{0} past the end \\
+\end{reftable}
+
+\subsection*{Files, and the RAM expansion}
+
+\begin{reftable}{lp{0.62\linewidth}}
+\bas{udir} & print the current directory \\
+\bas{uload} \textit{name\$} [,\textit{addr}] & load a PRG; no address means the
+  file's own \\
+\bas{ubload} \textit{name\$}, \textit{addr}, \textit{len} & load raw bytes, and
+  not one past \textit{len} \\
+\bas{usave} \textit{name\$}, \textit{addr}, \textit{len} & memory to a file \\
+\bas{ustash} \textit{addr}, \textit{reu}, \textit{len} & C64 memory into the
+  expansion \\
+\bas{ufetch} \textit{addr}, \textit{reu}, \textit{len} & and back out of it \\
+\bas{ureu} & the expansion's size in 64K banks, \bas{0} for none \\
+\end{reftable}
+
+\subsection*{Speed}
+
+\begin{reftable}{lp{0.62\linewidth}}
+\bas{uturbo} \textit{n} & set the processor speed index \\
+\bas{uturbo} & as a function, the current index --- or \bas{255} when the
+  machine's owner has turned turbo off \\
+\end{reftable}
+
+\subsection*{Everything else}
+
+\begin{reftable}{lp{0.62\linewidth}}
+\bas{uci} \textit{t}, \textit{c} [, \textit{args}] & send any command to any
+  target \\
+\bas{uci} & on its own, rescue a wedged interface \\
+\bas{uw(}\textit{x}\bas{)} & force a 16-bit argument \\
+\bas{ul(}\textit{x}\bas{)} & force a 32-bit argument \\
+\bas{udos1} \bas{udos2} \bas{unet} \bas{uctrl} \bas{uiec} \bas{uhttp} &
+  the six target numbers, by name \\
+\end{reftable}
+
+\section{Files And Directories}
+
+\bas{udir} prints the directory and is the quickest way to see that everything
+is working:
+
+\begin{screen}
+UDIR
+\end{screen}
+
+Loading is the interesting one, because the Ultimate has a fast path and the
+SDK takes it when it can. This loads a file to the address stored in the file
+itself, exactly as \bas{load"x",8,1} would:
+
+\begin{screen}
+10 ULOAD "GAME"\\
+20 IF UERR THEN PRINT "COULD NOT LOAD": END
+\end{screen}
+
+Give it an address and it loads there instead:
+
+\begin{screen}
+10 ULOAD "SPRITES",832\\
+20 IF UERR THEN PRINT "NO SPRITES": END
+\end{screen}
+
+\bas{ubload} is the one to use for data rather than programs. It interprets
+nothing, strips no header, and stops at the length you give it:
+
+\begin{screen}
+10 UBLOAD "MUSIC.BIN",49152,4096
+\end{screen}
+
+\begin{note}
+Filenames go to the Ultimate exactly as you type them. Uppercase PETSCII and
+uppercase ASCII are the same bytes, so a name typed at a C64 arrives as the
+Ultimate expects it, and the filesystem does not care about case anyway.
+\end{note}
+
+\section{The RAM Expansion}
+
+If there is an expansion fitted, you have up to sixteen megabytes to put things
+in --- and moving bytes in and out of it costs almost nothing, because the REU
+does it with the processor halted rather than a byte at a time.
+
+Always ask first. \bas{ureu} returns the size in 64K banks and zero when there
+is nothing there, so one test covers both questions:
+
+\begin{screen}
+10 B = UREU\\
+20 IF B = 0 THEN PRINT "NO EXPANSION": END\\
+30 PRINT "EXPANSION IS"; B * 64; "K"
+\end{screen}
+
+Now put something in it and get it back. This copies the top of the screen into
+the expansion, clears the screen, and puts it back:
+
+\begin{screen}
+10 IF UREU = 0 THEN PRINT "NEED AN REU": END\\
+20 USTASH 1024,0,1000\\
+30 PRINT CHR\$(147)\\
+40 FOR I = 1 TO 2000: NEXT\\
+50 UFETCH 1024,0,1000
+\end{screen}
+
+Line~20 sends 1000 bytes from screen memory at 1024 to expansion address~0.
+Line~50 brings them back. Both are instant.
+
+\begin{note}
+The expansion address is a full 24-bit number, so it can reach all sixteen
+megabytes. BASIC handles that fine --- \bas{ustash 1024, 1048576, 256} is a
+perfectly good line.
+\end{note}
+
+\begin{warning}
+Writing past the end of the expansion does not fail --- it wraps round to the
+beginning and quietly overwrites what is there. That is exactly how \bas{ureu}
+measures the size, and it is why asking first is worth the one line.
+\end{warning}
+
+\section{Turbo}
+
+On an Ultimate~64 the processor can run faster than 1MHz, and \bas{uturbo}
+sets it. The catch is that this is the machine owner's decision, not your
+program's: unless \bas{turbo control} is set in the Ultimate's menu, the
+registers are not there at all.
+
+\begin{screen}
+10 UTURBO 3\\
+20 IF UERR THEN PRINT "NO TURBO HERE"\\
+30 PRINT "SPEED INDEX IS"; UTURBO
+\end{screen}
+
+Index \bas{0} is 1MHz and index \bas{3} is 4MHz on every machine that has
+turbo. Above~3 the numbers mean different speeds on different machines, so a
+program that ships to other people should stay at or below~3 or ask.
+
+The function form answers \bas{255} when turbo is unavailable. That is not a
+speed --- the index is only four bits --- so you can test for it.
+
+\section{Talking To The Ultimate Directly}
+
+The wedge wraps the operations most programs want. Everything else --- and
+there are around a hundred commands --- is reachable with \bas{uci}, which
+sends any command to any target.
+
+\begin{screen}
+10 UCI UCTRL, 1\\
+20 PRINT UDAT\$
+\end{screen}
+
+That sends command~1 to the control target, which identifies itself, and prints
+what came back.
+
+Arguments follow the command, and the wedge sends each number as a single byte
+because that is what nearly every command wants. When a command wants something
+wider, say so with \bas{uw()} for sixteen bits or \bas{ul()} for thirty-two:
+
+\begin{screen}
+10 UCI UDOS1, 16, UW(8192)
+\end{screen}
+
+\begin{note}
+The SDK knows the shape of many commands and will widen arguments for you
+without being told. \bas{uw()} and \bas{ul()} are the escape hatch for a
+command newer than the SDK's table, and they always win over it.
+\end{note}
+
+\section{What BASIC Cannot Do}
+
+Two limits worth knowing before they surprise you.
+
+\subsection*{IF X THEN UCI does not work}
+
+BASIC's \bas{if} jumps straight into the ROM's own statement dispatcher, which
+rejects any token above \bas{new}. Every extension that adds statement keywords
+to BASIC~V2 has this hole. So this does not work:
+
+\begin{screen}
+10 IF X = 1 THEN ULOAD "GAME"
+\end{screen}
+
+and this does:
+
+\begin{screen}
+10 IF X = 1 THEN 100\\
+\hspace*{1em}\ldots\\
+100 ULOAD "GAME"
+\end{screen}
+
+Functions are unaffected, because expression evaluation does come back through
+the wedge. \bas{if uerr then \ldots} is fine, and so is \bas{if ureu = 0 then
+\ldots}.
+
+\subsection*{Strings are 255 bytes}
+
+\bas{udat\$} gives you the reply as a string, clipped at 255 bytes because that
+is the longest string BASIC has. When a reply is longer than that, use
+\bas{ubyte(n)} to walk it, or \bas{ubload} to put it somewhere you can
+\bas{peek}.

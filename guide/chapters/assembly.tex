@@ -1,0 +1,115 @@
+% Chapter 4 - Assembly.
+
+\guidechapter{PROGRAMMING IN ASSEMBLY}{%
+  \item What assembly callers get
+  \item The calling convention
+  \item The shared variable block
+  \item Zero page, and moving it
+  \item Which calls are bounded in time
+}
+
+\section{What Assembly Callers Get}
+
+The SDK is written in 6502 assembly, so an assembly caller is talking to it
+directly rather than through a translation layer. There is no C runtime to
+start, no software stack to set up, and nothing to initialise before the first
+\cmd{jsr}. A cartridge that starts at \cmd{\$8000} can call
+\cmd{ultimate\_init} as its first instruction.
+
+\begin{listingbox}
+\hspace*{2em}.include "ultimate.inc"
+\end{listingbox}
+
+That one file declares every entry point and every shared variable.
+
+\section{The Calling Convention}
+
+Three rules cover nearly everything:
+
+\begin{itemize}[leftmargin=1.4em,itemsep=0.25em,topsep=0.4em]
+  \item A result comes back in \cmd{A}, and \cmd{ULTIMATE\_OK} is zero.
+  \item A single pointer argument goes in \cmd{A}/\cmd{X}, low byte first.
+  \item Anything wider than that goes in the shared variable block.
+\end{itemize}
+
+So the simple calls look like this:
+
+\begin{listingbox}
+\hspace*{2em}lda \#<name\\
+\hspace*{2em}ldx \#>name\\
+\hspace*{2em}jsr ultimate\_chdir\\
+\hspace*{2em}cmp \#ULTIMATE\_OK\\
+\hspace*{2em}bne failed
+\end{listingbox}
+
+and the ones that need more set the variables first:
+
+\begin{listingbox}
+\hspace*{2em}lda \#<buffer\\
+\hspace*{2em}sta ult\_buf\\
+\hspace*{2em}lda \#>buffer\\
+\hspace*{2em}sta ult\_buf + 1\\
+\hspace*{2em}lda \#<64\\
+\hspace*{2em}sta ult\_buflen\\
+\hspace*{2em}lda \#>64\\
+\hspace*{2em}sta ult\_buflen + 1\\
+\hspace*{2em}jsr ultimate\_getpath
+\end{listingbox}
+
+Appendix~C lists every entry point with what it reads and what it returns.
+
+\section{The Shared Variable Block}
+
+The SDK needs 143 bytes of RAM, and by default the linker places them in BSS
+like any other variables. A cartridge cannot do that --- its code is in ROM and
+the RAM it may touch is the programmer's decision --- so the whole block can be
+placed instead:
+
+\begin{listingbox}
+ca65 -D UCI\_VARS=\$CF00 \ldots
+\end{listingbox}
+
+Every variable then becomes an equate at a fixed offset from that address, and
+there is no address in the SDK a cartridge author cannot move.
+
+\section{Zero Page, And Moving It}
+
+Four bytes, and you choose where. The default is \cmd{\$FB}--\cmd{\$FE},
+which is free on a stock C64 --- the KERNAL uses it only for tape --- and which
+cc65's runtime does not claim.
+
+\begin{listingbox}
+ca65 -D UCI\_ZP=\$A3 \ldots
+\end{listingbox}
+
+\begin{note}
+Four bytes is the whole of it. The SDK installs no interrupt handler, requires
+no interrupts to be enabled, and never writes anywhere you did not tell it to.
+\end{note}
+
+\section{Which Calls Are Bounded In Time}
+
+Every entry point completes or returns \cmd{ULTIMATE\_ERR\_TIMEOUT} --- with
+three deliberate exceptions, and they are exceptions because the hardware
+leaves no choice.
+
+\cmd{ultimate\_net\_connect}, \cmd{ultimate\_net\_udp} and
+\cmd{ultimate\_http\_exchange} each contain a name lookup and a TCP connection.
+A connection to an address with nothing at it was measured at 30.8 seconds
+before the firmware gave up, and the SDK's timeout budget is a single byte
+counting polls --- it tops out near one second. No value of it can express
+thirty. So those three wait, relying on the firmware's own limit, and put your
+timeout budget back when they return.
+
+\begin{listingbox}
+\hspace*{2em}jsr uci\_get\_timeout\_a   ; A = the current budget\\
+\hspace*{2em}pha\\
+\hspace*{2em}lda \#UCI\_TIMEOUT\_FOREVER\\
+\hspace*{2em}jsr uci\_set\_timeout\_a\\
+\hspace*{2em}; \ldots something slow \ldots\\
+\hspace*{2em}pla\\
+\hspace*{2em}jsr uci\_set\_timeout\_a
+\end{listingbox}
+
+That is the pattern the SDK uses itself, and it is the one to copy if you drive
+a slow command through the generic form.

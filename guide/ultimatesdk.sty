@@ -1,0 +1,204 @@
+% ultimatesdk.sty - the look of a Commodore user's guide, in LaTeX.
+%
+% The 1982 Commodore 64 User's Guide is the model, and the things that make it
+% recognisable are worth naming, because each one is a decision here:
+%
+%   - a blue divider page in front of every chapter, with a large numeral and
+%     the chapter's contents as a bulleted list
+%   - section headings in bold blue, set in a geometric sans
+%   - listings shown as a C64 screen: light blue on dark blue, in the real
+%     palette rather than an approximation
+%   - keys drawn as keycaps, so RETURN reads as a key and not as a word
+%   - warm, roomy body text on a narrow measure
+%
+% SPDX-License-Identifier: MIT
+
+\ProvidesPackage{ultimatesdk}[2026/08/18 Ultimate SDK guide style]
+
+\RequirePackage[T1]{fontenc}
+\RequirePackage{xcolor}
+\RequirePackage{tikz}
+\RequirePackage{eso-pic}
+\RequirePackage{tcolorbox}
+\RequirePackage{titlesec}
+\RequirePackage{fancyhdr}
+\RequirePackage{enumitem}
+\RequirePackage{microtype}
+\tcbuselibrary{skins,breakable}
+
+% ---------------------------------------------------------------------------
+% Colour.
+%
+% The screen colours are the C64's own palette, not a guess: background and
+% text are the values a real machine powers up with, so a listing in this book
+% is the colour it will be on the screen in front of you. The heading blue is
+% the printer's ink from the guide, which is a brighter corporate blue and
+% deliberately not the screen colour.
+% ---------------------------------------------------------------------------
+\definecolor{c64screen}{HTML}{40318D}   % the power-on background
+\definecolor{c64border}{HTML}{6C5EB5}   % and its border
+% The screen's own light blue is #7B71D6, and on paper it is too close to the
+% background to read comfortably. This is the same hue lifted for print - the
+% one place in this file where legibility beats authenticity.
+\definecolor{c64text}{HTML}{B4ACF5}
+\definecolor{guideblue}{HTML}{0069B4}   % the ink the guide is printed in
+\definecolor{guiderule}{HTML}{B9D9EE}
+\definecolor{keycap}{HTML}{2B2B2B}
+\definecolor{notegrey}{HTML}{F2F2F2}
+
+% ---------------------------------------------------------------------------
+% Type. URW Gothic for headings is as close to the guide's Kabel as anything
+% that ships with TeX Live; the body is a humanist sans because the original
+% is, and a reference book that is pleasant to read is half the job.
+% ---------------------------------------------------------------------------
+\RequirePackage{avant}
+\RequirePackage[scaled=0.92]{helvet}
+\RequirePackage[varqu,scaled=0.95]{inconsolata}
+\renewcommand{\familydefault}{\sfdefault}
+\newcommand{\headingfont}{\fontfamily{pag}\selectfont\bfseries}
+
+\linespread{1.10}
+\setlength{\parindent}{1.4em}
+\setlength{\parskip}{0pt}
+
+% ---------------------------------------------------------------------------
+% Headings.
+% ---------------------------------------------------------------------------
+\titleformat{\section}
+  {\headingfont\color{guideblue}\large}{}{0pt}{\MakeUppercase}
+\titlespacing*{\section}{0pt}{2.2\baselineskip}{0.8\baselineskip}
+
+\titleformat{\subsection}
+  {\headingfont\color{guideblue}\normalsize}{}{0pt}{}
+\titlespacing*{\subsection}{0pt}{1.6\baselineskip}{0.5\baselineskip}
+
+\titleformat{\subsubsection}[runin]
+  {\headingfont\normalsize}{}{0pt}{}[\quad]
+\titlespacing*{\subsubsection}{0pt}{1.1\baselineskip}{0.6em}
+
+% ---------------------------------------------------------------------------
+% Running heads and folios: page number centred at the foot, as in the guide.
+% ---------------------------------------------------------------------------
+\fancypagestyle{guide}{%
+  \fancyhf{}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \fancyfoot[C]{\footnotesize\color{black!70}\thepage}%
+}
+\pagestyle{guide}
+
+% ---------------------------------------------------------------------------
+% The chapter divider page.
+%
+% A whole blue leaf, the numeral large and to the right, the title under it,
+% then what the chapter covers as a bulleted list - which doubles as a
+% contents page for the chapter and is why the original is so easy to leaf
+% through looking for something.
+% ---------------------------------------------------------------------------
+\newcounter{guidechapter}
+\newcommand{\chaptercontents}{}
+
+\newcommand{\guidechapter}[2]{%
+  \clearpage
+  \refstepcounter{guidechapter}%
+  \thispagestyle{empty}%
+  \AddToShipoutPictureBG*{\AtPageLowerLeft{%
+    \color{guideblue}\rule{\paperwidth}{\paperheight}}}%
+  \null\vspace*{0.16\paperheight}%
+  {\color{white}\headingfont
+   \begin{flushright}
+     {\fontsize{16}{18}\selectfont CHAPTER\hspace{0.6em}}%
+     {\fontsize{64}{64}\selectfont \theguidechapter}\\[2.2\baselineskip]
+     {\fontsize{26}{30}\selectfont #1}
+   \end{flushright}
+   \vspace{1.6\baselineskip}
+   \begin{flushright}
+     \begin{minipage}{0.62\linewidth}
+       \normalsize\normalfont\color{white}
+       \begin{itemize}[leftmargin=1.2em,itemsep=0.15em,topsep=0pt,label={\textbullet}]
+         #2
+       \end{itemize}
+     \end{minipage}
+   \end{flushright}}%
+  \clearpage
+  \addcontentsline{toc}{section}{\protect\numberline{\theguidechapter}#1}%
+}
+
+% ---------------------------------------------------------------------------
+% A C64 screen.
+%
+% Everything the reader is told to type, and everything the machine says back,
+% is shown the way it looks on the screen: light blue on dark blue, inside the
+% border. Uppercase is not a shouting style - it is what the machine displays.
+% ---------------------------------------------------------------------------
+\newtcolorbox{screen}[1][]{%
+  enhanced, breakable,
+  colback=c64screen, colframe=c64border,
+  boxrule=3mm, arc=1mm, outer arc=1mm,
+  left=3mm, right=3mm, top=2.5mm, bottom=2.5mm,
+  before skip=1.1\baselineskip, after skip=1.1\baselineskip,
+  fontupper=\ttfamily\color{c64text}\linespread{1.0}\selectfont,
+  before upper={\catcode`\_=12\relax},
+  #1}
+
+% A listing of source you keep in a file rather than type at the machine: plain
+% paper, a rule down the left, no screen furniture.
+\newtcolorbox{listingbox}[1][]{%
+  enhanced, breakable,
+  colback=black!2, colframe=guideblue,
+  boxrule=0pt, leftrule=1.6pt, arc=0pt, outer arc=0pt,
+  left=3mm, right=3mm, top=2.2mm, bottom=2.2mm,
+  before skip=1.0\baselineskip, after skip=1.0\baselineskip,
+  fontupper=\ttfamily\small\linespread{1.05}\selectfont,
+  before upper={\catcode`\_=12\relax},
+  #1}
+
+% ---------------------------------------------------------------------------
+% A keycap, so RETURN reads as a key.
+% ---------------------------------------------------------------------------
+\newcommand{\key}[1]{%
+  \tikz[baseline=(K.base)]{
+    \node[fill=keycap, text=white, rounded corners=1.2pt,
+          inner xsep=3.5pt, inner ysep=1.6pt,
+          font=\sffamily\bfseries\scriptsize] (K) {\MakeUppercase{#1}};}}
+
+% ---------------------------------------------------------------------------
+% A note, and a warning. The guide sets NOTE: in italic and indents the
+% paragraph; the warning is the same shape with the ink turned up, and is used
+% only where getting it wrong costs the reader real time.
+% ---------------------------------------------------------------------------
+\newenvironment{note}
+  {\par\vspace{0.7\baselineskip}\noindent
+   \begin{tcolorbox}[enhanced, breakable, colback=notegrey, colframe=notegrey,
+     boxrule=0pt, leftrule=2pt, coltitle=black,
+     borderline west={2pt}{0pt}{guideblue},
+     arc=0pt, outer arc=0pt, left=3mm, right=3mm, top=2mm, bottom=2mm]
+   \small\textit{Note:}\hspace{0.4em}}
+  {\end{tcolorbox}\par\vspace{0.3\baselineskip}}
+
+\newenvironment{warning}
+  {\par\vspace{0.7\baselineskip}\noindent
+   \begin{tcolorbox}[enhanced, breakable, colback=red!4, colframe=red!4,
+     boxrule=0pt, arc=0pt, outer arc=0pt,
+     borderline west={2pt}{0pt}{red!60!black},
+     left=3mm, right=3mm, top=2mm, bottom=2mm]
+   \small\textbf{Careful:}\hspace{0.4em}}
+  {\end{tcolorbox}\par\vspace{0.3\baselineskip}}
+
+% ---------------------------------------------------------------------------
+% Small conveniences used throughout the text.
+% ---------------------------------------------------------------------------
+\newcommand{\sdk}{\textbf{ULTIMATE SDK}}
+\newcommand{\ult}{\textbf{ULTIMATE 64}}
+\newcommand{\cmd}[1]{\texttt{#1}}
+\newcommand{\bas}[1]{\texttt{\MakeUppercase{#1}}}
+
+% A two-column table of things and what they do, used for keyword and entry
+% point summaries. Plain, ruled only under the head, as the guide's are.
+\RequirePackage{booktabs}
+\RequirePackage{array}
+\newenvironment{reftable}[1]
+  {\par\vspace{0.5\baselineskip}\small
+   \begin{tabular}{@{}#1@{}}\toprule}
+  {\bottomrule\end{tabular}\par\vspace{0.7\baselineskip}}
+
+\endinput

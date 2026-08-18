@@ -1,0 +1,76 @@
+% Appendices.
+
+\appendix
+\guidechapter{APPENDICES}{%
+  \item A --- Every BASIC keyword
+  \item B --- Result codes
+  \item C --- Where to find the rest
+}
+
+\section{Appendix A: Every BASIC Keyword}
+
+Token values are a file format --- a tokenised program stores the number, not
+the name --- so this table is append-only and these numbers never change.
+
+\begin{reftable}{llp{0.46\linewidth}}
+Token & Keyword & \\
+\midrule
+\cmd{\$CC} & \bas{uci}    & any command, any target; alone, rescue the interface \\
+\cmd{\$CD} & \bas{uerr}   & the last result code \\
+\cmd{\$CE} & \bas{udev}   & the raw device code \\
+\cmd{\$CF} & \bas{ulen}   & reply length \\
+\cmd{\$D0} & \bas{ust\$}  & status text \\
+\cmd{\$D1} & \bas{udat\$} & reply as a string \\
+\cmd{\$D2} & \bas{ubyte(} & byte n of the reply \\
+\cmd{\$D3} & \bas{uw(}    & force 16 bits \\
+\cmd{\$D4} & \bas{ul(}    & force 32 bits \\
+\cmd{\$D5} & \bas{udos1}  & target 1 \\
+\cmd{\$D6} & \bas{udos2}  & target 2 \\
+\cmd{\$D7} & \bas{unet}   & target 3 \\
+\cmd{\$D8} & \bas{uctrl}  & target 4 \\
+\cmd{\$D9} & \bas{uiec}   & target 5 \\
+\cmd{\$DA} & \bas{uhttp}  & target 6 \\
+\cmd{\$DB} & \bas{uturbo} & set or read the speed index \\
+\cmd{\$DC} & \bas{uload}  & load a PRG \\
+\cmd{\$DD} & \bas{ubload} & load raw bytes \\
+\cmd{\$DE} & \bas{usave}  & memory to a file \\
+\cmd{\$DF} & \bas{udir}   & print the directory \\
+\cmd{\$E0} & \bas{ustash} & C64 memory into the expansion \\
+\cmd{\$E1} & \bas{ufetch} & and back out \\
+\cmd{\$E2} & \bas{ureu}   & the expansion's size in banks \\
+\end{reftable}
+
+\section{Appendix B: Result Codes}
+
+\begin{reftable}{llp{0.50\linewidth}}
+0  & \cmd{ULTIMATE\_OK}               & success \\
+1  & \cmd{ULTIMATE\_ERR\_NO\_DEVICE}   & no command interface found \\
+2  & \cmd{ULTIMATE\_ERR\_TIMEOUT}     & it did not answer in time \\
+3  & \cmd{ULTIMATE\_ERR\_PROTOCOL}    & a transport-level violation \\
+4  & \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED} & this firmware has not got it \\
+5  & \cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT} & your mistake, caught early \\
+6  & \cmd{ULTIMATE\_ERR\_IO}          & filesystem or network failure \\
+7  & \cmd{ULTIMATE\_ERR\_DEVICE}      & the target reported a failure \\
+8  & \cmd{ULTIMATE\_ERR\_TRUNCATED}   & it worked; the buffer was small \\
+9  & \cmd{ULTIMATE\_ERR\_ABORTED}     & the command was abandoned \\
+10 & \cmd{ULTIMATE\_END}              & no more --- and not a failure \\
+\end{reftable}
+
+\cmd{ultimate\_strerror()} turns any of them into a short, stable description.
+
+\section{Appendix C: Where To Find The Rest}
+
+This guide is the friendly half. The reference half lives with the source, and
+is generated from the same definitions the code is:
+
+\begin{reftable}{lp{0.55\linewidth}}
+\cmd{docs/uci.md} & the protocol itself, with every fact sourced and measured
+  behaviour separated from documented behaviour \\
+\cmd{docs/asm-abi.md} & the assembly contract, entry point by entry point \\
+\cmd{docs/api-design.md} & why the API looks like this \\
+\cmd{docs/compatibility.md} & hardware, firmware, speeds, known issues \\
+\cmd{docs/generated/} & every constant, every keyword and every command the
+  tests exercise --- generated, so never out of step \\
+\cmd{bindings/blob/README.md} & the jump table and parameter block, offset by
+  offset \\
+\end{reftable}

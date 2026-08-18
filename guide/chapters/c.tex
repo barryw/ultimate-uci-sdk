@@ -1,0 +1,147 @@
+% Chapter 3 - C.
+
+\guidechapter{PROGRAMMING IN C}{%
+  \item Building against the SDK
+  \item The shape of every call
+  \item Buffers belong to you
+  \item Result codes
+  \item Capability detection
+  \item A worked example
+}
+
+\section{Building Against The SDK}
+
+Build the library once:
+
+\begin{listingbox}
+make lib
+\end{listingbox}
+
+then compile against \cmd{include/} and link \cmd{ultimate.lib}:
+
+\begin{listingbox}
+cl65 -t c64 -Osir -I include -o prog.prg prog.c \textbackslash\\
+\hspace*{2em}bindings/cc65/build/ultimate.lib
+\end{listingbox}
+
+One header covers the whole library:
+
+\begin{listingbox}
+\#include <ultimate.h>
+\end{listingbox}
+
+If you need the transport itself --- to send a command the SDK does not wrap ---
+add \cmd{<uci.h>} as well. Most programs never do.
+
+\section{The Shape Of Every Call}
+
+Almost every function in the SDK looks like this:
+
+\begin{listingbox}
+uint8\_t ultimate\_something(\ldots);
+\end{listingbox}
+
+It returns a result code, and \cmd{ULTIMATE\_OK} is zero. Anything it produces
+comes back through a pointer you passed in. There are no global error variables
+to check, nothing is returned in a static buffer, and no call allocates memory.
+
+\begin{listingbox}
+uint16\_t got;\\
+uint8\_t  err;\\
+\\
+err = ultimate\_read(buf, sizeof buf, \&got);\\
+if (err != ULTIMATE\_OK)\\
+\hspace*{1em}return err;
+\end{listingbox}
+
+\section{Buffers Belong To You}
+
+The SDK has no heap and no hidden buffers. Every byte it produces lands in
+memory you own, and it never keeps a pointer after the call returns. That is
+what makes it usable from an interrupt-driven demo, and it is why every call
+that produces data takes both a buffer and its size.
+
+\begin{warning}
+The size you pass is the size of the buffer, not the number of bytes you want.
+If a reply is larger, you get \cmd{ULTIMATE\_ERR\_TRUNCATED}, the count tells
+you how much was kept, and nothing is written past the end.
+\end{warning}
+
+\section{Result Codes}
+
+There are eleven, they never change, and Appendix~B lists them. Three are worth
+knowing straight away:
+
+\begin{reftable}{lp{0.60\linewidth}}
+\cmd{ULTIMATE\_OK} & it worked \\
+\cmd{ULTIMATE\_END} & there is no more --- the end of a directory, or a socket
+  the far end has closed. Not a failure \\
+\cmd{ULTIMATE\_ERR\_TRUNCATED} & it worked, and your buffer was too small \\
+\end{reftable}
+
+Turn any of them into text with:
+
+\begin{listingbox}
+printf("\%s\textbackslash n", ultimate\_strerror(err));
+\end{listingbox}
+
+\section{Capability Detection}
+
+Different machines have different targets, and firmware versions differ too.
+Ask once, at start-up, rather than assuming:
+
+\begin{listingbox}
+ultimate\_capabilities caps;\\
+\\
+ultimate\_detect(\&caps);\\
+if (ultimate\_has\_http(\&caps)) \{ /* fetch things */ \}\\
+if (ultimate\_has\_network(\&caps)) \{ /* sockets */ \}
+\end{listingbox}
+
+The hardware that is not reached through the command interface answers
+separately, because it is not a target: \cmd{ultimate\_turbo\_available()} and
+\cmd{ultimate\_reu\_size()} tell you about the processor speed registers and
+the RAM expansion.
+
+\section{A Worked Example}
+
+This prints the directory, one entry at a time. It is the pattern for every
+walk in the SDK: start it, take entries until \cmd{ULTIMATE\_END}, and check
+the result of the call that ended it.
+
+\begin{listingbox}
+\#include <stdio.h>\\
+\#include <ultimate.h>\\
+\\
+int main(void)\\
+\{\\
+\hspace*{1em}char    name[64];\\
+\hspace*{1em}uint8\_t attrib;\\
+\hspace*{1em}uint8\_t err;\\
+\\
+\hspace*{1em}if (ultimate\_init() != ULTIMATE\_OK) \{\\
+\hspace*{2em}printf("no ultimate\textbackslash n");\\
+\hspace*{2em}return 1;\\
+\hspace*{1em}\}\\
+\\
+\hspace*{1em}err = ultimate\_opendir();\\
+\hspace*{1em}while (err == ULTIMATE\_OK) \{\\
+\hspace*{2em}err = ultimate\_readdir(name, sizeof name, \&attrib);\\
+\hspace*{2em}if (err != ULTIMATE\_OK)\\
+\hspace*{3em}break;\\
+\hspace*{2em}printf("\%s\%s\textbackslash n", name,\\
+\hspace*{3em}(attrib \& DOS\_ATTR\_DIR) ? "/" : "");\\
+\hspace*{1em}\}\\
+\\
+\hspace*{1em}if (err != ULTIMATE\_END)\\
+\hspace*{2em}printf("stopped: \%s\textbackslash n", ultimate\_strerror(err));\\
+\hspace*{1em}return 0;\\
+\}
+\end{listingbox}
+
+\begin{note}
+A directory walk is one live exchange with the Ultimate. Do not issue any other
+command in the middle of one --- the block boundaries between entries are the
+only thing separating one name from the next. If you need to stop early, call
+\cmd{uci\_abort()}.
+\end{note}

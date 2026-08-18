@@ -1,0 +1,80 @@
+% Chapter 5 - the blob.
+
+\guidechapter{OTHER TOOLCHAINS}{%
+  \item Why a jump table
+  \item Loading the blob
+  \item Calling through the table
+  \item The parameter block
+  \item Driving it from BASIC with POKE and SYS
+}
+
+\section{Why A Jump Table}
+
+KickAssembler, ACME, 64tass, Oscar64, llvm-mos and KickC cannot link a ca65
+object file. Rather than port the SDK to each of them --- six implementations to
+keep in step, and six chances to disagree --- there is one binary with a jump
+table at the front. Every toolchain can \cmd{jsr} an address.
+
+It is not a port. It is the same object files the C library is built from,
+linked differently.
+
+\section{Loading The Blob}
+
+Load \cmd{ultimate.bin} at \cmd{\$8000} and check the signature before calling
+anything:
+
+\begin{listingbox}
+\hspace*{2em}lda \$C000\\
+\hspace*{2em}cmp \#\$D5\hspace{2em}; 'U' in PETSCII\\
+\hspace*{2em}bne no\_sdk
+\end{listingbox}
+
+The binary is relocatable: a table of the addresses that need adjusting ships
+with it, so you can move it somewhere else and fix it up.
+
+\section{Calling Through The Table}
+
+The table starts four bytes in, three bytes per entry, in a published order
+that is append-only --- new entries go on the end and existing ones never move.
+
+\begin{listingbox}
+\hspace*{2em}jsr \$8004\hspace{2em}; +\$04  uci\_init\\
+\hspace*{2em}jsr \$801C\hspace{2em}; +\$1C  ultimate\_init
+\end{listingbox}
+
+Appendix~C has every offset.
+
+\section{The Parameter Block}
+
+A caller cannot pass a filename in \cmd{A}/\cmd{X}, so the entries that need
+more take their arguments from a page-aligned block that follows the table. You
+write the fields, call the entry, and read the result out of the same block.
+
+\begin{reftable}{lp{0.62\linewidth}}
+\cmd{+\$00} & the result code \\
+\cmd{+\$01} & the raw device code \\
+\cmd{+\$03} & an address argument \\
+\cmd{+\$05} & a length, in and out \\
+\cmd{+\$29} & the filename \\
+\cmd{+\$51} & the reply buffer \\
+\end{reftable}
+
+\section{Driving It From BASIC With POKE And SYS}
+
+The block is page-aligned for a reason: it is the only calling convention BASIC
+can express without a wedge. \bas{poke} the fields, \bas{sys} the entry, and
+\bas{peek} the answer.
+
+\begin{screen}
+10 B = 32768 : P = B + 256\\
+20 SYS B + 28 : REM ULTIMATE\_INIT\\
+30 SYS B + 175 : REM REU\_SIZE\\
+40 PRINT "BANKS:"; PEEK(P+5) + PEEK(P+6)*256
+\end{screen}
+
+\begin{note}
+This is the long way round if you have the wedge --- \bas{ureu} does the same
+thing in four characters. It is here because a program that ships the blob for
+its assembly code can drive it from its BASIC loader too, without shipping the
+wedge as well.
+\end{note}

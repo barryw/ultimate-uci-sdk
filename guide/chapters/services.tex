@@ -1,0 +1,138 @@
+% Chapter 6 - the services.
+
+\guidechapter{THE SERVICES}{%
+  \item Files and directories
+  \item Loading and saving
+  \item The RAM expansion
+  \item Processor speed
+  \item The screen palette
+  \item Network sockets
+  \item Fetching over HTTP
+}
+
+\section{Files And Directories}
+
+The Ultimate's own filesystem, reached by name. Open a file, read or write it,
+seek in it, close it --- the operations you would expect, with two things worth
+knowing.
+
+A directory walk is \textbf{one live exchange}: \cmd{ultimate\_opendir()} then
+\cmd{ultimate\_readdir()} until it answers \cmd{ULTIMATE\_END}, with no other
+command in between. And a filename goes on the wire exactly as you gave it: the
+SDK converts nothing, because uppercase PETSCII and uppercase ASCII are the
+same bytes and the filesystem does not care about case.
+
+\section{Loading And Saving}
+
+\cmd{ultimate\_load()} takes the firmware's fast path when the machine has one
+--- the bytes go straight into C64 memory without passing through the command
+interface at all --- and falls back to the ordinary route when it does not. You
+do not choose; the SDK does, and tells you where the file ended.
+
+\cmd{ultimate\_bload()} is the one for data: no header consumed, nothing
+interpreted, and not one byte past the limit you set.
+
+\section{The RAM Expansion}
+
+Two different things share one name here, and the difference matters.
+
+\textbf{C64 memory to the expansion and back} is the REU's own direct memory
+access. There is no command involved: the SDK programs eight registers and the
+transfer happens with the processor halted, so by the next instruction it is
+already done. Nothing to poll, nothing to wait for.
+
+\textbf{A file to the expansion} is a command, and it is the one that cannot be
+done any other way --- the bytes never pass through the C64 at all. Sixteen
+megabytes of assets can be loaded without staging them through 64K.
+
+\cmd{ultimate\_reu\_size()} answers how much there is, in 64K banks, and zero
+when there is none. It measures rather than asks, because nothing in the
+protocol reports it: the expansion aliases, so the first power-of-two boundary
+whose write comes back round to the start is the size.
+
+\begin{note}
+16MB is the ceiling whatever the machine has, because the expansion's address
+registers are 24 bits. A machine with more RAM than that cannot reach the rest
+through this interface.
+\end{note}
+
+\section{Processor Speed}
+
+Memory-mapped, not a command, and only on an Ultimate~64. The index runs from
+0 to 15; 0 is 1MHz and 3 is 4MHz on every machine that has it. Above 3 the same
+index means different speeds on different models, so the SDK passes the number
+through and does not pretend to know megahertz.
+
+Whether turbo exists at all is the machine owner's decision. Both registers
+read \cmd{\$FF} when it has been switched off, which makes availability
+testable rather than assumed.
+
+There is a second half to it: bit~7 turns off badlines, which stops the video
+chip stealing cycles from the processor. On a fixed loop that is worth about
+6.3\% --- measured, and it agrees with the arithmetic.
+
+\section{The Screen Palette}
+
+All sixteen colours, live, on firmware newer than 3.15. This affects the
+running palette only --- not flash, not a file --- so a program that crashes
+half way through a colour cycle cannot leave the machine looking wrong
+permanently.
+
+A whole-palette rotation costs about a quarter of a frame, so colour cycling
+directly is comfortably affordable.
+
+\section{Network Sockets}
+
+TCP and UDP, with three things that decide how you use them.
+
+\textbf{A read never waits.} One issued straight after connecting reports
+"nothing yet" even when the far end has already replied. Callers poll --- which
+is the right answer on a C64, because a blocking read would freeze the machine
+for as long as the other end stayed quiet.
+
+\textbf{The end of the stream is \cmd{ULTIMATE\_END}}, the same code a
+directory ends with, and it is reported exactly once. After it the handle is
+already gone, so do not close it.
+
+\textbf{Connecting can take thirty seconds.} 48 to 75 milliseconds to a host
+that is up, and 30.8 seconds to an address with nothing at it before the
+firmware gives up.
+
+\begin{listingbox}
+for (;;) \{\\
+\hspace*{1em}err = ultimate\_net\_read(h, buf, sizeof buf, \&got);\\
+\hspace*{1em}if (err == ULTIMATE\_END) break;\hspace{1em}/* far end hung up */\\
+\hspace*{1em}if (err != ULTIMATE\_OK)   return err;\\
+\hspace*{1em}if (got == 0)             continue;\hspace{1em}/* nothing yet */\\
+\hspace*{1em}/* \ldots use buf[0..got-1] \ldots */\\
+\}
+\end{listingbox}
+
+\section{Fetching Over HTTP}
+
+\cmd{ultimate\_http\_get()} is the whole of the common case: it builds the
+request, runs it, and gives the firmware's slot back whether it worked or not.
+
+\begin{listingbox}
+uint16\_t got;\\
+uint8\_t  err;\\
+\\
+err = ultimate\_http\_get(url, buf, sizeof buf, \&got);
+\end{listingbox}
+
+\cmd{ULTIMATE\_OK} means the server answered below 400. A 404 or a 500 is
+\cmd{ULTIMATE\_ERR\_DEVICE} with the number in
+\cmd{ultimate\_device\_code()} --- the request itself worked, and the body of
+the error page is in your buffer.
+
+\begin{warning}
+A URL written as a plain C string literal arrives at the server uppercased.
+cc65 translates source characters into PETSCII, and an HTTP path is case
+sensitive. Build the URL as bytes, or fold it back at run time.
+\end{warning}
+
+\begin{note}
+A reply larger than your buffer is truncated and the rest is gone. Nothing in
+the protocol offers a range request or a second block, so size the buffer for
+what you expect.
+\end{note}

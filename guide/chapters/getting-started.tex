@@ -1,0 +1,201 @@
+% Chapter 1 - Getting Started.
+
+\guidechapter{GETTING STARTED}{%
+  \item What you need
+  \item Switching the command interface on
+  \item Your first program in BASIC
+  \item Your first program in C
+  \item Your first program in assembly
+  \item When nothing happens
+}
+
+\section{What You Need}
+
+Three things, and you may have all of them already.
+
+\textbf{An Ultimate.} Any of them: a 1541~Ultimate-II or II+ plugged into a
+Commodore~64, an Ultimate~64 or 64~Elite, or a Commodore~64 Ultimate. The SDK
+speaks to all of them through the same five addresses and asks each one what it
+can do rather than assuming.
+
+\textbf{Firmware 3.15 or later}, which is where the command interface settled
+into the shape this guide describes. Older firmware works for most of it; the
+guide flags the places where it does not.
+
+\textbf{The command interface switched on.} This is the one that catches
+everybody, and it is the next section.
+
+\section{Switching the Command Interface On}
+
+The Ultimate ships with its command interface \textit{disabled}. A program that
+tries to use it on a machine where nobody has turned it on will find nothing
+there --- correctly, and quickly, but it will find nothing.
+
+Press \key{F5} to bring up the Ultimate menu, then find:
+
+\begin{screen}
+C64 AND CARTRIDGE SETTINGS\\
+\hspace*{2em}COMMAND INTERFACE: ENABLED
+\end{screen}
+
+Set it to \bas{enabled}. That is the whole of the setup.
+
+\begin{note}
+You do not have to do this for the RAM expansion or for turbo. Those two reach
+the hardware directly and work whether or not the command interface is on ---
+though they have settings of their own in the same menu.
+\end{note}
+
+\section{Your First Program In BASIC}
+
+The BASIC route needs no compiler and no cross-development machine. Load the
+wedge, run it, and BASIC has twenty-three new keywords.
+
+\begin{screen}
+LOAD"UCI",8\\
+RUN
+\end{screen}
+
+The wedge installs itself and hands you back the \bas{ready.} prompt. Now type
+this, exactly as shown, and press \key{return}:
+
+\begin{screen}
+PRINT UREU
+\end{screen}
+
+If you have a RAM expansion switched on, the machine answers with its size in
+64K banks --- \bas{32} for a two-megabyte expansion. If you have not, it
+answers \bas{0}. Either way, your Commodore~64 has just asked the cartridge a
+question and been told the truth.
+
+Now something with a little more in it. Type:
+
+\begin{screen}
+UDIR
+\end{screen}
+
+and the directory of whatever the Ultimate has mounted scrolls up the screen.
+No disk drive was involved.
+
+\subsection*{A short program}
+
+Type \bas{new}, then this. Remember \key{return} at the end of every line.
+
+\begin{screen}
+10 IF UREU = 0 THEN PRINT "NO EXPANSION": END\\
+20 PRINT "EXPANSION IS"; UREU * 64; "K"\\
+30 PRINT "TURBO INDEX IS"; UTURBO
+\end{screen}
+
+Type \bas{run}. Three lines, and the program has interrogated two pieces of
+hardware that a stock Commodore~64 does not have.
+
+\section{Your First Program In C}
+
+You will need cc65, and you will build on a modern machine and copy the result
+across. From the SDK directory:
+
+\begin{listingbox}
+make lib
+\end{listingbox}
+
+That produces \cmd{bindings/cc65/build/ultimate.lib}. Now a program:
+
+\begin{listingbox}
+\#include <stdio.h>\\
+\#include <ultimate.h>\\
+\\
+int main(void)\\
+\{\\
+\hspace*{1em}uint16_t banks;\\
+\\
+\hspace*{1em}if (ultimate\_init() != ULTIMATE\_OK) \{\\
+\hspace*{2em}printf("no ultimate here\\n");\\
+\hspace*{2em}return 1;\\
+\hspace*{1em}\}\\
+\\
+\hspace*{1em}banks = ultimate\_reu\_size();\\
+\hspace*{1em}printf("expansion: \%u banks\\n", banks);\\
+\hspace*{1em}return 0;\\
+\}
+\end{listingbox}
+
+Build it, pointing the compiler at the SDK's headers and library:
+
+\begin{listingbox}
+cl65 -t c64 -I include -o hello.prg hello.c \textbackslash\\
+\hspace*{2em}bindings/cc65/build/ultimate.lib
+\end{listingbox}
+
+Copy \cmd{hello.prg} to the Ultimate and run it.
+
+\begin{note}
+\cmd{ultimate\_init()} is worth calling first and worth checking. It verifies
+the interface is really there, clears anything a previous program left behind,
+and puts the transport into a known state. Every other call assumes it has run.
+\end{note}
+
+\section{Your First Program In Assembly}
+
+Assembly callers need no C runtime at all --- no software stack to set up, no
+start-up code to run. Include the SDK's declarations and call the entry points.
+
+\begin{listingbox}
+\hspace*{2em}.include "ultimate.inc"\\
+\\
+\hspace*{2em}jsr ultimate\_init\\
+\hspace*{2em}cmp \#ULTIMATE\_OK\\
+\hspace*{2em}bne no\_ultimate\\
+\\
+\hspace*{2em}jsr ultimate\_reu\_size   ; A = low, X = high, in 64K banks\\
+\hspace*{2em}sta banks\\
+\hspace*{2em}stx banks + 1\\
+\hspace*{2em}rts
+\end{listingbox}
+
+Assemble and link it against the same library the C route uses. The whole
+assembly contract --- which registers carry what, which variables an entry
+point reads, and which of them are bounded in time --- is Chapter~4.
+
+\section{When Nothing Happens}
+
+Four things account for almost every "it did not work", in the order they are
+worth checking.
+
+\subsection*{The command interface is off}
+
+The commonest by far. \cmd{ultimate\_init()} returns
+\cmd{ULTIMATE\_ERR\_NO\_DEVICE} and every later call fails the same way. Go and
+turn it on: see the second section of this chapter.
+
+\subsection*{Something crashed mid-command}
+
+A program that stopped in the middle of talking to the Ultimate can leave the
+interface holding a half-finished exchange, and the next program to run finds
+it busy. This is what \cmd{uci\_abort()} is for, and \cmd{ultimate\_init()}
+calls it for you --- so simply running your program again usually clears it.
+
+From BASIC, a bare \bas{uci} with no arguments does the same thing:
+
+\begin{screen}
+UCI
+\end{screen}
+
+\subsection*{You asked for something this machine has not got}
+
+Turbo needs an Ultimate~64 and the \bas{turbo control} setting; the RAM
+expansion needs to be enabled and given a size. The SDK will tell you rather
+than pretend: \cmd{ultimate\_turbo\_available()} answers plainly, and
+\cmd{ultimate\_reu\_size()} returns zero when there is nothing there.
+
+\subsection*{The reply did not fit}
+
+If a call comes back \cmd{ULTIMATE\_ERR\_TRUNCATED}, the command worked and
+your buffer was too small. The count that comes back tells you how much was
+kept.
+
+\begin{note}
+Every entry point in the SDK returns a result code, and it is worth checking
+every one. The codes are a small fixed set --- Appendix~B lists them all --- and
+\cmd{ultimate\_strerror()} turns any of them into text you can print.
+\end{note}
