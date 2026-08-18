@@ -1,9 +1,10 @@
 # Hardware tests: a C64 program that exercises the SDK against a real Ultimate.
 #
-#   make            -> ucitest.prg
+#   make            -> ucitest.prg, ucitime.prg
 #
-# Copy it to your Ultimate and run it. Output is TAP on the C64 screen; see
-# tests/README.md for capturing it.
+# Copy ucitest.prg to your Ultimate and run it. Output is TAP on the C64 screen;
+# see tests/README.md for capturing it. ucitime.prg answers a different
+# question - how long a round trip takes - and is driven by `make time-run`.
 #
 # SPDX-License-Identifier: MIT
 
@@ -13,13 +14,16 @@ CL65   ?= cl65
 
 LIB := $(ROOT)/bindings/cc65/build/ultimate.lib
 
-all: ucitest.prg
+all: ucitest.prg ucitime.prg
 
 $(LIB): FORCE
 	$(MAKE) -C $(ROOT)/bindings/cc65 TARGET=$(TARGET)
 
 ucitest.prg: ucitest.c $(LIB)
 	$(CL65) -t $(TARGET) -Osir -I $(ROOT)/include -o $@ ucitest.c $(LIB)
+
+ucitime.prg: ucitime.c $(LIB)
+	$(CL65) -t $(TARGET) -Osir -I $(ROOT)/include -o $@ ucitime.c $(LIB)
 
 # Drive the settings matrix against a real Ultimate over its REST API.
 #   make run U64_HOST=192.168.1.62
@@ -38,9 +42,19 @@ basic-run:
 	python3 basictest.py --host $(U64_HOST) $(BASICTEST_ARGS)
 	python3 basictest.py --host $(U64_HOST) --crt $(BASICTEST_ARGS)
 
+# How long a UCI round trip takes, measured on the machine itself.
+#   make time-run U64_HOST=192.168.1.62
+# Wrapped in the settings guard because the command interface is normally
+# Disabled on the bench machine, and because this reads no settings of its own.
+time-run: ucitime.prg
+	@test -n "$(U64_HOST)" || { echo "set U64_HOST=<ip of your Ultimate>"; exit 1; }
+	python3 $(ROOT)/tools/u64_settings.py --host $(U64_HOST) \
+	    --require "C64 and Cartridge Settings:Command Interface=Enabled" \
+	    -- python3 ucitime.py --host $(U64_HOST) $(UCITIME_ARGS)
+
 clean:
-	rm -f ucitest.prg ucitest.o
+	rm -f ucitest.prg ucitest.o ucitime.prg ucitime.o
 
 FORCE:
 
-.PHONY: all run basic-run clean FORCE
+.PHONY: all run basic-run time-run clean FORCE

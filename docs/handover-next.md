@@ -198,38 +198,79 @@ UCI UCTRL,$53,I,R,G,B      : REM one colour
 UCI UCTRL,$54              : REM put it all back
 ```
 
-### The risk to measure first
+### ~~The risk to measure first~~ — measured
 
-**Nobody has timed a UCI round trip against a frame.** Colour cycling wants a
-palette write every frame or two — 50Hz. Every UCI command is a handshake:
-write the bytes, push, poll for BUSY to clear, read the status. `uci_exec`
-budgets `UCI_TIMEOUT_DEFAULT` (200 units of 256 polls) for that.
+**A UCI round trip is much cheaper than a frame.** `make time-run
+U64_HOST=<ip>` builds `tests/hardware/ucitime.c`, runs it on the machine and
+reads the numbers back by DMA. On the bench Ultimate 64 Elite, NTSC, CPU at
+1MHz with turbo unavailable:
 
-Measure before designing around it. `SET_PALETTE_COLOR` is six bytes on the
-wire, so it is the cheapest possible command, but the round trip is the round
-trip. Three outcomes:
+| Command | cycles | frames | per frame |
+|---|---|---|---|
+| `SET_PALETTE_COLOR` fire-and-forget | 1074 | 0.06 | 15.9 |
+| `SET_PALETTE_COLOR` | 2096 | 0.12 | 8.2 |
+| `SET_PALETTE`, all 16 colours, fire-and-forget | 3082 | 0.18 | 5.5 |
+| `SET_PALETTE`, all 16 colours | 4105 | 0.24 | 4.2 |
+| `DOS_CMD_ECHO` fire-and-forget | 1091 | 0.06 | 15.7 |
+| `DOS_CMD_ECHO` | 2684 | 0.16 | 6.4 |
+| `UCI_CMD_IDENTIFY` | 3780 | 0.22 | 4.5 |
+| `GET_PALETTE`, 48 bytes back | 6328 | 0.37 | 2.7 |
 
-- Fast enough per frame → cycle directly, and the demo is simple.
-- Fast enough only every few frames → cycle more slowly, which the original's
-  rotation speed may tolerate anyway.
-- Too slow → cycle the C64's own colour registers for the ball and use the
-  Ultimate's palette to shift what those registers *mean*, which is one write
-  per several frames.
+**The one number: a whole-palette rotation costs a quarter of a frame.** Colour
+cycling is not the constraint, so the first of the three outcomes below holds -
+cycle directly, and the demo stays simple. Four rotations fit in a frame with
+the screen on and interrupts off, which is three more than the demo needs.
+
+Run to run the figures move by about 2%, and the third column is what to design
+against, not the first.
+
+Two things about the method, because they are what make the number trustworthy:
+
+- **The frame length is measured, not assumed.** CIA #2's two timers chain into
+  a 32-bit cycle counter, and the same counter times ten raster frames, so every
+  result is a ratio of two figures off one clock - immune to PAL versus NTSC, to
+  whatever the CIA is really clocked at on an Ultimate 64, and to the machine
+  sitting in turbo. It reads 17091 against a textbook NTSC 17095, and the report
+  prints both so a broken measurement looks broken.
+- **Sync the raster *before* starting the timer.** The first version started it
+  first, so the ten frames were really nine and a half: 16245 cycles, a number
+  plausible enough to have been believed. The 5% gap against the textbook figure
+  is what caught it.
+
+`UCI_TARGET_NO_REPLY` is worth knowing about: it skips the data and status
+phase and costs about half as much. Fine for a palette write, which has nothing
+to say back.
 
 **None of the palette commands is wrapped or tested.** `make coverage` reports
 9/101 wrapped; the palette four are reachable through the generic form only.
 Wrapping them is small and would earn `ULOAD`-style sugar in the wedge.
+
+**The bench machine's firmware string lies about the palette commands.** It
+reports `firmware 3.15`, the palette four are annotated `FW > 3.15`, and they
+work anyway — because it is running a post-tag build. The commit that added them
+is `v3.15-68-g6b41404f`, and no release tag contains it. So the annotation is
+right, the REST `firmware_version` field simply cannot tell a 3.15 dev build
+from 3.15, and anything shipping to other people must probe rather than compare
+version strings. `ucitime.c` probes with `GET_PALETTE` and skips the palette
+measurements if it fails.
+
+The measurements never change what is on screen, incidentally: the palette is
+read first and written straight back, so this stays out of the destructive
+bucket that `docs/handover.md` §6 puts palette writes in.
 
 ### Sprites versus hires
 
 - **Sprite multiplexing** is the safer route: the ball is a sphere, sprites are
   cheap to move, and multiplexing is a solved problem at 1MHz. Turbo would only
   raise the sprite count.
-- **Hires bitmap** needs turbo to redraw at speed, which needs the register that
-  has not been found yet.
+- **Hires bitmap** needs turbo to redraw at speed. The registers are known now
+  (§2), but turbo is a setting the user owns and a program cannot switch on for
+  itself, so a demo that requires it is a demo that does not run everywhere.
 
-Start with sprites. Turbo is an optimisation with an unresolved dependency, and
-the demo does not need it to exist.
+Start with sprites. Turbo is an optimisation with a dependency on someone else's
+settings menu, and the demo does not need it to exist. The bench machine reads
+`$D031` as `$FF` right now, which is what turbo-unavailable looks like — see the
+`make time-run` output.
 
 ### The shadow
 
@@ -244,8 +285,9 @@ buys — do it last.
 
 1. ~~Confirm and fix the cc65 charmap bug.~~ **Done**, and `make test` now
    fails if it comes back.
-2. Measure a UCI round trip in frames. One number, and it decides the demo's
-   whole shape.
+2. ~~Measure a UCI round trip in frames.~~ **Done** — a whole-palette rotation
+   is a quarter of a frame, so the demo's shape is the simple one. `make
+   time-run U64_HOST=<ip>`.
 3. Wrap the palette commands and add `make coverage` entries.
 4. Build `turbo.s` and its three exposures. The registers are known now; what
    is left is the module, and proving on hardware that the speed really changes.

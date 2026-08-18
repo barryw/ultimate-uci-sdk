@@ -8,6 +8,7 @@
 #   make emulator    the same thing; test is an alias      (cc65, Docker)
 #   make hardware    build the on-device test program      (cc65)
 #   make hardware-run U64_HOST=<ip>   drive it over the REST API
+#   make time-run U64_HOST=<ip>       time a UCI round trip in frames
 #   make protocol    regenerate the protocol constants     (Python 3)
 #   make all         everything that needs no hardware
 #
@@ -69,6 +70,12 @@ hardware-run: lib
 basic-run: wedge
 	$(MAKE) -C tests/hardware basic-run U64_HOST=$(U64_HOST)
 
+# How long a UCI round trip takes, measured on the machine itself. Not a test:
+# it answers a design question, and the answer changes with the firmware.
+#   make time-run U64_HOST=192.168.1.62
+time-run: lib
+	$(MAKE) -C tests/hardware time-run U64_HOST=$(U64_HOST)
+
 # Regenerate include/uci_protocol.h, bindings/asm/uci_protocol.inc,
 # bindings/asm/uci_argtable.inc, bindings/asm/uci_keywords.inc,
 # bindings/kickass/uci_protocol.asm, bindings/acme/uci_protocol.a and the
@@ -97,4 +104,5 @@ clean:
 	$(MAKE) -C bindings/cc65 clean
 	$(MAKE) -C bindings/blob clean
 
-.PHONY: all test unittest lib blob examples emulator hardware hardware-run protocol coverage clean
+.PHONY: all test unittest lib blob examples emulator hardware hardware-run \
+		basic-run time-run protocol coverage clean

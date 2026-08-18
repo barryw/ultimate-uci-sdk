@@ -42,6 +42,9 @@ make hardware-run     GREEN     4/4 scenarios on real hardware, 13 checks each
                                 except uci-disabled, which asserts one clean
                                 failure and is meant to report failed=1
 make coverage         GREEN     0 wrapped-but-untested
+make time-run         n/a       not a test: it times a UCI round trip on the
+                                machine and prints the numbers. A whole-palette
+                                rotation is 0.24 frames
 ```
 
 ### What Phase 1 added
@@ -208,6 +211,14 @@ It publishes counters to `$033C` so `hwtest.py` reads results by DMA.
 
 `hwtest.py` reconfigures the Ultimate over REST and runs the program once per
 configuration, restoring every setting afterwards and never writing flash.
+
+`ucitime.c` is the other on-device program and is **not** a test: it measures
+how long a UCI round trip takes and prints the answer, which changes with the
+firmware and with the machine. It shares `ucitest.c`'s shape — a result block in
+the cassette buffer, read back by DMA — and chains CIA #2's timers into a 32-bit
+cycle counter, timing ten raster frames on that same counter so every figure is
+a ratio and nothing has to assume PAL, NTSC or a CPU speed. Numbers and method
+are in [handover-next.md](handover-next.md) §3.
 
 ---
 
