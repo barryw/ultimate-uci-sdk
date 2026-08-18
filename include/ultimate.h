@@ -222,6 +222,11 @@ uint8_t ultimate_opendir(void);
  * exchange with the Ultimate - the firmware sends an entry per reply block -
  * and any other command in the middle of it ends the walk.
  *
+ * **To stop before the end, call uci_abort().** The firmware holds a block
+ * until it is released, so a half-read walk leaves the interface unable to
+ * take another command; uci_abort() releases it and returns the interface to
+ * idle. Reading to ULTIMATE_END needs no abort.
+ *
  *     if (ultimate_opendir() == ULTIMATE_OK)
  *         while (ultimate_readdir(name, sizeof(name), &attrib) == ULTIMATE_OK)
  *             puts(name);

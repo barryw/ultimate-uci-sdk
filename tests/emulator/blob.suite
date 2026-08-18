@@ -147,5 +147,195 @@ suites {
       assert($df08 == $01, "length high: 256")
       assert($df01 == $90, "EXECUTE and NOW, mode 00: C64 to REU")
     }
+
+    ; The DOS service, driven entirely through the block: a caller with no
+    ; symbols, no linker and no C runtime, which is every toolchain the blob
+    ; exists for. Each entry leaves its answer in bp_result as well as in A.
+    test("blob-dos-walk-through-the-parameter-block", "chdir, getpath, opendir, readdir, open, read, close") {
+      jsr($8004, stop_on_rts = true, fail_on_brk = true)
+      assert(a == $00, "init")
+
+      $8129 = $2f            ; "/Usb0"
+      $812a = $55            
+      $812b = $73            
+      $812c = $62            
+      $812d = $30            
+      $812e = $00
+      $8100 = $ff
+      jsr($804f, stop_on_rts = true, fail_on_brk = true)   ; +$4F chdir
+      assert($8100 == $00, "chdir: bp_result is ULTIMATE_OK")
+
+      $8151 = $00
+      jsr($8052, stop_on_rts = true, fail_on_brk = true)   ; +$52 getpath
+      assert($8100 == $00, "getpath succeeded")
+      assert($8151 == $2f, "and the path is in bp_reply, starting '/'")
+
+      jsr($8055, stop_on_rts = true, fail_on_brk = true)   ; +$55 opendir
+      assert($8100 == $00, "opendir succeeded")
+
+      $8251 = $00
+      jsr($8058, stop_on_rts = true, fail_on_brk = true)   ; +$58 readdir
+      assert($8100 == $00, "readdir returned an entry")
+      assert($8251 == $10, "bp_attrib says DOS_ATTR_DIR")
+      assert($8151 == $64, "'d' of data, with the attribute byte lifted off it")
+
+      ; **The walk is finished before anything else is sent.** The firmware is
+      ; midway through a reply chain until the last entry has been read, and a
+      ; command sent into that times out. Two entries here, so the third call
+      ; is the end.
+      jsr($8058, stop_on_rts = true, fail_on_brk = true)   ; +$58 readdir
+      assert($8100 == $00, "the second entry")
+      assert($8151 == $62, "'b' of big.bin")
+      jsr($8058, stop_on_rts = true, fail_on_brk = true)   ; +$58 readdir
+      assert($8100 == $0a, "ULTIMATE_END: the directory is finished")
+
+      $8129 = $62            ; "big.bin"
+      $812a = $69            
+      $812b = $67            
+      $812c = $2e            
+      $812d = $62            
+      $812e = $69            
+      $812f = $6e            
+      $8130 = $00
+      $8251 = $01                                          ; bp_attrib: DOS_FA_READ
+      jsr($805b, stop_on_rts = true, fail_on_brk = true)   ; +$5B open
+      assert($8100 == $00, "open succeeded")
+
+      $8103 = $00                                          ; bp_addr = $4000
+      $8104 = $40
+      $8105 = $40                                          ; bp_len: ask for 64
+      $8106 = $00
+      $4000 = $ff
+      jsr($8061, stop_on_rts = true, fail_on_brk = true)   ; +$61 read
+      assert($8100 == $00, "read succeeded")
+      assert($8105 == $40, "bp_len came back as how many arrived")
+      assert($4000 == $00, "and big.bin counts up from zero")
+
+      jsr($805e, stop_on_rts = true, fail_on_brk = true)   ; +$5E close
+      assert($8100 == $00, "close succeeded")
+    }
+
+    ; The write half, and the cleanup that the test data policy in
+    ; docs/handover.md section 6 requires: the file is created here, used here,
+    ; and deleted here.
+    test("blob-write-walk-through-the-parameter-block", "open, write, seek, save, bload, delete") {
+      jsr($8004, stop_on_rts = true, fail_on_brk = true)
+
+      $8129 = $2f            ; "/Usb0/data"
+      $812a = $55            
+      $812b = $73            
+      $812c = $62            
+      $812d = $30            
+      $812e = $2f            
+      $812f = $64            
+      $8130 = $61            
+      $8131 = $74            
+      $8132 = $61            
+      $8133 = $00
+      jsr($804f, stop_on_rts = true, fail_on_brk = true)   ; +$4F chdir
+      assert($8100 == $00, "in the fixture's subdirectory")
+
+      $8129 = $62            ; "bl.tmp"
+      $812a = $6c            
+      $812b = $2e            
+      $812c = $74            
+      $812d = $6d            
+      $812e = $70            
+      $812f = $00
+      $8251 = $0b                                          ; CREATE_ALWAYS|WRITE|READ
+      jsr($805b, stop_on_rts = true, fail_on_brk = true)   ; +$5B open
+      assert($8100 == $00, "the file was created")
+
+      $4200 = $de
+      $4201 = $ad
+      $4202 = $be
+      $4203 = $ef
+      $8103 = $00                                          ; bp_addr = $4200
+      $8104 = $42
+      $8105 = $04                                          ; bp_len = 4
+      $8106 = $00
+      jsr($8064, stop_on_rts = true, fail_on_brk = true)   ; +$64 write
+      assert($8100 == $00, "write succeeded")
+      jsr($805e, stop_on_rts = true, fail_on_brk = true)   ; +$5E close
+
+      $8251 = $01
+      jsr($805b, stop_on_rts = true, fail_on_brk = true)   ; +$5B open, for reading
+      assert($8100 == $00, "and it opens again")
+
+      $8252 = $02                                          ; bp_pos = 2
+      $8253 = $00
+      $8254 = $00
+      $8255 = $00
+      jsr($8067, stop_on_rts = true, fail_on_brk = true)   ; +$67 seek
+      assert($8100 == $00, "seek succeeded")
+
+      $8103 = $00                                          ; bp_addr = $4300
+      $8104 = $43
+      $8105 = $10                                          ; ask for sixteen
+      $8106 = $00
+      $4300 = $00
+      jsr($8061, stop_on_rts = true, fail_on_brk = true)   ; +$61 read
+      assert($8105 == $02, "two bytes left after the seek")
+      assert($4300 == $be, "and they are the third and fourth written")
+      jsr($805e, stop_on_rts = true, fail_on_brk = true)   ; +$5E close
+
+      ; save writes a region straight out of memory, and bload reads it back
+      ; over a wiped buffer so the comparison cannot pass on what was there.
+      $8103 = $00                                          ; bp_addr = $4200
+      $8104 = $42
+      $8105 = $04
+      $8106 = $00
+      jsr($8073, stop_on_rts = true, fail_on_brk = true)   ; +$73 save
+      assert($8100 == $00, "save succeeded")
+
+      $4200 = $00
+      $4203 = $00
+      $8105 = $04
+      $8106 = $00
+      jsr($8070, stop_on_rts = true, fail_on_brk = true)   ; +$70 bload
+      assert($8100 == $00, "bload succeeded")
+      assert($8107.w == $4204, "bp_end: four bytes, ending where they started plus four")
+      assert($4200 == $de, "byte for byte")
+      assert($4203 == $ef, "all four of them")
+
+      jsr($806a, stop_on_rts = true, fail_on_brk = true)   ; +$6A delete
+      assert($8100 == $00, "and the fixture tree is as it was found")
+    }
+
+    ; The REU entries. u64sim has RAM at $DF00-$DF0A rather than an expansion,
+    ; which is enough to see the block reach the registers, and it does not
+    ; implement the DOS REU pair at all - so those two are pinned at the
+    ; ULTIMATE_ERR_NOT_SUPPORTED a caller has to handle on any firmware that
+    ; answers the same way.
+    test("blob-reu-entries", "available, fetch, and the two that go through DOS") {
+      $df00 = $40                                          ; REU_STAT_DONE
+
+      jsr($8076, stop_on_rts = true, fail_on_brk = true)   ; +$76 reu_available
+      assert(a == $01, "plain RAM answers the probe, as reu.s says it will")
+
+      $8103 = $00                                          ; bp_addr = $4400
+      $8104 = $44
+      $8256 = $00                                          ; bp_reu = 0
+      $8257 = $00
+      $8258 = $00
+      $8259 = $00
+      $825a = $20                                          ; bp_reulen = 32
+      $825b = $00
+      $825c = $00
+      $825d = $00
+      $8100 = $ff
+      jsr($807c, stop_on_rts = true, fail_on_brk = true)   ; +$7C reu_fetch
+      assert($8100 == $00, "fetch reported the transfer done")
+      assert($df01 == $91, "EXECUTE and NOW, mode 01: REU to C64")
+      assert($df03 == $44, "and the C64 address came out of the block")
+
+      $8100 = $ff
+      jsr($807f, stop_on_rts = true, fail_on_brk = true)   ; +$7F reu_load
+      assert($8100 == $04, "ULTIMATE_ERR_NOT_SUPPORTED, from this firmware")
+
+      $8100 = $ff
+      jsr($8082, stop_on_rts = true, fail_on_brk = true)   ; +$82 reu_save
+      assert($8100 == $04, "and the same for reu_save")
+    }
   }
 }

@@ -85,11 +85,7 @@ _ultimate_identify:
         lda (c_sp),y
         sta ult_buflen + 1
         iny
-        lda (c_sp),y
-        sta ult_buf
-        iny
-        lda (c_sp),y
-        sta ult_buf + 1
+        jsr cc_ptr_at_y
         iny
         lda (c_sp),y
         pha                     ; target
@@ -112,11 +108,7 @@ _ultimate_get_model:
         lda (c_sp),y
         sta ult_buflen + 1
         iny
-        lda (c_sp),y
-        sta ult_buf
-        iny
-        lda (c_sp),y
-        sta ult_buf + 1
+        jsr cc_ptr_at_y
         jsr incsp4
         jsr ultimate_get_model
         ldx #$00
@@ -164,11 +156,7 @@ cc_buf_len_out:
         lda (c_sp),y
         sta ult_buflen + 1
         iny
-        lda (c_sp),y
-        sta ult_buf
-        iny
-        lda (c_sp),y
-        sta ult_buf + 1
+        jsr cc_ptr_at_y
         jmp incsp4
 
 ; uint8_t ultimate_getpath(char *buf, uint16_t buflen, uint16_t *outlen);
@@ -213,11 +201,7 @@ _ultimate_readdir:
 _ultimate_open:
         pha
         ldy #$00
-        lda (c_sp),y
-        sta ult_buf
-        iny
-        lda (c_sp),y
-        sta ult_buf + 1
+        jsr cc_ptr_at_y
         jsr incsp2
         pla
         jsr ultimate_open
@@ -231,11 +215,7 @@ _ultimate_write:
         sta ult_buflen
         stx ult_buflen + 1
         ldy #$00
-        lda (c_sp),y
-        sta ult_buf
-        iny
-        lda (c_sp),y
-        sta ult_buf + 1
+        jsr cc_ptr_at_y
         jsr incsp2
         jsr ultimate_write
         ldx #$00
@@ -299,21 +279,24 @@ cc_name_addr_max:
         lda (c_sp),y
         sta ult_addr + 1
         iny
-        lda (c_sp),y
-        sta ult_buf
-        iny
-        lda (c_sp),y
-        sta ult_buf + 1
+        jsr cc_ptr_at_y
         jmp incsp4
 
 cc_name_only:
         ldy #$00
+        jsr cc_ptr_at_y
+        jmp incsp2
+
+; The two bytes at (c_sp),y into ult_buf. Seven of the unpackers here do exactly
+; this, at four different stack offsets, so the offset stays the caller's
+; business in Y and the copy is written once.
+cc_ptr_at_y:
         lda (c_sp),y
         sta ult_buf
         iny
         lda (c_sp),y
         sta ult_buf + 1
-        jmp incsp2
+        rts
 
 ; ---------------------------------------------------------------------------
 ; reu.s. Both pairs put the REU address and the length in the same two

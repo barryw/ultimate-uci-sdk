@@ -26,7 +26,7 @@ binding that reimplements the handshake is a bug, not a feature.
 
 ## Layer 1 — UCI core
 
-`src/uci/uci_core.s`. About 1000 lines of 6502, assembling to 1398 bytes.
+`src/uci/uci_core.s`. About 1300 lines of 6502, assembling to 1504 bytes.
 
 Owns: command framing, the four-state handshake, bounded waiting, queue
 draining, abort and recovery, and the translation of firmware status replies
@@ -60,11 +60,11 @@ into an API that reads naturally on a C64, and each one is built from
 `uci_exec()` alone:
 
 ```
-services/dos/       open, close, read, write, seek, stat, directories
-services/file/      streaming helpers over dos
-services/network/   sockets
-services/http/      requests, headers, JSON bodies
-services/control/   drives, freeze, reboot, REU images, palette
+src/uci/dos.s       open, close, read, write, seek, delete, directories
+src/uci/file.s      load, bload, save - two-tier, over dos or SoftwareIEC
+src/uci/reu.s       stash and fetch over DMA, and the DOS REU pair
+src/uci/palette.s   the running palette, on the control target
+src/uci/turbo.s     CPU speed, which is not a UCI command at all
 ```
 
 Services are where target-specific knowledge lives — that `82` means something
@@ -72,8 +72,16 @@ different on the network target than on the control target, that SoftwareIEC
 answers in binary, that a `READ_DATA` longer than 512 bytes arrives in chunks.
 The core deliberately does not know any of that.
 
-The directories above do not exist yet. They will be created when there is code
-to put in them.
+One file per service, flat, because a service is a few hundred bytes of 6502 and
+a directory per file would be filing rather than structure. Network and HTTP are
+the two that do not exist yet; the generic form reaches both today.
+
+**Two services do not go through `uci_exec` at all, and the list is closed.**
+`turbo.s` and `reu.s` drive hardware registers directly, because the operations
+they expose — CPU speed, and moving bytes between C64 RAM and the expansion —
+have no UCI command behind them. The test that admits one is exactly that: does
+the operation exist on the interface at all. `tools/test_registers.py` enforces
+the boundary.
 
 ## Layer 3 — bindings
 
@@ -84,13 +92,13 @@ whatever thin thing makes the one implementation reachable from that toolchain.
 |---|---|---|
 | ca65 / cl65 assembly | `bindings/asm` — request block, jump-table entry points, generated constants | working |
 | cc65 | `bindings/cc65` — compiles the core into `ultimate.lib` | working |
-| Oscar64 | `bindings/oscar64` — a source list; Oscar64 links whole programs | **broken**: it lists the C core the assembly rewrite replaced |
-| llvm-mos | needs its own core or a relocatable binary with a jump table | designed, not built |
-| KickC | needs its own core, held to the conformance tests | designed, not built |
-| BASIC | a separate project on top of the C API, e.g. CustomBasicCommands | out of scope here |
+| KickAssembler, ACME, 64tass | `bindings/blob` — a standalone binary with a jump table, plus generated constant files | working |
+| Oscar64, llvm-mos, KickC | `bindings/blob` — the same, since none of them can link a ca65 object | working |
+| BASIC | `src/basic` — a wedge that owns four RAM vectors and adds 22 keywords | working, `.prg` and `.crt` |
 
 None of these contain protocol knowledge. `bindings/asm/ultimate_asm.s` is 30
-lines of `jmp`; `bindings/oscar64/ultimate.mk` is a list of filenames.
+lines of `jmp`, and the blob is the library's own object files linked at a base
+address — not a port, and not a second implementation.
 
 ## Testing, in two layers
 

@@ -5,10 +5,14 @@
 ;
 ;   sim6502 -s timeout.suite --backend u64sim --u64sim-uci-latency 200000
 ;
-; Every entry point completes or returns ULTIMATE_ERR_TIMEOUT - that is the
-; guarantee the SDK sells, and this is the only place it can be exercised
-; without unplugging something. The latency is a suite-wide setting, which is
-; why this is its own file: every other test wants a device that answers.
+; The guarantee the SDK sells is that every entry point completes or returns
+; ULTIMATE_ERR_TIMEOUT. **This exercises one path of it** - a command sent to an
+; interface that never leaves Busy - which is the path every other entry point
+; reaches the hardware through. Bring-up is asserted to still *succeed* under
+; the same latency, because init polls for idle rather than for an answer.
+;
+; It is its own file because the latency is a suite-wide setting: every other
+; test wants a device that answers.
 ;
 ; SPDX-License-Identifier: MIT
 

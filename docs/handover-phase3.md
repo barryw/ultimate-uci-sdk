@@ -23,12 +23,12 @@ and what the next person should not have to rediscover.
 | network, http services | not started, and not needed: the generic form reaches them |
 
 ```
-make test         GREEN   104 host unit tests + 182 across 8 suites
-make hardware-run GREEN   5/5 scenarios, 38-50 checks each, 1-2 skips
+make test         GREEN   110 host unit tests + 187 across 8 suites
+make hardware-run GREEN   5/5 scenarios, 40-52 checks each, 1-2 skips
 make basic-run    GREEN   32/32 from the .prg and 32/32 from the .crt
 make coverage     GREEN   24/101 commands, and 0 wrapped-but-untested
-make blob         GREEN   5078 bytes at $8000, 287 relocations
-make wedge        GREEN   wedge 2741 of the 4K at $C000, SDK 3533 of the 8K at $A000
+make blob         GREEN   5037 bytes at $8000, 305 relocations
+make wedge        GREEN   wedge 2741 of the 4K at $C000, SDK 3498 of the 8K at $A000
 ```
 
 **The promise the SDK was built to prove now holds end to end.** The same

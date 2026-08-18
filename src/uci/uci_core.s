@@ -303,7 +303,37 @@ uci_poll_reply:
 ; ---------------------------------------------------------------------------
 uci_abort:
 _uci_abort:
-        lda #UCI_CTRL_ABORT
+        ; --- release whatever block the interface is holding, first ---
+        ;
+        ; **An abort is not serviced while a reply block is on the table.** The
+        ; firmware is waiting for DATA_ACC, and until it gets one the state
+        ; never leaves data-more, so the poll below times out and the interface
+        ; stays exactly as stuck as it was. A program that walked half a
+        ; directory and then gave up hits this, and so does one that died in
+        ; the middle of any reply chain - which is the case abort exists for.
+        ;
+        ; Releasing without reading is what a drain wants: the block's queues
+        ; are reset by DATA_ACC whether or not anything read them.
+        ;
+        ; Bounded like every other loop here, by the same budget: a directory
+        ; of any size drains inside it, and a device that never leaves
+        ; data-more cannot hold the CPU for ever.
+        ldx uci_timeout
+@drain: ldy #$00
+@block: lda UCI_REG_STATUS
+        and #UCI_STAT_STATE
+        cmp #UCI_STATE_DATA_LAST
+        bcc @clear                      ; idle or busy: nothing to release
+        lda #UCI_CTRL_DATA_ACC
+        sta UCI_REG_CONTROL
+        dey
+        bne @block
+        lda uci_timeout                 ; zero means wait forever
+        beq @drain
+        dex
+        bne @drain
+
+@clear: lda #UCI_CTRL_ABORT
         sta UCI_REG_CONTROL
         jsr uci_poll_idle
         bcs @timeout
@@ -377,6 +407,18 @@ uci_get_word:
         iny
         lda (uci_rq),y
         sta uci_tmp + 1
+        rts
+
+; ---------------------------------------------------------------------------
+; Internal: load a request field into uci_ptr, the working pointer.
+;   Y = field offset  ->  A = the high byte, so `ora uci_ptr` tests for null
+; ---------------------------------------------------------------------------
+uci_get_ptr:
+        lda (uci_rq),y
+        sta uci_ptr
+        iny
+        lda (uci_rq),y
+        sta uci_ptr + 1
         rts
 
 ; ---------------------------------------------------------------------------
@@ -641,11 +683,7 @@ uci_exec_send:
         sta UCI_REG_CMDDATA
 
         ldy #UCI_REQ_ARGS
-        lda (uci_rq),y
-        sta uci_ptr
-        iny
-        lda (uci_rq),y
-        sta uci_ptr + 1
+        jsr uci_get_ptr
         ldy #UCI_REQ_ARGLEN
         jsr uci_get_word
         lda uci_tmp
@@ -655,11 +693,7 @@ uci_exec_send:
         jsr uci_write_span
 
         ldy #UCI_REQ_PAYLOAD
-        lda (uci_rq),y
-        sta uci_ptr
-        iny
-        lda (uci_rq),y
-        sta uci_ptr + 1
+        jsr uci_get_ptr
         ldy #UCI_REQ_PAYLOADLEN
         jsr uci_get_word
         lda uci_tmp
@@ -783,11 +817,7 @@ uci_translate:
 uci_read_block:
         ; uci_ptr = data buffer, advanced past whatever is already stored
         ldy #UCI_REQ_DATA
-        lda (uci_rq),y
-        sta uci_ptr
-        iny
-        lda (uci_rq),y
-        sta uci_ptr + 1
+        jsr uci_get_ptr
         ora uci_ptr
         bne @have_buf
         jmp @discard_all        ; no buffer: read and drop, not truncation
@@ -914,11 +944,7 @@ uci_read_block:
 uci_store_status:
         pha
         ldy #UCI_REQ_STATUS
-        lda (uci_rq),y
-        sta uci_ptr             ; free by now: the data phase has finished
-        iny
-        lda (uci_rq),y
-        sta uci_ptr + 1
+        jsr uci_get_ptr         ; free by now: the data phase has finished
         ora uci_ptr
         beq @drop
 

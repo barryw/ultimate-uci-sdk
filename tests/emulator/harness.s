@@ -34,6 +34,7 @@
         .import uci_decode, uci_dec_target, uci_dec_ptr, uci_dec_len
         .import uci_status_fmt
         .import uci_set_timeout_a, uci_get_timeout_a
+        .import uci_abort
         .import uci_last_code
         .import ultimate_available, ultimate_identify, ultimate_get_model
         .import ultimate_strerror
@@ -78,6 +79,7 @@
         .export t_reu_load, t_reu_save, reu_at, reu_len
         .export dir_attrib
         .export t_req_reset
+        .export t_abort
         .export t_exec
         .export t_decode
         .export t_status_fmt
@@ -511,6 +513,13 @@ t_save: jsr set_load_args
 ; to prove the registers are programmed with the right bytes in the right order
 ; and not enough to move anything. The suite pokes the done bit itself to say
 ; which outcome it is testing; hardware does the real transfer.
+
+; The recovery hatch, as a caller reaches it: abandon whatever the interface is
+; holding and put it back to idle.
+t_abort:
+        jsr uci_abort
+        sta result
+        rts
 
 t_reu_avail:
         jsr ultimate_reu_available

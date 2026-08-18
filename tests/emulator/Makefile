@@ -66,6 +66,7 @@ HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_available \
                 t_load t_bload t_save load_addr load_max load_end \
                 t_reu_avail t_reu_stash t_reu_fetch t_reu_load t_reu_save \
                 reu_at reu_len \
+                t_abort \
                 t_decode t_status_fmt t_strerror t_set_timeout t_get_timeout \
                 result devcode reply reply_len reply0 reply1 reply2 reply3 \
                 caps caps_present caps_ident caps_targets_lo caps_targets_hi \

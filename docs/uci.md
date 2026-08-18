@@ -173,6 +173,20 @@ at once: a stuck state, a half-written command, and (with `CLR_ERR` after it) a
 latched state error. Gideon's kernal does exactly this on reset, in
 `ulti_restor`. The SDK does it in `uci_init()`.
 
+**There is a fourth mode, and abort alone does not clear it.** An abort is not
+serviced while the interface is holding a reply block: the firmware is waiting
+for `DATA_ACC`, the state never leaves *data-more*, and the abort's own wait for
+idle times out. A program that abandons a reply chain half way - a directory
+walk given up after the first entry is the ordinary way to get here - is then
+stuck with every later command returning `ULTIMATE_ERR_TIMEOUT`, including the
+abort meant to rescue it.
+
+`uci_abort()` therefore releases whatever is held first, with `DATA_ACC`, until
+the state falls below *data-last*, and only then aborts. Releasing without
+reading is exactly right for this: `DATA_ACC` resets both queues whether or not
+anything read them. The loop is bounded by the same timeout budget as every
+other wait in the SDK.
+
 ---
 
 ## Targets

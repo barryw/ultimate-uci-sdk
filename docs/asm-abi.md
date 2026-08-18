@@ -162,6 +162,12 @@ sharing them.
 | `uci_get_timeout_a` | — | `A` = current budget |
 | `uci_last_code` | — | `A` = low, `X` = high of the raw device code |
 
+**Stopping a directory walk early needs `uci_abort`.** `ultimate_readdir` is one
+live exchange with the firmware, which holds a reply block until it is released
+— so a walk given up half way leaves the interface unable to take another
+command at all. `uci_abort` releases what is held and puts the state back to
+idle. Reading to `ULTIMATE_END` needs nothing.
+
 ## The request block
 
 `uci_req` is `UCI_REQ_SIZE` (22) bytes, exported by the SDK — in BSS by

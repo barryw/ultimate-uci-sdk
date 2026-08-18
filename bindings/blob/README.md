@@ -8,7 +8,7 @@ can use it — with no linking at all.
     make -C bindings/blob BASE=c000       # at $C000 - no longer big enough
     make -C bindings/blob BASE=6000 VARS=32512 ZP=163
 
-The default build is 5,078 bytes: the 256-byte jump table page and the
+The default build is 5,037 bytes: the 256-byte jump table page and the
 512-byte parameter block, fixed at those sizes so every offset below holds
 regardless of how little of them is used, plus the code itself.
 
@@ -104,14 +104,14 @@ At `base+$100`, page-aligned so a BASIC program needs no address arithmetic.
 
 | Offset | | Size |
 |---|---|---|
-| `+$00` | result | 1 |
-| `+$01` | raw device code | 2 |
-| `+$03` | address argument | 2 |
-| `+$05` | length argument | 2 |
-| `+$07` | end address after a load | 2 |
-| `+$09` | status string | 32 |
-| `+$29` | filename | 40 |
-| `+$51` | reply buffer | 256 |
+| `+$00` | `bp_result` — the last entry's result code | 1 |
+| `+$01` | `bp_devcode` — **yours**: the SDK never writes it, see below | 2 |
+| `+$03` | `bp_addr` — address argument | 2 |
+| `+$05` | `bp_len` — length argument, and what a read reports back | 2 |
+| `+$07` | `bp_end` — the address after the last byte a load wrote | 2 |
+| `+$09` | `bp_status` — **yours**: 32 bytes to point a hand-built request at | 32 |
+| `+$29` | `bp_name` — filename, NUL terminated | 40 |
+| `+$51` | `bp_reply` — where getpath and readdir put their answer | 256 |
 | `+$151` | `bp_attrib` — open's `DOS_FA_*` mask in, readdir's attributes out | 1 |
 | `+$152` | `bp_pos` — seek's 32-bit position | 4 |
 | `+$156` | `bp_reu` — address in the RAM expansion | 4 |
@@ -120,6 +120,13 @@ At `base+$100`, page-aligned so a BASIC program needs no address arithmetic.
 Offsets are from the block, so `bp_reu` in a `$8000` build is at `$8256`. The
 block is a fixed 512 bytes whatever is used of it, which is why the four above
 could be appended without moving anything.
+
+**Two of these fields are the caller's, not the SDK's.** `bp_devcode` and
+`bp_status` are never written by any entry above: the raw device code comes from
+`uci_last_code` at `+$19`, and the status *text* is only kept when a caller
+builds a request themselves and points `UCI_REQ_STATUS` at a buffer — which is
+what those 32 bytes are for. They are reserved rather than removed because the
+layout is published, and reserved space costs a fixed block nothing.
 
 ## The SDK's variable block
 
@@ -165,8 +172,8 @@ assemble `reloc.s` into your loader:
 The table is a little-endian count followed by that many 16-bit offsets, each
 naming a byte that holds the high half of an absolute address. It is produced by
 diffing two builds one page apart, so it cannot fall behind the assembler the
-way a hand-written instruction table would. The default build has 287 such
-offsets, a 576-byte table.
+way a hand-written instruction table would. The default build has 305 such
+offsets, a 612-byte table.
 
 `tests/emulator/blob-relocated.suite` moves the blob and then erases the
 original before calling it, which is what turns a missing relocation entry into

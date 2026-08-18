@@ -33,6 +33,7 @@
         .import ult_req, ult_buf, ult_buflen, ult_outlen
         .import ult_attrib, ult_dir, ult_num
         .import ult_req_clear, ult_exec_string
+        .import ult_have_buf, ult_invalid
 
         .export ultimate_chdir,   _ultimate_chdir
         .export ultimate_delete,  _ultimate_delete
@@ -84,12 +85,8 @@ ultimate_delete:
 ; still the answer to "where am I".
 ; ---------------------------------------------------------------------------
 ultimate_getpath:
-        lda ult_buf
-        ora ult_buf + 1
-        beq @invalid
-        lda ult_buflen
-        ora ult_buflen + 1
-        beq @invalid
+        jsr ult_have_buf
+        bcc @invalid
 
         jsr ult_req_clear
         jsr ult_dos_target
@@ -103,9 +100,7 @@ ultimate_getpath:
         rts
 
 @invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
-        ldx #$00
-        rts
+        jmp ult_invalid
 
 ; ---------------------------------------------------------------------------
 ; ultimate_opendir  ->  A = ULTIMATE_* result
@@ -144,17 +139,18 @@ _ultimate_opendir:
 ; **Do not issue other commands between calls.** The walk is a live exchange
 ; with the Ultimate, and another command in the middle of it ends the
 ; directory. Read the whole directory, then do something with it.
+;
+; **To stop early, call uci_abort.** The firmware holds a reply block until it
+; is released, so a walk left half read leaves the interface unable to take the
+; next command at all. uci_abort releases what is held and puts the state back
+; to idle; nothing else does.
 ; ---------------------------------------------------------------------------
 ULT_DIR_FIRST = 1
 ULT_DIR_NEXT  = 2
 
 ultimate_readdir:
-        lda ult_buf
-        ora ult_buf + 1
-        beq @invalid
-        lda ult_buflen
-        ora ult_buflen + 1
-        beq @invalid
+        jsr ult_have_buf
+        bcc @invalid
 
         lda ult_dir
         bne @walking
@@ -217,9 +213,7 @@ ultimate_readdir:
         rts
 
 @invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
-        ldx #$00
-        rts
+        jmp ult_invalid
 
 ; ---------------------------------------------------------------------------
 ; ultimate_open   A = DOS_FA_* mask, ult_buf = NUL-terminated name
@@ -273,12 +267,8 @@ _ultimate_close:
 ; the end of the file, not an error: ult_outlen is the answer.
 ; ---------------------------------------------------------------------------
 ultimate_read:
-        lda ult_buf
-        ora ult_buf + 1
-        beq @invalid
-        lda ult_buflen
-        ora ult_buflen + 1
-        beq @invalid
+        jsr ult_have_buf
+        bcc @invalid
 
         lda ult_buflen
         sta ult_num
@@ -313,9 +303,7 @@ ultimate_read:
         rts
 
 @invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
-        ldx #$00
-        rts
+        jmp ult_invalid
 
 ; ---------------------------------------------------------------------------
 ; ultimate_write   ult_buf = data, ult_buflen = length  ->  A = result
@@ -325,12 +313,8 @@ ultimate_read:
 ; copied in front of the caller's data, which is what keeps this zero-copy.
 ; ---------------------------------------------------------------------------
 ultimate_write:
-        lda ult_buf
-        ora ult_buf + 1
-        beq @invalid
-        lda ult_buflen
-        ora ult_buflen + 1
-        beq @invalid
+        jsr ult_have_buf
+        bcc @invalid
 
         jsr ult_req_clear
         jsr ult_dos_target
@@ -346,9 +330,7 @@ ultimate_write:
         jmp ult_dos_exec
 
 @invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
-        ldx #$00
-        rts
+        jmp ult_invalid
 
 ; ---------------------------------------------------------------------------
 ; ultimate_seek   ult_num = 32-bit position, little endian  ->  A = result

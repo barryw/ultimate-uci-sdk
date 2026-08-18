@@ -26,7 +26,7 @@
 
         .import uci_exec
         .import ult_req, ult_buf, ult_color
-        .import ult_req_clear
+        .import ult_req_clear, ult_invalid
 
         .export ultimate_palette_get,   _ultimate_palette_get
         .export ultimate_palette_set,   _ultimate_palette_set
@@ -78,9 +78,7 @@ _ultimate_palette_get:
         rts
 
 @invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
-        ldx #$00
-        rts
+        jmp ult_invalid
 
 ; ---------------------------------------------------------------------------
 ; ultimate_palette_set   A/X = pointer to UCI_PALETTE_BYTES bytes
@@ -112,9 +110,7 @@ _ultimate_palette_set:
         rts
 
 @invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
-        ldx #$00
-        rts
+        jmp ult_invalid
 
 ; ---------------------------------------------------------------------------
 ; ultimate_palette_set_color   ult_color = index, r, g, b
@@ -148,9 +144,7 @@ ultimate_palette_set_color:
         rts
 
 @invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
-        ldx #$00
-        rts
+        jmp ult_invalid
 
 ; ---------------------------------------------------------------------------
 ; ultimate_palette_reset  ->  A = ULTIMATE_* result

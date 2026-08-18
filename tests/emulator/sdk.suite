@@ -24,6 +24,19 @@ suites {
     symbols("/code/tests/emulator/harness.sym")
     load("/code/tests/emulator/harness.prg", strip_header = true)
 
+    ; Every variable a test reads back starts as $FF rather than as whatever
+    ; the loader happened to leave. Around twenty assertions here were
+    ; non-vacuous only by accident: the harness's BSS overlaps cc65's ONCE
+    ; segment, so `result` and the capability block held non-zero bytes before
+    ; each test - and if that overlap ever moved, a whole class of
+    ; `assert(... == $00)` would go quietly vacuous with nothing failing.
+    ;
+    ; The nine bytes are result, devcode, reply_len and the four-byte
+    ; capability block, in the order harness.s declares them.
+    setup {
+      memfill([result], 9, $ff)
+    }
+
     ; ---------------------------------------------------------------- bring-up
 
     test("sdk-signature", "the signature is on the bus and readable without blocking") {
@@ -364,18 +377,28 @@ suites {
       assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
     }
 
-    test("sdk-exec-rejects-wrapping-lengths", "two large lengths cannot wrap into a small one") {
+    ; The sum, and only the sum. Both lengths below are legal on their own -
+    ; 800 is under the 895-byte maximum - so this fails only if the total is
+    ; checked as well as the parts.
+    ;
+    ; A 16-bit wrap ($8000 + $8000 + 2 = 2) is unreachable and is deliberately
+    ; not tested: each length is rejected against the maximum before the sum is
+    ; computed, so no pair that wraps ever reaches the addition. A test using
+    ; those values passes on the first bound and proves nothing about the
+    ; second, which is what this one used to do.
+    test("sdk-exec-rejects-a-total-that-does-not-fit", "two legal lengths can still be too much together") {
       jsr([boot], stop_on_rts = true, fail_on_brk = true)
       jsr([t_init], stop_on_rts = true, fail_on_brk = true)
       jsr([t_req_reset], stop_on_rts = true, fail_on_brk = true)
       [req_target] = $01
       [req_command] = $01
-      [req_arglen] = $00
-      [req_arglen] + $01 = $80          ; $8000
-      [req_payloadlen] = $00
-      [req_payloadlen] + $01 = $80      ; $8000, and $8000 + $8000 + 2 = 2
+      [req_arglen] = $20                ; 800 bytes of arguments
+      [req_arglen] + $01 = $03
+      [req_payloadlen] = $20            ; and 800 of payload: 1602 with the
+      [req_payloadlen] + $01 = $03      ; target and command bytes
       jsr([t_exec], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+      assert([req_datalen].w == $0000, "and nothing went on the wire")
     }
 
     ; ---------------------------------------------------------------- identity
@@ -997,6 +1020,38 @@ suites {
       [result] = $ff
       jsr([t_readdir], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $0a, "ULTIMATE_END")
+    }
+
+    ; **A walk that is abandoned has to be aborted**, and until this was tested
+    ; the abort did not work either. The firmware holds a reply block until it
+    ; is released, and it does not service an abort while it is holding one -
+    ; so a program that read one entry and gave up left every later command
+    ; timing out, including the abort that was supposed to rescue it.
+    ;
+    ; uci_abort releases the block first now. This is the test that says so:
+    ; one entry, then straight into another command, which has to work.
+    test("sdk-abort-recovers-an-abandoned-walk", "giving up half way is a thing programs do") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      jsr([t_opendir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the walk started")
+      jsr([t_readdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "one entry, and then we lose interest")
+
+      [result] = $ff
+      jsr([t_abort], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the abort itself succeeds, which it did not before")
+
+      [result] = $ff
+      jsr([t_getpath], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and the interface takes commands again")
+
+      [result] = $ff
+      jsr([t_getpath], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "...more than one of them")
     }
 
     test("sdk-readdir-without-opendir", "a walk that was never started is over") {

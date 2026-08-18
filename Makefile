@@ -4,7 +4,7 @@
 #   make unittest    host-side Python unit tests only       (Python 3)
 #   make lib         the cc65 library                      (cc65)
 #   make blob        standalone binary with a jump table    (cc65)
-#   make examples    assembly, cc65 and Oscar64 examples   (cc65, Oscar64)
+#   make examples    the assembly and cc65 examples          (cc65)
 #   make emulator    the same thing; test is an alias      (cc65, Docker)
 #   make hardware    build the on-device test program      (cc65)
 #   make hardware-run U64_HOST=<ip>   drive it over the REST API
@@ -16,8 +16,6 @@
 
 .DEFAULT_GOAL := test
 
-# Point this at your oscar64 binary to include the Oscar64 example.
-OSCAR64 ?= oscar64
 
 all: lib examples emulator wedge
 
@@ -43,10 +41,9 @@ lib:
 blob:
 	$(MAKE) -C bindings/blob
 
-# The Oscar64 example is not built. bindings/oscar64/ultimate.mk lists the C
-# core that the assembly rewrite replaced, so the binding has to be redone -
-# and docs/handover.md says not to, until the service API has settled. Building
-# it conditionally on the compiler being installed only hid that.
+# Two examples, because there are two ways in: a ca65 link and a cc65 link.
+# Every other toolchain reaches the SDK through the standalone blob, which
+# needs no linking and no example of its own beyond bindings/blob/README.md.
 examples: lib
 	$(MAKE) -C examples/asm
 	$(MAKE) -C examples/cc65
@@ -100,7 +97,6 @@ clean:
 	$(MAKE) -C tests/hardware clean
 	$(MAKE) -C examples/asm clean
 	$(MAKE) -C examples/cc65 clean
-	$(MAKE) -C examples/oscar64 clean
 	$(MAKE) -C bindings/cc65 clean
 	$(MAKE) -C bindings/blob clean
 

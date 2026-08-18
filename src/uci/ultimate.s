@@ -23,7 +23,9 @@
         .export ultimate_identify
         .export ultimate_detect,    _ultimate_detect
         .export ultimate_get_model
-        .export ult_req_clear, ult_exec_string   ; the other service modules use both
+        ; The other service modules build on these four.
+        .export ult_req_clear, ult_exec_string
+        .export ult_have_buf, ult_invalid
 
 ; The probe buffer is deliberately small. Detection does not need to read an
 ; identification string, only to tell "NO TARGET" from anything else, and
@@ -70,6 +72,38 @@ ult_req_clear:
 @loop:  sta ult_req,x
         dex
         bpl @loop
+        rts
+
+; ---------------------------------------------------------------------------
+; Internal: did the caller give us somewhere to put the answer?
+;
+; Carry set when ult_buf and ult_buflen are both non-zero. Six entry points ask
+; exactly this before they touch the hardware, and the answer is always the same
+; five instructions - so it is written once here and jsr'd, which is smaller
+; than six copies and harder to get subtly different.
+; ---------------------------------------------------------------------------
+ult_have_buf:
+        lda ult_buf
+        ora ult_buf + 1
+        beq @none
+        lda ult_buflen
+        ora ult_buflen + 1
+        beq @none
+        sec
+        rts
+@none:  clc
+        rts
+
+; ---------------------------------------------------------------------------
+; Internal: the answer to a caller that asked for something impossible.
+;
+; A tail, not a subroutine: jmp here rather than jsr. Ten entry points end this
+; way, and X is zero because that is what a cc65 caller needs to see for an
+; unsigned char return.
+; ---------------------------------------------------------------------------
+ult_invalid:
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
+        ldx #$00
         rts
 
 ; ---------------------------------------------------------------------------
@@ -138,12 +172,8 @@ ult_exec_string:
 ; ---------------------------------------------------------------------------
 ultimate_identify:
         pha
-        lda ult_buf
-        ora ult_buf + 1
-        beq @invalid
-        lda ult_buflen
-        ora ult_buflen + 1
-        beq @invalid
+        jsr ult_have_buf
+        bcc @invalid
 
         jsr ult_req_clear
         pla
@@ -336,12 +366,8 @@ _ultimate_detect:
 ; stock C64 has to fold or convert it first.
 ; ---------------------------------------------------------------------------
 ultimate_get_model:
-        lda ult_buf
-        ora ult_buf + 1
-        beq @invalid
-        lda ult_buflen
-        ora ult_buflen + 1
-        beq @invalid
+        jsr ult_have_buf
+        bcc @invalid
 
         jsr ult_req_clear
         lda #UCI_TARGET_CONTROL
@@ -363,9 +389,7 @@ ultimate_get_model:
         rts
 
 @invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
-        ldx #$00
-        rts
+        jmp ult_invalid
 
         .rodata
 

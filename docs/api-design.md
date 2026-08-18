@@ -22,20 +22,20 @@ The assembly core costs the reach and keeps everything else:
 
 | | C core | assembly core |
 |---|---|---|
-| size | — | 1398 bytes for the transport, 673 for the service layer |
+| size | — | 1504 bytes for the transport, 488 for the service layer, and 98-634 for each service on top |
 | assembly callers | must initialise cc65's software stack | need nothing at all |
 | RAM | BSS, wherever the linker puts it | `UCI_VARS` places every byte, or BSS by default |
 | zero page | the C runtime's | four bytes, at an address you choose |
 | cc65 | native | native |
-| Oscar64, llvm-mos, KickC | native | needs a port, or a jump-table binary |
+| Oscar64, llvm-mos, KickC | native | the jump-table binary in `bindings/blob` |
 
-That last row is the whole bill, and it is why
-[handover.md](handover.md) says not to start those ports until the service API
-has settled: each one multiplies the cost of an API change, and there is nothing
-to gain by paying that early.
+That last row was the whole bill, and it is paid: the blob is the same object
+files linked at a base address, with a jump table at its first bytes and a
+parameter block behind it, so a toolchain that cannot link a ca65 object does
+not need a port at all. One implementation reaches all of them.
 
-`tests/emulator` is what makes a port safe when the time comes. Any replacement
-core has to pass it unchanged.
+`tests/emulator` is what would make a real port safe if one were ever wanted.
+Any replacement core has to pass it unchanged.
 
 ## Protocol bytes are never string literals
 
@@ -225,5 +225,8 @@ does inherit from the C core is the runtime initialisation requirement, which
   Undocumented upstream; see [uci.md](uci.md).
 - **DMA and IRQ.** The control bits are defined and documented. Nothing uses
   them yet. They are how a future high-speed path will work.
-- **REU.** `DOS_CMD_LOAD_REU` and the control target's REU commands are in the
-  constant tables, unwrapped. A future `services/reu` gets them.
+- **The control target's REU pair.** `src/uci/reu.s` wraps the DOS pair
+  (`$21`/`$22`) and the expansion's own DMA registers. `CTRL_CMD_LOAD_REU` stays
+  unwrapped on purpose: it never returns on firmware 3.14d and wedges the
+  interface until a power cycle, so it is reachable only through the generic
+  form, where issuing it is a deliberate act.

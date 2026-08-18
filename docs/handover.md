@@ -33,24 +33,24 @@ work to be useful: the palette, and turbo. The BASIC wedge is complete.
 
 ```
 make lib              GREEN
-make blob             GREEN     5078 bytes, 287 relocations, based at $8000
+make blob             GREEN     5037 bytes, 305 relocations, based at $8000
                                 with its variables at $9F00: file.s overflowed
                                 the old 4K at $C000 by 350 bytes and the link
                                 said so
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make wedge            GREEN     uci.prg 5983 bytes, uci.crt 8272. The wedge
+make wedge            GREEN     uci.prg 5948 bytes, uci.crt 8272. The wedge
                                 holds 2741 of the 4K at $C000, and the SDK runs
-                                at $A000 under BASIC ROM: 3533 of 8K, reached
+                                at $A000 under BASIC ROM: 3498 of 8K, reached
                                 through the stubs in src/basic/bank.s
-make test             GREEN     104 host unit tests + 182 tests across 8 suites
+make test             GREEN     110 host unit tests + 187 tests across 8 suites
 make basic-run        GREEN     32/32 from the .prg and 32/32 from the .crt, the
                                 same checks typed at a real C64. The cartridge
                                 costs BASIC 8K: 38911 bytes free becomes 30719
-make hardware-run     GREEN     5/5 scenarios on real hardware: 38 checks in
-                                the plain one, 50 with the RAM expansion
-                                switched on and 45 with turbo. The only skips
+make hardware-run     GREEN     5/5 scenarios on real hardware: 40 checks in
+                                the plain one, 52 with the RAM expansion
+                                switched on and 47 with turbo. The only skips
                                 left are turbo and the REU where their setting
                                 is off, which is what those scenarios exist to
                                 turn on. uci-disabled asserts one clean failure
@@ -301,25 +301,28 @@ them bite:
   `ultimate_strerror.s` asserts its table against it. `ULTIMATE_END` was the
   eleventh code the old note predicted would silently print "UNKNOWN ERROR".
 
+**Cleared in the cleanup pass after Phase 3:**
+- The blob's jump table entries are exercised: `blob.suite` walks the DOS, file
+  and REU services through the parameter block with no symbols at all, and
+  `tools/test_blob_table.py` fails the build when `blob.s` and the README
+  disagree about an offset - which is the cheaper half of generating the table
+  from the link map.
+- **The harness sentinels are in.** `sdk.suite`'s setup fills `result`,
+  `devcode`, `reply_len` and the capability block with `$FF` before every test,
+  so an assertion that only passed because BSS happened to be zero now fails.
+  All 56 still pass, which is the answer to whether they were vacuous.
+- `sdk-exec-rejects-wrapping-lengths` proved nothing: each length is bounded
+  before the sum, so no wrapping pair reaches the addition. It is
+  `sdk-exec-rejects-a-total-that-does-not-fit` now, with two lengths that are
+  legal apart and too much together - which only the sum check can catch.
+- `timeout.suite`'s header says what it exercises: one path, the one every
+  entry point reaches the hardware through.
+- `docs/architecture.md`'s size figure is measured again, from the link map.
+
 **Whenever the relevant file is next touched:**
-- `tools/gen_coverage.py`'s untested-entry-point gate was never extended to the
-  blob's jump table entries; most are never called by any test.
-- `bindings/blob/README.md`'s jump table is hand-written. The design asked for it
-  to be generated from the ca65 link map.
-- **~20 harness assertions are non-vacuous only by accident.** `harness.prg`'s
-  BSS overlaps cc65's ONCE segment by 38 bytes, so `result` and `caps_*` get
-  non-zero bytes before each test. If that overlap ever changes, a whole class of
-  `assert(... == $00)` goes vacuous with nothing failing. Use `memfill(..., $ff)`
-  sentinels, as `sdk-absent-softiec` already does correctly.
-- `sdk.suite`'s `sdk-exec-rejects-wrapping-lengths` is vacuous: `arglen` is
-  rejected against the maximum before the sum is computed, and with both bounds
-  in place a 16-bit wrap is unreachable. Delete it or say plainly that the sum
-  check is unreachable defence-in-depth.
-- `timeout.suite`'s header claims to prove bounded time for every entry point.
-  It exercises one path, and asserts init *succeeds* under that latency. Narrow
-  the claim or add the cases.
-- `docs/architecture.md` says `uci_core.s` assembles to 1398 bytes; measured is
-  1401. Predates Phase 1.
+- `tools/gen_coverage.py` gates SDK entry points, not the wedge's keywords. A
+  keyword could be added to `gen_keywords.py`, tokenise, and dispatch to nothing
+  without anything failing; `basic.suite` covers today's by hand.
 
 ---
 
@@ -426,10 +429,13 @@ Every shape was read out of the firmware source rather than transcribed, which
 is worth keeping up as the table grows: it caught two errors the prose had been
 carrying, one of them on Phase 3's critical path. See §2.
 
-Do not start the Oscar64 / llvm-mos / KickC ports until the service API has
-settled. The blob is now their route in, so none of them needs a port at all.
-`bindings/oscar64/ultimate.mk` still lists the deleted C core and does not
-build; it is marked broken.
+**The Oscar64 / llvm-mos / KickC ports are not wanted, and the question is
+closed.** The blob is their route in: the same object files linked at a base
+address, with a jump table and a parameter block, which every one of them can
+`jsr` without linking anything. `bindings/oscar64` was a source list naming the
+C core the assembly rewrite deleted, marked broken by its own header and built
+by nothing; it and its example are gone. A real port would still have to pass
+`tests/emulator` unchanged if anyone ever wanted one.
 
 ---
 

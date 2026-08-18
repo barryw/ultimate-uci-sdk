@@ -558,6 +558,22 @@ int main(void)
 after_write:
 
     /*
+     * Abandoning a directory walk, which is the ordinary way to reach the one
+     * failure mode abort could not clear: the firmware holds a reply block
+     * until it is released, does not service an abort while it holds one, and
+     * leaves every later command timing out. The simulator reproduces it and
+     * so does the real machine, which is why this runs in both places.
+     */
+    if (ultimate_opendir() != ULTIMATE_OK) {
+        skip("abort-recovers-an-abandoned-walk", "no directory to walk here");
+    } else {
+        ultimate_readdir(scratch, sizeof(scratch), NULL);   /* one entry, then stop */
+        check("abort-after-an-abandoned-walk", ULTIMATE_OK, uci_abort());
+        check("abort-recovers-an-abandoned-walk", ULTIMATE_OK,
+              ultimate_identify(UCI_TARGET_DOS1, scratch, sizeof(scratch), NULL));
+    }
+
+    /*
      * The RAM expansion, both halves of it: the DMA registers, which are the
      * only way to move bytes between C64 RAM and the expansion, and
      * DOS_CMD_LOAD_REU, which moves a file into it without the C64 seeing any
