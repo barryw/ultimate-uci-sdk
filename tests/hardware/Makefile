@@ -19,8 +19,22 @@ all: ucitest.prg ucitime.prg
 $(LIB): FORCE
 	$(MAKE) -C $(ROOT)/bindings/cc65 TARGET=$(TARGET)
 
+# The socket round trip needs something to talk to, and this file will not
+# assume one exists - see the fixtures at the top of ucitest.c for what happened
+# when it did. Give it a peer and those checks run; leave it out and they skip.
+#
+#   make NET_PEER=192.168.1.242:6464
+#
+# A dotted quad, not a name: cc65 charmaps source characters, and digits and
+# '.' survive that unchanged where letters do not. The far end only has to
+# accept a connection and send a byte.
+ifdef NET_PEER
+NET_DEFS := -DNET_PEER_HOST='"$(word 1,$(subst :, ,$(NET_PEER)))"' \
+            -DNET_PEER_PORT=$(word 2,$(subst :, ,$(NET_PEER)))
+endif
+
 ucitest.prg: ucitest.c $(LIB)
-	$(CL65) -t $(TARGET) -Osir -I $(ROOT)/include -o $@ ucitest.c $(LIB)
+	$(CL65) -t $(TARGET) -Osir -I $(ROOT)/include $(NET_DEFS) -o $@ ucitest.c $(LIB)
 
 ucitime.prg: ucitime.c $(LIB)
 	$(CL65) -t $(TARGET) -Osir -I $(ROOT)/include -o $@ ucitime.c $(LIB)

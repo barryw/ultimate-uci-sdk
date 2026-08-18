@@ -198,18 +198,42 @@ Answering handover-next.md §2's question directly: the figures there are all
 *local* commands and do not transfer. A socket read or write is 3-21 ms, which
 is frame-scale and fine; a connect is not, and cannot be made so.
 
-**The machine.** It dropped off the network twice, once during the read-length
-probe and once about fifteen minutes after a probe run had finished cleanly.
-Both needed a power cycle. That may be the same firmware fragility from two
-angles, or the second may be unrelated; it is not established either way, and it
-is the reason `make hardware-run` has not been run against this yet. Anyone
-picking this up should expect it and should not read a hang as their own bug.
+**`make hardware-run` is 5/5 green**, with the network address checks running:
+`net-interfaces`, `net-has-an-address` (which correctly picks interface 1 of 2
+on the bench machine), `net-macaddr`, `net-macaddr-is-not-empty`,
+`net-bad-interface-is-refused`, and both argument checks. **The socket round
+trip is not in that run**, and the next section says why.
+
+**The machine went down three times, and this cost real time.** docs/uci.md,
+"The network stack is fragile", has the table. The short version: socket traffic
+destabilises the firmware's network stack, the failure can arrive minutes after
+the program that caused it has finished, and each one needs a power cycle. Two
+of the three have credible causes — a read in the 769..1023 gap, and a connect
+to the machine's own address — and the third has none.
+
+**The first version of the hardware test connected to the Ultimate's own web
+server**, on the reasoning that a machine can always reach itself and that this
+kept the fixture policy intact. It hung in the connect; the run never finished,
+and the firmware stayed busy long enough to fail the three scenarios after it.
+That was a guess dressed as a fixture, and it is the mistake worth not repeating:
+the rest of this work measured everything and that one assumption was not.
+
+So the socket checks now need a peer and skip without one:
+
+    make -C tests/hardware NET_PEER=192.168.1.242:6464
+
+anything that accepts a connection and sends a byte. A dotted quad, not a name —
+cc65 charmaps source characters and digits survive that where letters do not.
+`hwtest.py` requires the address half to have run and merely *reports* whether
+the socket half did, because requiring a peer would make the routine run depend
+on something that may not be there.
 
 **What is left here:**
 
-1. `make hardware-run U64_HOST=<ip>`. The scenario `uci-enabled` now uses
-   `expect_clean_pass_with_net`, which fails if the socket checks skip rather
-   than run — so a pass means they really connected.
+1. The socket round trip against a real peer, through the wrappers. The
+   semantics underneath it are all measured (docs/uci.md) and the local logic is
+   in `sdk.suite`, but `ultimate_net_read`'s prefix-stripping and its
+   ULTIMATE_END mapping have not been run end to end on hardware.
 2. The four LISTEN commands stay unwrapped: `tools/gen_protocol.py` marks them
    INFERRED, their numbers are not in the published specification, and wrapping
    a guessed command number is not something this SDK does. The generic form
@@ -218,14 +242,7 @@ picking this up should expect it and should not read a hang as their own bug.
    format, so adding `UNET`-anything is a commitment that should follow a
    working demo rather than precede one.
 4. No worked example yet; `tests/hardware/ucitest.c`'s network section is the
-   only end-to-end reading of the API.
-
-**The peer is the Ultimate itself.** The hardware test connects to the machine's
-own web server, found by asking `ultimate_net_ipconfig` for the address of
-whichever interface has one. That keeps the fixture policy intact: nothing on
-the network has to exist for the test to run. It also means a second interface
-that reports a MAC and an all-zero address — which is what the bench machine
-does — is handled rather than tripped over.
+   only reading of the API end to end.
 
 ### 7.3 The HTTP service
 

@@ -66,8 +66,11 @@ class Result:
         self.done = block[12] == RESULT_DONE
         # Format 2 and later: whether the turbo checks ran rather than skipped.
         self.turbo_ran = bool(block[13]) if self.format >= 2 else False
-        # Format 3 and later: the same question for the socket checks.
+        # Format 3 and later: whether the network checks ran, and separately
+        # whether a socket really carried bytes - which needs a peer, so it is
+        # reported rather than required. See ucitest.c's fixtures.
         self.net_ran = bool(block[14]) if self.format >= 3 else False
+        self.net_sock_ran = bool(block[15]) if self.format >= 3 else False
 
     def __str__(self):
         if not self.valid:
@@ -114,21 +117,28 @@ def expect_clean_pass(r, state=None):
 
 
 def expect_clean_pass_with_net(r, state=None):
-    """A clean pass, and the socket checks really connected to something.
+    """A clean pass, and the network checks really ran.
 
     u64sim implements no network command at all, so tests/hardware is the only
-    place they are exercised - which makes a silent skip here the difference
-    between covered and not covered. The peer is the Ultimate's own web server,
-    so the only ways to skip are a firmware with no network target or a machine
-    with no address, and both are worth being told about rather than passing
-    quietly.
+    place they are exercised, which makes a silent skip the difference between
+    covered and not covered. What is required here is the half that needs
+    nothing on the network: the interface count, the addresses and the argument
+    checks.
+
+    **The socket round trip is reported, not required.** It needs a peer, and
+    ucitest.c will not assume one exists - see its fixtures for what happened
+    when it did. Build with NET_PEER=<dotted-quad>:<port> to run it.
     """
     problem = expect_clean_pass(r)
     if problem:
         return problem
     if not r.net_ran:
-        return ("the socket checks skipped: either this firmware has no "
+        return ("the network checks skipped: either this firmware has no "
                 "network target, or no interface had an address")
+    if not r.net_sock_ran:
+        state = state if state is not None else {}
+        state["note"] = ("the socket round trip skipped - no peer was built in; "
+                         "use NET_PEER=<dotted-quad>:<port> to exercise it")
     return None
 
 

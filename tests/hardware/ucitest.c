@@ -77,44 +77,38 @@ static ultimate_capabilities caps;
 /* ---------------------------------------------------------------------------
  * The network fixtures.
  *
- * http_get is written as bytes rather than as a string literal for the reason
- * ascii_upper() explains: cc65 charmaps source characters into PETSCII, and
- * the wire wants ASCII. Lowercase source happens to land on the ASCII
- * uppercase range, which is why "get" here really does send "GET" - but the
- * CRLFs would not survive the same trip, because the charmap turns \n into
- * $0D. Spelling all of it out removes the question.
+ * **The socket round trip needs a peer, and this file will not invent one.**
+ * An earlier version connected to the Ultimate's own web server, on the theory
+ * that a machine can always reach itself. It hung: the run never returned from
+ * the connect, and the firmware was still busy long enough afterwards to fail
+ * the three scenarios that followed. Whether a self-connect is refused,
+ * dropped, or merely slower than the harness waits was never established - the
+ * bench machine went off the network before the probe that would have settled
+ * it could run.
+ *
+ * So the peer is supplied from outside, or the socket checks skip:
+ *
+ *     make -C tests/hardware NET_PEER=192.168.1.242:6464
+ *
+ * with something at the far end that accepts a connection and sends a byte.
+ * **A dotted quad, not a name**: cc65 charmaps source characters into PETSCII,
+ * and digits and '.' survive that unchanged where letters do not.
+ *
+ * Everything that needs no peer - the interface count, the addresses, and the
+ * argument checks that never reach the wire - always runs, and is what the
+ * harness asserts on.
  * ------------------------------------------------------------------------ */
 static uint8_t net_buf[288];
 static uint8_t net_ip[UCI_NET_IPCONFIG_BYTES];
 static uint8_t net_mac[UCI_NET_MACADDR_BYTES];
-static char    net_host[16];
 
-static const uint8_t http_get[] = {
-    0x47, 0x45, 0x54, 0x20,                         /* "GET " */
-    0x2F, 0x20,                                     /* "/ "   */
-    0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x30, /* "HTTP/1.0" */
-    0x0D, 0x0A, 0x0D, 0x0A
-};
+#ifdef NET_PEER_HOST
+static const char net_peer[] = NET_PEER_HOST;
 
-/* Four bytes of an address as the dotted quad the firmware wants to be given.
-   The digits are built by arithmetic, so no charmap touches them. */
-static void dotted_quad(char *out, const uint8_t *ip)
-{
-    uint8_t i, v;
-
-    for (i = 0; i < 4; ++i) {
-        v = ip[i];
-        if (v >= 100) {
-            *out++ = 0x30 + v / 100;
-            v %= 100;
-            *out++ = 0x30 + v / 10;
-        } else if (v >= 10) {
-            *out++ = 0x30 + v / 10;
-        }
-        *out++ = 0x30 + v % 10;
-        *out++ = (i < 3) ? 0x2E : 0x00;
-    }
-}
+/* Something to say to a peer that waits to be spoken to. Bytes rather than a
+   literal, because the charmap would rewrite it. */
+static const uint8_t net_hello[] = { 0x68, 0x69, 0x0D, 0x0A };  /* "hi" CRLF */
+#endif
 
 /*
  * A fixed amount of CPU work, measured in 256ths of a raster frame.
@@ -227,6 +221,7 @@ static uint8_t readback[UCI_PALETTE_BYTES];
 
 static uint8_t turbo_ran;
 static uint8_t net_ran;
+static uint8_t net_sock_ran;
 
 static void publish(void)
 {
@@ -243,8 +238,11 @@ static void publish(void)
     RESULT_BLOCK[10] = (uint8_t)caps.targets;
     RESULT_BLOCK[11] = (uint8_t)(caps.targets >> 8);
     RESULT_BLOCK[13] = turbo_ran;
-    /* Format 3 and later: whether the socket checks ran rather than skipped. */
+    /* Format 3 and later: whether the network checks ran rather than skipped,
+       and separately whether a socket really carried bytes - which needs a peer
+       this file is handed rather than one it assumes exists. */
     RESULT_BLOCK[14] = net_ran;
+    RESULT_BLOCK[15] = net_sock_ran;
     RESULT_BLOCK[12] = RESULT_DONE;     /* last, always */
 }
 
@@ -713,16 +711,13 @@ after_write:
     }
 
     /* ------------------------------------------------------------------
-     * The network target: TCP sockets, against the Ultimate's own web server.
-     *
-     * **The peer is the machine the SDK is running on.** An Ultimate serves
-     * its REST API over HTTP, so the C64 connects back to its own address and
-     * this needs nothing on the network that the test did not already find.
-     * That is the same fixture policy the rest of this file follows: no
-     * dependency a second machine could fail to satisfy.
+     * The network target.
      *
      * u64sim implements none of these commands, so this file is the only place
-     * they are exercised at all.
+     * they run at all. It is in two halves deliberately: the addresses and the
+     * argument checks need nothing on the network and always run, and the
+     * socket round trip needs a peer and skips without one. The fixtures at the
+     * top of this file say why that split exists - it was not free.
      * ------------------------------------------------------------------ */
     if (!ultimate_has_network(&caps)) {
         skip("net-interfaces", "no network target on this firmware");
@@ -730,19 +725,15 @@ after_write:
         uint8_t  ifcount = 0;
         uint8_t  iface;
         uint8_t  live = 0xFF;
-        uint8_t  handle = 0xFF;
         uint16_t got;
-        uint16_t sent;
-        uint16_t total;
-        uint8_t  tries;
 
         err = ultimate_net_ifcount(&ifcount);
         check("net-interfaces", ULTIMATE_OK, err);
 
         /*
          * Which interface is up is not a given: this machine reports two, and
-         * on the bench one of them has a MAC and an all-zero address. The one
-         * with an address is the one to use.
+         * on the bench one of them has a MAC and an all-zero address. A count
+         * is not a list of usable interfaces, so find one with an address.
          */
         for (iface = 0; iface < ifcount && live == 0xFF; ++iface) {
             memset(net_ip, 0, sizeof(net_ip));
@@ -754,76 +745,77 @@ after_write:
         if (live == 0xFF) {
             skip("net-has-an-address", "no interface has an address");
         } else {
+            net_ran = 1;
             ok("net-has-an-address");
             printf("# ip=%u.%u.%u.%u iface=%u of %u\n",
                    net_ip[0], net_ip[1], net_ip[2], net_ip[3], live, ifcount);
 
             check("net-macaddr", ULTIMATE_OK,
                   ultimate_net_macaddr(live, net_mac));
-            /* A MAC of all zeros is not a MAC, and would pass on status alone. */
+            /* All zeros is not a MAC, and would pass on the status alone. */
             check("net-macaddr-is-not-empty", 1,
                   (net_mac[0] | net_mac[1] | net_mac[2] |
                    net_mac[3] | net_mac[4] | net_mac[5]) != 0 ? 1 : 0);
 
             /* An interface the machine does not have is the firmware's own
-               "82,PARAMETER(S) OUT OF RANGE", not something we invent. */
+               "82,PARAMETER(S) OUT OF RANGE", not something invented here. */
             check("net-bad-interface-is-refused", ULTIMATE_ERR_DEVICE,
                   ultimate_net_ipconfig(ifcount + 5, net_ip));
+        }
 
-            /* Local argument checks: neither of these reaches the wire. */
-            check("net-read-refuses-a-null-buffer",
-                  ULTIMATE_ERR_INVALID_ARGUMENT,
-                  ultimate_net_read(0, (uint8_t *)0, sizeof(net_buf), &got));
-            check("net-read-refuses-a-buffer-with-no-room",
-                  ULTIMATE_ERR_INVALID_ARGUMENT,
-                  ultimate_net_read(0, net_buf, UCI_NET_READ_PREFIX, &got));
+        /* Neither of these reaches the wire, so they run whatever the machine
+           is plugged into. */
+        check("net-read-refuses-a-null-buffer",
+              ULTIMATE_ERR_INVALID_ARGUMENT,
+              ultimate_net_read(0, (uint8_t *)0, sizeof(net_buf), &got));
+        check("net-read-refuses-a-buffer-with-no-room",
+              ULTIMATE_ERR_INVALID_ARGUMENT,
+              ultimate_net_read(0, net_buf, UCI_NET_READ_PREFIX, &got));
 
-            dotted_quad(net_host, net_ip);
-            err = ultimate_net_connect(net_host, 80, &handle);
-            check("net-connect-to-our-own-web-server", ULTIMATE_OK, err);
+#ifdef NET_PEER_HOST
+        {
+            uint8_t  handle = 0xFF;
+            uint16_t sent = 0;
+            uint16_t total;
+            uint8_t  tries;
+
+            printf("# peer=%s:%u\n", net_peer, (unsigned)NET_PEER_PORT);
+
+            err = ultimate_net_connect(net_peer, NET_PEER_PORT, &handle);
+            check("net-connect", ULTIMATE_OK, err);
 
             if (err != ULTIMATE_OK) {
-                skip("net-request", "nothing connected");
+                skip("net-write", "nothing connected");
             } else {
-                net_ran = 1;
+                net_sock_ran = 1;
 
-                sent = 0;
-                check("net-write-a-request", ULTIMATE_OK,
-                      ultimate_net_write(handle, http_get, sizeof(http_get),
+                check("net-write", ULTIMATE_OK,
+                      ultimate_net_write(handle, net_hello, sizeof(net_hello),
                                          &sent));
-                check("net-write-took-all-of-it", (int)sizeof(http_get),
+                check("net-write-took-all-of-it", (int)sizeof(net_hello),
                       (int)sent);
 
                 /*
-                 * **A read does not wait for the wire.** The first one after a
-                 * connect answers "nothing yet" even though the server is
-                 * already replying, so this polls - and that polling is the
-                 * behaviour being pinned, not an accident of this test.
+                 * **A read does not wait for the wire**, so this polls - and
+                 * the polling is the behaviour being pinned rather than an
+                 * accident of the test. The bound is small on purpose: an idle
+                 * read costs about 42 ms and the harness gives the whole
+                 * program about 26 seconds, so a generous-looking loop here is
+                 * what times the run out.
                  */
                 got = 0;
-                for (tries = 0; tries < 200; ++tries) {
+                for (tries = 0; tries < 40; ++tries) {
                     err = ultimate_net_read(handle, net_buf, sizeof(net_buf),
                                             &got);
                     if (err != ULTIMATE_OK || got != 0)
                         break;
                 }
-                check("net-read-gets-the-reply", ULTIMATE_OK, err);
+                check("net-read-gets-something-back", ULTIMATE_OK, err);
                 check("net-read-returned-bytes", 1, got != 0 ? 1 : 0);
 
-                /*
-                 * Written as numbers because cc65 charmaps character
-                 * constants: 'H' in source is PETSCII $C8, and the wire says
-                 * ASCII $48. Same rule as ascii_upper() above.
-                 */
-                check("net-reply-is-http", 1,
-                      (got >= 7 && net_buf[0] == 0x48 && net_buf[1] == 0x54 &&
-                       net_buf[2] == 0x54 && net_buf[3] == 0x50 &&
-                       net_buf[4] == 0x2F && net_buf[5] == 0x31) ? 1 : 0);
-
-                /* Drain to the end of the stream. ULTIMATE_END is how it ends,
-                   the same code a directory ends with. */
+                /* Drain what is already buffered, bounded for the same reason. */
                 total = got;
-                for (tries = 0; tries < 250; ++tries) {
+                for (tries = 0; tries < 40; ++tries) {
                     got = 0;
                     err = ultimate_net_read(handle, net_buf, sizeof(net_buf),
                                             &got);
@@ -831,39 +823,31 @@ after_write:
                         break;
                     total += got;
                 }
-                check("net-read-ends-with-end", ULTIMATE_END, err);
-                check("net-read-drained-more-than-the-first-block", 1,
-                      total > 7 ? 1 : 0);
-                printf("# http reply %u bytes\n", total);
+                printf("# read %u bytes, ended %u\n", total, err);
 
                 /*
-                 * After ULTIMATE_END the firmware has already let the handle
-                 * go, so closing it is an error about a socket that no longer
-                 * exists. Pinned rather than worked around: a caller reading
-                 * to the end must not then close.
+                 * ULTIMATE_END means the peer hung up and the handle is already
+                 * gone, so closing it then is an error about a socket that no
+                 * longer exists. Which ending happens depends on the peer, so
+                 * the close is checked against the ending that actually
+                 * occurred rather than against an assumed one.
                  */
-                check("net-close-after-end-is-refused", ULTIMATE_ERR_DEVICE,
-                      ultimate_net_close(handle));
-
-                /* And a socket closed while it is still open, which is the
-                   ordinary path. */
-                handle = 0xFF;
-                if (ultimate_net_connect(net_host, 80, &handle) == ULTIMATE_OK)
+                if (err == ULTIMATE_END)
+                    check("net-close-after-end-is-refused",
+                          ULTIMATE_ERR_DEVICE, ultimate_net_close(handle));
+                else
                     check("net-close-an-open-socket", ULTIMATE_OK,
                           ultimate_net_close(handle));
-                else
-                    skip("net-close-an-open-socket", "the second connect failed");
 
                 /*
-                 * UDP, which needs no peer: there is no handshake, so the
-                 * socket opens whether or not anything is listening at the
-                 * other end. That is the whole of what this proves - the
-                 * command reaches the firmware and gives back a handle that
-                 * closes cleanly - and it is deliberately not a claim that a
-                 * datagram went anywhere.
+                 * UDP has no handshake, so the socket opens whether or not
+                 * anything is listening. That is the whole of what this proves
+                 * - the command reaches the firmware and hands back a handle
+                 * that closes cleanly - and it is deliberately not a claim that
+                 * a datagram went anywhere.
                  */
                 handle = 0xFF;
-                err = ultimate_net_udp(net_host, 9, &handle);
+                err = ultimate_net_udp(net_peer, NET_PEER_PORT, &handle);
                 check("net-udp-opens-a-socket", ULTIMATE_OK, err);
                 if (err == ULTIMATE_OK) {
                     check("net-udp-gives-back-a-handle", 1,
@@ -876,6 +860,9 @@ after_write:
                 }
             }
         }
+#else
+        skip("net-connect", "no peer: build with net_peer=<dotted-quad>:<port>");
+#endif
     }
 
     printf("1..%u\n", test_no);

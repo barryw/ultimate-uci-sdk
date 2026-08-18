@@ -437,6 +437,35 @@ configuration. **A count is not a list of usable interfaces** — ask
 `NET_CMD_GET_IPADDR` and use the one with an address. An index past the count is
 `82,PARAMETER(S) OUT OF RANGE`.
 
+### The network stack is fragile, and the damage is not always immediate
+
+On the bench machine, firmware 3.15, exercising this target took the Ultimate
+off the network entirely three times. Each needed a power cycle; nothing was
+written to flash and the machine came back clean every time.
+
+| when | what preceded it |
+|---|---|
+| immediately | a read of 800-1023 bytes — inside the gap between the firmware's own range check and its response queue |
+| about 15 minutes later | a socket probe that had completed cleanly and restored its settings |
+| about 2 minutes later | a run that hung connecting the C64 **to the Ultimate's own address** |
+
+Two of the three have a credible cause: a request the firmware accepts but
+cannot buffer, and a connect that asks the stack to reach itself. The middle one
+has no explanation. **What they share is socket traffic, and that the failure can
+arrive minutes after the program that caused it has finished** — which makes it
+easy to blame whatever happened to be running at the time.
+
+Two consequences for anyone building on this:
+
+- **Do not connect to the machine's own address.** The run that did hung in the
+  connect and never returned. Whether it is refused, dropped, or merely slower
+  than any sensible timeout was not established, and finding out costs a power
+  cycle each attempt.
+- `tests/hardware/ucitest.c` opens no socket unless it is given a peer
+  (`NET_PEER=<dotted-quad>:<port>`), so the routine hardware run cannot trigger
+  any of this. The interface count, the addresses and the argument checks all
+  run without one, and they are what the harness asserts on.
+
 ### The listener commands stay unwrapped
 
 `$12`-`$15` are marked `INFERRED`: their numbers are not in the published
