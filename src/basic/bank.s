@@ -37,10 +37,16 @@
 
         .import uci_init, uci_exec, uci_abort, uci_last_code
         .import ultimate_turbo_set, ultimate_turbo_get
+        .import ultimate_load, ultimate_bload, ultimate_save
+        .import ultimate_opendir, ultimate_readdir
+        .import ultimate_reu_stash, ultimate_reu_fetch
 
         .export bank_uci_init, bank_uci_exec, bank_uci_abort
         .export bank_uci_last_code
         .export bank_turbo_set, bank_turbo_get
+        .export bank_load, bank_bload, bank_save
+        .export bank_opendir, bank_readdir
+        .export bank_reu_stash, bank_reu_fetch
 
 ; $37 is the machine as BASIC left it: BASIC ROM, KERNAL and I/O all mapped.
 ; $36 is the same with BASIC ROM swapped for the RAM underneath it.
@@ -77,3 +83,27 @@ bank_turbo_set:
 
 bank_turbo_get:
         banked ultimate_turbo_get
+
+; The file and REU services. Their arguments are in the shared variable block,
+; which is BSS at $C000 and needs no banking at all - only the call does.
+
+bank_load:
+        banked ultimate_load
+
+bank_bload:
+        banked ultimate_bload
+
+bank_save:
+        banked ultimate_save
+
+bank_opendir:
+        banked ultimate_opendir
+
+bank_readdir:
+        banked ultimate_readdir
+
+bank_reu_stash:
+        banked ultimate_reu_stash
+
+bank_reu_fetch:
+        banked ultimate_reu_fetch

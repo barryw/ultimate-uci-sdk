@@ -21,8 +21,8 @@
 ; SPDX-License-Identifier: MIT
 
 UCI_TOK_FIRST  = $CC
-UCI_TOK_LAST   = $DB
-UCI_TOK_COUNT  = 16
+UCI_TOK_LAST   = $E1
+UCI_TOK_COUNT  = 22
 
 UCI_TOK_UCI    = $CC   ; statement
 UCI_TOK_UERR   = $CD   ; function
@@ -40,6 +40,12 @@ UCI_TOK_UCTRL  = $D8   ; constant
 UCI_TOK_UIEC   = $D9   ; constant
 UCI_TOK_UHTTP  = $DA   ; constant
 UCI_TOK_UTURBO = $DB   ; statement
+UCI_TOK_ULOAD  = $DC   ; statement
+UCI_TOK_UBLOAD = $DD   ; statement
+UCI_TOK_USAVE  = $DE   ; statement
+UCI_TOK_UDIR   = $DF   ; statement
+UCI_TOK_USTASH = $E0   ; statement
+UCI_TOK_UFETCH = $E1   ; statement
 
 ; Target constants, in table order, for the constant handler.
 UCI_KWVAL_UDOS1  = $01
@@ -97,6 +103,24 @@ uci_keywords:
         .byte 0
         ; $DB UTURBO
         .byte 6, $55, $54, $55, $52, $42, $4F
+        .byte 0
+        ; $DC ULOAD   (crunches to U[LOAD])
+        .byte 2, $55, $93
+        .byte 5, $55, $4C, $4F, $41, $44
+        ; $DD UBLOAD   (crunches to UB[LOAD])
+        .byte 3, $55, $42, $93
+        .byte 6, $55, $42, $4C, $4F, $41, $44
+        ; $DE USAVE   (crunches to U[SAVE])
+        .byte 2, $55, $94
+        .byte 5, $55, $53, $41, $56, $45
+        ; $DF UDIR
+        .byte 4, $55, $44, $49, $52
+        .byte 0
+        ; $E0 USTASH
+        .byte 6, $55, $53, $54, $41, $53, $48
+        .byte 0
+        ; $E1 UFETCH
+        .byte 6, $55, $46, $45, $54, $43, $48
         .byte 0
         .byte 0                 ; end of table
 

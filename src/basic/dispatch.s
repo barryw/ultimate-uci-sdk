@@ -28,8 +28,19 @@
         .import uci_req
         .import bank_uci_init, bank_uci_exec, bank_uci_abort
         .import bank_uci_last_code, bank_turbo_set, bank_turbo_get
+        .import bank_load, bank_bload, bank_save
+        .import bank_opendir, bank_readdir
+        .import bank_reu_stash, bank_reu_fetch
+
+; The services take their wider arguments in the SDK's shared variable block.
+; It is BSS at $C000 - RAM whatever $01 says - so the wedge writes it directly
+; and only the calls above need banking.
+        .import ult_buf, ult_buflen, ult_attrib
+        .import ult_addr, ult_max, ult_reu, ult_reulen
 
         .export wedge_gone, wedge_eval, wedge_do_uci, wedge_do_turbo
+        .export wedge_do_load, wedge_do_bload, wedge_do_save
+        .export wedge_do_dir, wedge_do_stash, wedge_do_fetch
         .export wedge_sdk_init
         .export wedge_err, wedge_target, wedge_command, wedge_arglen
         .export wedge_argbuf, wedge_reply, wedge_status
@@ -83,7 +94,11 @@ wedge_gone:
         beq @ours
         cmp #UCI_TOK_UTURBO
         beq @turbo
-        plp
+        cmp #UCI_TOK_ULOAD
+        bcc @rom                ; below the file keywords: not one of ours
+        cmp #UCI_TOK_UFETCH + 1
+        bcc @file
+@rom:   plp
         jmp NGONE1
 
 @ours:  plp
@@ -93,6 +108,34 @@ wedge_gone:
 @turbo: plp
         jsr wedge_do_turbo
         jmp NEWSTT
+
+; ULOAD through UFETCH are contiguous and all statements, so one range test and
+; one table replace six comparisons and six branches.
+@file:  plp
+        sec
+        sbc #UCI_TOK_ULOAD
+        asl                     ; two bytes per entry
+        tax
+        lda wedge_file_vec,x
+        sta wedge_jump
+        lda wedge_file_vec + 1,x
+        sta wedge_jump + 1
+        jsr wedge_via_jump
+        jmp NEWSTT
+
+; The 6510 has no jmp (addr,x), so the handler's address is copied into one
+; place and jumped through from there. Behind a jsr, so every handler can end
+; with an rts and the return to NEWSTT is written once.
+wedge_via_jump:
+        jmp (wedge_jump)
+
+wedge_file_vec:
+        .addr wedge_do_load     ; ULOAD
+        .addr wedge_do_bload    ; UBLOAD
+        .addr wedge_do_save     ; USAVE
+        .addr wedge_do_dir      ; UDIR
+        .addr wedge_do_stash    ; USTASH
+        .addr wedge_do_fetch    ; UFETCH
 
 ; ---------------------------------------------------------------------------
 ; UCI t, c [, arg ...]
@@ -160,6 +203,242 @@ wedge_do_turbo:
         jsr bank_turbo_set
         sta wedge_err
         rts
+
+; ---------------------------------------------------------------------------
+; The file keywords.
+;
+;   ULOAD  name$ [,address]         a PRG; no address means the file's own
+;   UBLOAD name$, address, length   raw bytes, and not one past the length
+;   USAVE  name$, start, length     memory to a file
+;
+; A name goes on the wire byte for byte, with no character conversion. That is
+; not an omission: uppercase PETSCII and uppercase ASCII are the same bytes, so
+; a name typed at a C64 arrives as the Ultimate expects it, and FAT lookup is
+; case-insensitive besides. See docs/uci.md.
+;
+; Errors land in UERR rather than stopping the program, like every other
+; keyword here:
+;
+;     ULOAD "GAME",$C000 : IF UERR THEN PRINT "no": END
+; ---------------------------------------------------------------------------
+
+wedge_do_load:
+        jsr CHRGET              ; past the token, onto the name
+        jsr wedge_name
+        lda #$00                ; no address given: the file's own, which is
+        sta ult_addr            ; what a zero means to ultimate_load
+        sta ult_addr + 1
+        jsr CHRGOT
+        cmp #','
+        bne @go
+        jsr wedge_argword
+        lda LINNUM
+        sta ult_addr
+        lda LINNUM + 1
+        sta ult_addr + 1
+@go:    jsr bank_load
+        sta wedge_err
+        rts
+
+wedge_do_bload:
+        jsr CHRGET
+        jsr wedge_name
+        jsr wedge_argword       ; the address
+        lda LINNUM
+        sta ult_addr
+        lda LINNUM + 1
+        sta ult_addr + 1
+        jsr wedge_argword       ; and the limit, which bload insists on
+        lda LINNUM
+        sta ult_max
+        lda LINNUM + 1
+        sta ult_max + 1
+        jsr bank_bload
+        sta wedge_err
+        rts
+
+wedge_do_save:
+        jsr CHRGET
+        jsr wedge_name
+        jsr wedge_argword       ; the start
+        lda LINNUM
+        sta ult_addr
+        lda LINNUM + 1
+        sta ult_addr + 1
+        jsr wedge_argword       ; and how much of it
+        lda LINNUM
+        sta ult_max
+        lda LINNUM + 1
+        sta ult_max + 1
+        jsr bank_save
+        sta wedge_err
+        rts
+
+; ---------------------------------------------------------------------------
+; UDIR - the current directory, on the screen.
+;
+; **A directory walk is one live exchange.** The firmware answers READ_DIR with
+; one reply block per entry and the block boundary is the only separator there
+; is, so no other command may go out between calls - which is why this prints
+; as it goes rather than collecting first.
+;
+; The names arrive in ASCII and CHROUT wants PETSCII. Only the letters differ
+; and only in one direction: ASCII $41-$5A already displays as letters, and
+; ASCII $61-$7A would display as graphics symbols, so lowercase is folded up.
+; Every name therefore reads as lowercase on a stock screen, which is what the
+; SDK's own strings do - see tools/test_charmap.py for the whole of that rule.
+; ---------------------------------------------------------------------------
+
+wedge_do_dir:
+        jsr CHRGET              ; past the token; UDIR takes no arguments
+        jsr bank_opendir
+        sta wedge_err
+        cmp #ULTIMATE_OK
+        bne @out
+
+@next:  lda #<wedge_reply
+        sta ult_buf
+        lda #>wedge_reply
+        sta ult_buf + 1
+        lda #<WEDGE_REPLY_SIZE
+        sta ult_buflen
+        lda #>WEDGE_REPLY_SIZE
+        sta ult_buflen + 1
+        jsr bank_readdir
+        cmp #ULTIMATE_OK
+        bne @end
+
+        ldy #$00
+@char:  lda wedge_reply,y
+        beq @eol
+        cmp #$61                ; ASCII 'a'
+        bcc @put
+        cmp #$7B                ; ...through 'z'
+        bcs @put
+        sec
+        sbc #$20                ; which CHROUT draws as letters
+@put:   sty wedge_tmp
+        jsr OUTDO
+        ldy wedge_tmp
+        iny
+        bne @char               ; a name is 255 bytes at the very most
+
+@eol:   lda ult_attrib
+        and #DOS_ATTR_DIR
+        beq @crlf
+        lda #$2F                ; '/', so a directory looks like one
+        jsr OUTDO
+@crlf:  lda #$0D
+        jsr OUTDO
+        jmp @next
+
+; ULTIMATE_END is how a directory finishes and is not a failure, so it does not
+; reach UERR. Anything else does.
+@end:   cmp #ULTIMATE_END
+        beq @done
+        sta wedge_err
+        rts
+@done:  lda #ULTIMATE_OK
+        sta wedge_err
+@out:   rts
+
+; ---------------------------------------------------------------------------
+; USTASH address, reu address, length
+; UFETCH address, reu address, length
+;
+; The REU address is 24 bits, so it is evaluated as a 32-bit value rather than
+; with GETADR: a BASIC program addressing the sixteenth megabyte is doing the
+; thing the expansion is for. The length is a plain 16-bit count, and zero means
+; 65536 - the REU's own convention, not the SDK's.
+; ---------------------------------------------------------------------------
+
+wedge_do_stash:
+        jsr wedge_reu_args
+        jsr bank_reu_stash
+        sta wedge_err
+        rts
+
+wedge_do_fetch:
+        jsr wedge_reu_args
+        jsr bank_reu_fetch
+        sta wedge_err
+        rts
+
+wedge_reu_args:
+        jsr CHRGET              ; past the token, onto the C64 address
+        jsr FRMNUM
+        jsr GETADR
+        lda LINNUM
+        sta ult_addr
+        lda LINNUM + 1
+        sta ult_addr + 1
+
+        jsr CHKCOM              ; the REU address, in full
+        jsr FRMNUM
+        jsr QINT                ; FACHO..FACHO+3, most significant first
+        lda FACHO + 3
+        sta ult_reu
+        lda FACHO + 2
+        sta ult_reu + 1
+        lda FACHO + 1
+        sta ult_reu + 2
+        lda FACHO
+        sta ult_reu + 3
+
+        jsr wedge_argword       ; and the length
+        lda LINNUM
+        sta ult_reulen
+        lda LINNUM + 1
+        sta ult_reulen + 1
+        lda #$00
+        sta ult_reulen + 2      ; a DMA transfer is 16 bits wide; the other half
+        sta ult_reulen + 3      ; of the shared length belongs to the DOS pair
+        rts
+
+; ---------------------------------------------------------------------------
+; Argument helpers for the keywords above.
+; ---------------------------------------------------------------------------
+
+; A string expression into wedge_argbuf, NUL terminated, with ult_buf aimed at
+; it. A name longer than the buffer is cut rather than allowed to run into what
+; follows; the command then fails on its own terms, which is the same bargain
+; the generic form's arguments make.
+wedge_name:
+        jsr FRMEVL
+        lda VALTYP
+        bne @string
+        jmp SNERR               ; a number where a name belongs is the ROM's
+                                ; own ?SYNTAX ERROR, and it should be
+
+@string:
+        jsr FRESTR              ; A = length, X/Y = the bytes
+        stx INDEX
+        sty INDEX + 1
+        cmp #WEDGE_ARG_SIZE
+        bcc @fits
+        lda #WEDGE_ARG_SIZE - 1
+@fits:  sta wedge_scount
+        ldy #$00
+        cpy wedge_scount
+        beq @term
+@copy:  lda (INDEX),y
+        sta wedge_argbuf,y
+        iny
+        cpy wedge_scount
+        bne @copy
+@term:  lda #$00
+        sta wedge_argbuf,y
+        lda #<wedge_argbuf
+        sta ult_buf
+        lda #>wedge_argbuf
+        sta ult_buf + 1
+        rts
+
+; A comma, then a 16-bit value, in LINNUM.
+wedge_argword:
+        jsr CHKCOM
+        jsr FRMNUM
+        jmp GETADR
 
 ; ---------------------------------------------------------------------------
 ; One argument.
@@ -589,6 +868,7 @@ wedge_shape_i:  .byte 0         ; which one is next
 wedge_shape_off: .byte 0        ; where its packed kinds start
 wedge_shape_e:  .byte 0         ; start of the entry being examined
 wedge_tmp:      .byte 0
+wedge_jump:     .word 0         ; where the statement dispatch is going
 
         .segment "BSS"
 

@@ -111,9 +111,21 @@ suites {
     ; last entry moves every time one is added, and a test aimed at the
     ; second-to-last stops proving the walk reaches the end.
     test("list-finds-the-last-keyword", "the table walk reaches the end") {
-      a = $db
+      a = $e1
       jsr([wedge_find_keyword], stop_on_rts = true, fail_on_brk = true)
-      assert([wedge_len] == $06, "UTURBO is six bytes")
+      assert([wedge_len] == $06, "UFETCH is six bytes")
+      assert(a == $55, "'U'")
+    }
+
+    ; ULOAD is the worst case for the walk: its match pattern is two bytes and
+    ; its display text is five, so an entry that carries a second copy sits
+    ; between the start of the table and the end of it. LIST printing 'U' and a
+    ; LOAD token would be the failure, and it would look like a working wedge
+    ; until somebody listed a program.
+    test("list-finds-a-file-keyword", "ULOAD lists as five letters, not as two bytes") {
+      a = $dc
+      jsr([wedge_find_keyword], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_len] == $05, "U, L, O, A, D")
       assert(a == $55, "'U'")
     }
 
@@ -958,6 +970,500 @@ suites {
       assert($0061 == $83, "6.0 is 1.5 x 2^2")
       assert($0062 == $c0, "...with this mantissa, so the badline bit is not in it")
       assert($000d == $00, "a number, not a string")
+    }
+
+    ; --- the file keywords ---
+    ;
+    ; ULOAD, UBLOAD and USAVE do not arrive as the text that was typed. CRUNCH
+    ; matches a reserved word anywhere, so LOAD and SAVE inside them are already
+    ; tokens by the time the wedge looks, and the patterns it matches are those
+    ; crunched forms. tools/gen_keywords.py works them out; this is the proof
+    ; that what it worked out is what the ROM really produces.
+
+    ; **Every statement below resets the stack first.** BASIC's own loop
+    ; unwinds between statements and these tests do not have one: they call a
+    ; handler directly, and FRMEVL leaves the stack deeper than it found it, so
+    ; the third string argument in a test would fail on stack rather than on
+    ; anything the wedge did. $A67A is the ROM's own stack reset, which the
+    ; setup above already calls once for the same reason.
+
+    test("tokenize-the-file-keywords", "a keyword with a keyword inside it still becomes one token") {
+      $0200 = $55
+      $0201 = $4c
+      $0202 = $4f
+      $0203 = $41
+      $0204 = $44
+      $0205 = $20
+      $0206 = $22
+      $0207 = $58
+      $0208 = $22
+      $0209 = $2c
+      $020a = $31
+      $020b = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $dc, "ULOAD is one token, not 'U' and a LOAD")
+      assert($0201 == $20, "and the rest of the line survived")
+
+      $0200 = $55
+      $0201 = $42
+      $0202 = $4c
+      $0203 = $4f
+      $0204 = $41
+      $0205 = $44
+      $0206 = $20
+      $0207 = $22
+      $0208 = $58
+      $0209 = $22
+      $020a = $2c
+      $020b = $31
+      $020c = $2c
+      $020d = $32
+      $020e = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $dd, "UBLOAD, whose crunched form is 'U' 'B' and LOAD")
+
+      $0200 = $55
+      $0201 = $53
+      $0202 = $41
+      $0203 = $56
+      $0204 = $45
+      $0205 = $20
+      $0206 = $22
+      $0207 = $58
+      $0208 = $22
+      $0209 = $2c
+      $020a = $31
+      $020b = $2c
+      $020c = $32
+      $020d = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $de, "USAVE, which contains SAVE")
+
+      $0200 = $55
+      $0201 = $44
+      $0202 = $49
+      $0203 = $52
+      $0204 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $df, "UDIR, which contains nothing the ROM knows")
+      assert($0201 == $00, "and takes no arguments")
+
+      $0200 = $55
+      $0201 = $53
+      $0202 = $54
+      $0203 = $41
+      $0204 = $53
+      $0205 = $48
+      $0206 = $20
+      $0207 = $31
+      $0208 = $2c
+      $0209 = $32
+      $020a = $2c
+      $020b = $33
+      $020c = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $e0, "USTASH")
+
+      $0200 = $55
+      $0201 = $46
+      $0202 = $45
+      $0203 = $54
+      $0204 = $43
+      $0205 = $48
+      $0206 = $20
+      $0207 = $31
+      $0208 = $2c
+      $0209 = $32
+      $020a = $2c
+      $020b = $33
+      $020c = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $e1, "UFETCH")
+    }
+
+    ; The names below are poked in as lowercase ASCII, which is not what a user
+    ; types. On a real machine typing `big.bin` produces PETSCII $42 $49 $47 -
+    ; the same bytes as ASCII "BIG" - and FAT lookup does not care about case,
+    ; so it finds the file. u64sim's directory is a real one on a Linux host,
+    ; which does care, so these send what that filesystem needs. The wedge
+    ; passes a name through byte for byte either way, and that is the property
+    ; being tested here.
+
+    test("uload-loads-a-file", "the PRG header is consumed, the rest is in memory") {
+      $cb00 = $ff
+      $0200 = $55
+      $0201 = $4c
+      $0202 = $4f
+      $0203 = $41
+      $0204 = $44
+      $0205 = $20
+      $0206 = $22
+      $0207 = $62
+      $0208 = $69
+      $0209 = $67
+      $020a = $2e
+      $020b = $62
+      $020c = $69
+      $020d = $6e
+      $020e = $22
+      $020f = $2c
+      $0210 = $35
+      $0211 = $31
+      $0212 = $39
+      $0213 = $36
+      $0214 = $38
+      $0215 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      jsr($a67a, stop_on_rts = true, fail_on_brk = true)
+      $007a = $00
+      $007b = $02
+      jsr([wedge_do_load], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "ULTIMATE_OK")
+      ; big.bin counts up from zero, so $00 $01 were its load address and were
+      ; eaten. The first byte stored is the third of the file.
+      assert($cb00 == $02, "the header is gone, not merely skipped over")
+      assert($cb01 == $03, "and the file follows it")
+    }
+
+    test("ubload-strips-nothing-and-stops-at-the-limit", "raw is raw") {
+      $cb00 = $ff
+      $cb08 = $aa
+      $0200 = $55
+      $0201 = $42
+      $0202 = $4c
+      $0203 = $4f
+      $0204 = $41
+      $0205 = $44
+      $0206 = $20
+      $0207 = $22
+      $0208 = $62
+      $0209 = $69
+      $020a = $67
+      $020b = $2e
+      $020c = $62
+      $020d = $69
+      $020e = $6e
+      $020f = $22
+      $0210 = $2c
+      $0211 = $35
+      $0212 = $31
+      $0213 = $39
+      $0214 = $36
+      $0215 = $38
+      $0216 = $2c
+      $0217 = $38
+      $0218 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      jsr($a67a, stop_on_rts = true, fail_on_brk = true)
+      $007a = $00
+      $007b = $02
+      jsr([wedge_do_bload], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "ULTIMATE_OK")
+      assert($cb00 == $00, "byte zero of the file, header and all")
+      assert($cb01 == $01, "then one")
+      assert($cb08 == $aa, "and nothing past the eight bytes asked for")
+    }
+
+    ; USAVE, then the generic form to take the file away again: the wedge has no
+    ; delete keyword, and the test data policy in docs/handover.md section 6 says
+    ; every mutating test cleans up after itself.
+    test("usave-writes-what-was-asked-for", "memory becomes a file") {
+      $cb00 = $de
+      $cb01 = $ad
+      $cb02 = $be
+      $cb03 = $ef
+      $0200 = $55
+      $0201 = $53
+      $0202 = $41
+      $0203 = $56
+      $0204 = $45
+      $0205 = $20
+      $0206 = $22
+      $0207 = $64
+      $0208 = $61
+      $0209 = $74
+      $020a = $61
+      $020b = $2f
+      $020c = $73
+      $020d = $76
+      $020e = $2e
+      $020f = $74
+      $0210 = $6d
+      $0211 = $70
+      $0212 = $22
+      $0213 = $2c
+      $0214 = $35
+      $0215 = $31
+      $0216 = $39
+      $0217 = $36
+      $0218 = $38
+      $0219 = $2c
+      $021a = $34
+      $021b = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      jsr($a67a, stop_on_rts = true, fail_on_brk = true)
+      $007a = $00
+      $007b = $02
+      jsr([wedge_do_save], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "ULTIMATE_OK")
+
+      ; Read it back through UBLOAD, over a wiped buffer, so the assertion
+      ; cannot pass on the bytes that were already there.
+      $cb00 = $00
+      $cb01 = $00
+      $cb02 = $00
+      $cb03 = $00
+      $0200 = $55
+      $0201 = $42
+      $0202 = $4c
+      $0203 = $4f
+      $0204 = $41
+      $0205 = $44
+      $0206 = $20
+      $0207 = $22
+      $0208 = $64
+      $0209 = $61
+      $020a = $74
+      $020b = $61
+      $020c = $2f
+      $020d = $73
+      $020e = $76
+      $020f = $2e
+      $0210 = $74
+      $0211 = $6d
+      $0212 = $70
+      $0213 = $22
+      $0214 = $2c
+      $0215 = $35
+      $0216 = $31
+      $0217 = $39
+      $0218 = $36
+      $0219 = $38
+      $021a = $2c
+      $021b = $34
+      $021c = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      jsr($a67a, stop_on_rts = true, fail_on_brk = true)
+      $007a = $00
+      $007b = $02
+      jsr([wedge_do_bload], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "and it reads back")
+      assert($cb00 == $de, "byte for byte")
+      assert($cb03 == $ef, "all four of them")
+
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $39
+      $0207 = $2c
+      $0208 = $22
+      $0209 = $64
+      $020a = $61
+      $020b = $74
+      $020c = $61
+      $020d = $2f
+      $020e = $73
+      $020f = $76
+      $0210 = $2e
+      $0211 = $74
+      $0212 = $6d
+      $0213 = $70
+      $0214 = $22
+      $0215 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      jsr($a67a, stop_on_rts = true, fail_on_brk = true)
+      $007a = $00
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "and the fixture tree is as it was found")
+    }
+
+    ; UDIR prints as it walks, because it has to: the firmware answers READ_DIR
+    ; with one reply block per entry and the block boundary is the only
+    ; separator, so no other command may go out between calls. So what it wrote
+    ; is the only evidence of what it read.
+    ;
+    ; **The bytes are captured at the KERNAL vector, not read off the screen.**
+    ; Bringing the screen editor up means $FF81, and $FF81 does not return under
+    ; this backend - it waits on hardware the simulator does not model. IBSOUT
+    ; at $0326 is where BASIC's OUTDO ends up either way, so a six-instruction
+    ; stub in the cassette buffer collects exactly what the wedge emitted, in
+    ; PETSCII, before anything draws it.
+    ;
+    ;     $033c  stx $0390      ; CHROUT preserves X, so this does too
+    ;            ldx $0391      ; how many bytes so far
+    ;            sta $0380,x
+    ;            inc $0391
+    ;            ldx $0390
+    ;            clc            ; carry set is an I/O error, and BASIC's OUTDO
+    ;            rts            ; goes through $E10C, which acts on it
+
+    test("udir-prints-the-directory", "one entry per line, converted on the way out") {
+      $033c = $8e
+      $033d = $90
+      $033e = $03
+      $033f = $ae
+      $0340 = $91
+      $0341 = $03
+      $0342 = $9d
+      $0343 = $80
+      $0344 = $03
+      $0345 = $ee
+      $0346 = $91
+      $0347 = $03
+      $0348 = $ae
+      $0349 = $90
+      $034a = $03
+      $034b = $18
+      $034c = $60
+      $0391 = $00               ; nothing collected yet
+      $0326 = $3c               ; IBSOUT, the KERNAL's character-out vector
+      $0327 = $03
+
+      $0200 = $55
+      $0201 = $44
+      $0202 = $49
+      $0203 = $52
+      $0204 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      jsr($a67a, stop_on_rts = true, fail_on_brk = true)
+      $007a = $00
+      $007b = $02
+      jsr([wedge_do_dir], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "the walk ended with ULTIMATE_END, which is not an error")
+
+      ; "data", folded up out of ASCII lowercase so CHROUT draws letters and not
+      ; graphics symbols, then the slash that says it is a directory.
+      assert($0391 == $0e, "fourteen bytes went out and no more")
+      assert($0380 == $44, "'d' of data")
+      assert($0381 == $41, "'a'")
+      assert($0382 == $54, "'t'")
+      assert($0383 == $41, "'a'")
+      assert($0384 == $2f, "'/' - it is a directory and says so")
+      assert($0385 == $0d, "and the line ends")
+
+      assert($0386 == $42, "'b' of big.bin")
+      assert($0387 == $49, "'i'")
+      assert($0388 == $47, "'g'")
+      assert($0389 == $2e, "'.'")
+      assert($038a == $42, "'b'")
+      assert($038b == $49, "'i'")
+      assert($038c == $4e, "'n'")
+      assert($038d == $0d, "a file gets no slash, just the line end")
+    }
+
+    ; --- the RAM expansion ---
+    ;
+    ; $DF00-$DF0A is ordinary memory under sim6502, so what these prove is the
+    ; arithmetic: that a 24-bit REU address survives BASIC's floating point,
+    ; that the C64 address and the length land in the right register pairs, and
+    ; that stash and fetch differ by exactly the mode bit. The transfer itself
+    ; is tests/hardware/ucitest.c, on a machine with an expansion in it.
+
+    test("ustash-programs-the-registers", "a 24-bit address survives the trip through BASIC") {
+      $df00 = $40               ; REU_STAT_DONE, so the SDK sees it finish
+      $0200 = $55
+      $0201 = $53
+      $0202 = $54
+      $0203 = $41
+      $0204 = $53
+      $0205 = $48
+      $0206 = $20
+      $0207 = $35
+      $0208 = $31
+      $0209 = $39
+      $020a = $36
+      $020b = $38
+      $020c = $2c
+      $020d = $37
+      $020e = $34
+      $020f = $35
+      $0210 = $36
+      $0211 = $35
+      $0212 = $2c
+      $0213 = $32
+      $0214 = $35
+      $0215 = $36
+      $0216 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      jsr($a67a, stop_on_rts = true, fail_on_brk = true)
+      $007a = $00
+      $007b = $02
+      jsr([wedge_do_stash], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "ULTIMATE_OK")
+      assert($df02 == $00, "C64 address low: 51968 is $cb00")
+      assert($df03 == $cb, "...and high")
+      assert($df04 == $45, "REU address low: 74565 is $012345")
+      assert($df05 == $23, "...middle")
+      assert($df06 == $01, "...and the third byte, which GETADR could not have carried")
+      assert($df07 == $00, "length low: 256")
+      assert($df08 == $01, "...and high")
+      assert($df01 == $90, "EXECUTE and NOW, mode 00: C64 to REU")
+    }
+
+    test("ufetch-is-the-other-direction", "one bit apart, and it is the right bit") {
+      $df00 = $40
+      $0200 = $55
+      $0201 = $46
+      $0202 = $45
+      $0203 = $54
+      $0204 = $43
+      $0205 = $48
+      $0206 = $20
+      $0207 = $34
+      $0208 = $39
+      $0209 = $31
+      $020a = $35
+      $020b = $32
+      $020c = $2c
+      $020d = $30
+      $020e = $2c
+      $020f = $31
+      $0210 = $36
+      $0211 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      jsr($a67a, stop_on_rts = true, fail_on_brk = true)
+      $007a = $00
+      $007b = $02
+      jsr([wedge_do_fetch], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "ULTIMATE_OK")
+      assert($df03 == $c0, "C64 address high: 49152 is $c000")
+      assert($df04 == $00, "REU address zero, all three bytes")
+      assert($df05 == $00, "...")
+      assert($df06 == $00, "...")
+      assert($df07 == $10, "sixteen bytes")
+      assert($df01 == $91, "mode 01: REU to C64")
     }
 
     test("uturbo-function-reports-no-turbo", "255 is not a speed, so it can be tested for") {

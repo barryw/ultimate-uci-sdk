@@ -49,6 +49,10 @@ harness.prg harness.lbl: harness.s $(LIB)
 # cl65 emits VICE labels for everything it linked, including cc65 runtime
 # helpers whose names repeat. Keep only the harness symbols the suites use, and
 # translate them to the KickAssembler form sim6502 reads.
+#
+# The lists live in this file, so every .sym rule below depends on it. Without
+# that, adding a symbol here leaves the .sym untouched and the suite that uses
+# it calls address zero - which reads as a wedge bug rather than a build one.
 HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_available \
                 t_identify_dos1 t_identify_absent t_detect \
                 t_identify t_get_model t_req_reset t_exec t_wedge \
@@ -72,7 +76,7 @@ HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_available \
                 req_status req_statusmax req_statuslen \
                 buf_args buf_payload buf_data buf_status
 
-harness.sym: harness.lbl
+harness.sym: harness.lbl Makefile
 	awk -v want="$(HARNESS_SYMS)" ' \
 	  BEGIN { n = split(want, a, " "); for (i = 1; i <= n; i++) keep[a[i]] = 1 } \
 	  /^al / { name = $$3; sub(/^\./, "", name); \
@@ -89,7 +93,7 @@ harness-placed.prg harness-placed.lbl: harness.s $(ROOT)/bindings/cc65/build-pla
 	  -Ln harness-placed.lbl -o harness-placed.prg harness.s \
 	  $(ROOT)/bindings/cc65/build-placed/ultimate.lib
 
-harness-placed.sym: harness-placed.lbl
+harness-placed.sym: harness-placed.lbl Makefile
 	awk -v want="$(HARNESS_SYMS)" ' \
 	  BEGIN { n = split(want, a, " "); for (i = 1; i <= n; i++) keep[a[i]] = 1 } \
 	  /^al / { name = $$3; sub(/^\./, "", name); \
@@ -123,7 +127,7 @@ relocharness.prg relocharness.lbl: relocharness.s blobsize.inc $(LIB) $(BLOB)
 	  -Ln relocharness.lbl -o relocharness.prg \
 	  relocharness.s $(ROOT)/bindings/blob/reloc.s $(LIB)
 
-relocharness.sym: relocharness.lbl
+relocharness.sym: relocharness.lbl Makefile
 	awk -v want="$(RELOCHARNESS_SYMS)" ' \
 	  BEGIN { n = split(want, a, " "); for (i = 1; i <= n; i++) keep[a[i]] = 1 } \
 	  /^al / { name = $$3; sub(/^\./, "", name); \
@@ -187,10 +191,12 @@ WEDGE_SYMS := BUF TXTPTR ICRNCH IQPLOP IGONE IEVAL DORES \
               wedge_print_keyword wedge_find_keyword wedge_len \
               wedge_src wedge_dst wedge_verbatim \
               wedge_gone wedge_eval wedge_do_uci wedge_do_turbo wedge_err \
+              wedge_do_load wedge_do_bload wedge_do_save \
+              wedge_do_dir wedge_do_stash wedge_do_fetch \
               wedge_target wedge_command wedge_arglen wedge_argbuf \
               wedge_reply wedge_status uci_req
 
-basic.sym: $(WEDGE_PRG)
+basic.sym: $(WEDGE_PRG) Makefile
 	awk -v want="$(WEDGE_SYMS)" ' \
 	  BEGIN { n = split(want, a, " "); for (i = 1; i <= n; i++) keep[a[i]] = 1 } \
 	  /^al / { name = $$3; sub(/^\./, "", name); \

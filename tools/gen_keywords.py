@@ -65,6 +65,17 @@ KEYWORDS = [
     ("UTURBO", STATEMENT, "CPU speed index as a statement, and the current "
                           "index as a function - 255 when the machine's turbo "
                           "is switched off in its settings"),
+    ("ULOAD",  STATEMENT, "ULOAD name$ [,address] - a PRG, with the header "
+                          "consumed; no address means the file's own, exactly "
+                          "as LOAD\"X\",8,1"),
+    ("UBLOAD", STATEMENT, "UBLOAD name$, address, length - raw bytes, nothing "
+                          "interpreted and nothing past the length"),
+    ("USAVE",  STATEMENT, "USAVE name$, start, length - memory to a file"),
+    ("UDIR",   STATEMENT, "UDIR - the current directory, printed"),
+    ("USTASH", STATEMENT, "USTASH address, reu address, length - C64 memory "
+                          "into the RAM expansion"),
+    ("UFETCH", STATEMENT, "UFETCH address, reu address, length - and back "
+                          "out of it"),
 ]
 
 # Constants resolve to a protocol value rather than to a handler.

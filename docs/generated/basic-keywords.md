@@ -30,5 +30,11 @@ crunched form; `LIST` prints the name.
 | `$D9` | `UIEC` | constant | same | target $05, SoftwareIEC |
 | `$DA` | `UHTTP` | constant | same | target $06, HTTP client |
 | `$DB` | `UTURBO` | statement | same | CPU speed index as a statement, and the current index as a function - 255 when the machine's turbo is switched off in its settings |
+| `$DC` | `ULOAD` | statement | `U[LOAD]` | ULOAD name$ [,address] - a PRG, with the header consumed; no address means the file's own, exactly as LOAD"X",8,1 |
+| `$DD` | `UBLOAD` | statement | `UB[LOAD]` | UBLOAD name$, address, length - raw bytes, nothing interpreted and nothing past the length |
+| `$DE` | `USAVE` | statement | `U[SAVE]` | USAVE name$, start, length - memory to a file |
+| `$DF` | `UDIR` | statement | same | UDIR - the current directory, printed |
+| `$E0` | `USTASH` | statement | same | USTASH address, reu address, length - C64 memory into the RAM expansion |
+| `$E1` | `UFETCH` | statement | same | UFETCH address, reu address, length - and back out of it |
 
-`$DC`-`$FE` remain free; `$FF` is pi and can never be claimed.
+`$E2`-`$FE` remain free; `$FF` is pi and can never be claimed.

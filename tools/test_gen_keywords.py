@@ -23,6 +23,8 @@ class TestTokenAssignment(unittest.TestCase):
         "UL(": 0xD4, "UDOS1": 0xD5, "UDOS2": 0xD6, "UNET": 0xD7,
         "UCTRL": 0xD8, "UIEC": 0xD9, "UHTTP": 0xDA,
         "UTURBO": 0xDB,
+        "ULOAD": 0xDC, "UBLOAD": 0xDD, "USAVE": 0xDE, "UDIR": 0xDF,
+        "USTASH": 0xE0, "UFETCH": 0xE1,
     }
 
     def test_tokens_have_not_moved(self):
@@ -170,11 +172,17 @@ class TestEmittedTable(unittest.TestCase):
         self.assertEqual(decoded, expected)
 
     def test_the_shared_case_costs_one_byte_not_a_second_copy(self):
+        """Only a keyword the ROM crunched carries its display text twice.
+
+        The four that do are the four with a reserved word inside them, and
+        naming them is the point: a fifth appearing means a new keyword is
+        being tokenised in a way its author probably did not intend, and a
+        fourth disappearing means the ROM stopped crunching one that it does.
+        """
         stream = self.bytes_of()
-        # 14 of 15 keywords display exactly as they match, so only ULEN pays.
-        copies = sum(1 for _n, _k, _no, _t, m, d in self.rows if m != d)
-        self.assertEqual(copies, 1)
-        self.assertLess(len(stream), 130)
+        differ = sorted(n for n, _k, _no, _t, m, d in self.rows if m != d)
+        self.assertEqual(differ, ["UBLOAD", "ULEN", "ULOAD", "USAVE"])
+        self.assertLess(len(stream), 200)
 
 
 if __name__ == "__main__":

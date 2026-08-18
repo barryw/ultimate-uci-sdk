@@ -47,6 +47,12 @@ CMD_IF = ("C64 and Cartridge Settings", "Command Interface")
 # script is to type at a machine set up the way the keyword needs, and both
 # settings are read first and put back afterwards.
 TURBO = ("U64 Specific Settings", "Turbo Control")
+# USTASH and UFETCH drive the REU's own DMA registers, which answer only when
+# the expansion is switched on. Enabling it here is safe in a way that touching
+# a file would not be: the machine had it off, so the expansion's contents are
+# this script's own from the moment it appears, and the setting goes back
+# afterwards with the others.
+REU = ("C64 and Cartridge Settings", "RAM Expansion Unit")
 
 BASIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "..", "..", "src", "basic")
@@ -95,6 +101,56 @@ CHECKS = [
 
     ("PRINT UTURBO", " 0",
      "and it really went back"),
+
+    # The file keywords. $CB00 is 51968: above the wedge, which ends around
+    # $CAB5, and below the I/O area - somewhere a load can land without
+    # writing over the thing doing the loading.
+    ('ULOAD "/USB1/DATA/HELLO.TXT",51968', "READY.",
+     "a PRG load, with the address given rather than taken from the file"),
+
+    ("PRINT UERR", " 0",
+     "and the Ultimate found the file: this is the SoftwareIEC fast path, on "
+     "the only machine that has one"),
+
+    ("PRINT PEEK(51968)", " 76",
+     "'L' - hello.txt starts HELLO, and a load eats the first two bytes as the "
+     "PRG header whichever tier ran"),
+
+    ('UBLOAD "/USB1/DATA/HELLO.TXT",51968,4', "READY.",
+     "raw bytes, and a limit the SDK insists on"),
+
+    ("PRINT PEEK(51968)", " 72",
+     "'H' - bload strips nothing, which is the whole difference from ULOAD"),
+
+    # The RAM expansion, typed. The C side of this is proved in ucitest.c; this
+    # is the same DMA through the wedge, which is the promise the SDK is built
+    # on - one operation, one call, from all three languages.
+    ("USTASH 51968,0,16", "READY.",
+     "sixteen bytes of C64 memory into the expansion"),
+
+    ("PRINT UERR", " 0",
+     "and the expansion answered - anything else means it is switched off"),
+
+    ("POKE 51968,0", "READY.",
+     "wipe the byte, so the fetch below cannot pass on what was already there"),
+
+    ("UFETCH 51968,0,16", "READY.",
+     "and back out again"),
+
+    ("PRINT PEEK(51968)", " 72",
+     "'H' came back through the expansion, which is a round trip no register "
+     "readback could have faked"),
+
+    # UDIR last, because it needs the current directory to be somewhere known.
+    # That directory belongs to the firmware and not to the C64, so it outlives
+    # a reset and whatever ran before this - the generic form puts it back.
+    ('UCI 1,17,"/"', "READY.",
+     "CHANGE_DIR to the root, so the listing below is the same every run"),
+
+    ("UDIR", "TEMP/",
+     "the directory prints itself, one entry per line, with a slash on the "
+     "directories - and the letters arrive as letters, which is the whole "
+     "point of folding ASCII on the way to CHROUT"),
 ]
 
 
@@ -120,7 +176,8 @@ def run(host, port, verbose, as_crt):
              info["fpga_version"], info["core_version"]))
 
     changed = require_settings(u, {CMD_IF: "Enabled",
-                                   TURBO: "U64 Turbo Registers"})
+                                   TURBO: "U64 Turbo Registers",
+                                   REU: "Enabled"})
     if changed:
         print("# saved settings: %s"
               % ", ".join("%s=%s" % (k[1], v) for k, v in changed.items()))
