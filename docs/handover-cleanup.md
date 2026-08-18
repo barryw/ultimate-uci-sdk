@@ -155,12 +155,12 @@ nowhere; the range widened without a vector; a vector dropped; `UTURBO`'s
 statement comparison deleted; `UBYTE(`'s eval comparison deleted; and the
 constant range narrowed from `UHTTP` to `UIEC`.
 
-### 7.2 The network service — built, hardware run still owed
+### ~~7.2 The network service~~ — done
 
 `src/uci/net.s`, nine of the fifteen commands, in assembly, C and the blob
-(`+$85`..`+$9A`). **The emulator half passes; the hardware half has not been run
-yet**, because the bench machine went off the network twice during this work —
-see "the machine" below, which is the first thing to read.
+(`+$85`..`+$9A`). Emulator and hardware both green, including the socket round
+trip. **Read "the machine went down three times" below before running anything
+against real hardware** — it is the part that cost the most time.
 
 Everything in the file was measured rather than read out of the protocol
 document, which gives the argument shapes and stops exactly where the trouble
@@ -201,8 +201,34 @@ is frame-scale and fine; a connect is not, and cannot be made so.
 **`make hardware-run` is 5/5 green**, with the network address checks running:
 `net-interfaces`, `net-has-an-address` (which correctly picks interface 1 of 2
 on the bench machine), `net-macaddr`, `net-macaddr-is-not-empty`,
-`net-bad-interface-is-refused`, and both argument checks. **The socket round
-trip is not in that run**, and the next section says why.
+`net-bad-interface-is-refused`, and both argument checks.
+
+**The socket round trip is proved too**, with a peer supplied:
+
+```
+make -C tests/hardware NET_PEER=192.168.1.242:6464
+make hardware-run U64_HOST=<ip>          5/5, 56 checks in uci-enabled
+```
+
+against a peer that greets, echoes once and hangs up. Four scenarios reached it
+and all four reported the same thing:
+
+```
+# read 14 bytes, ended 10
+ok - net-close-after-end-is-refused
+```
+
+Fourteen bytes is the greeting (10) plus the echo (4) exactly, which is what
+says `ultimate_net_read` strips the firmware's two-byte count and counts the
+rest correctly rather than merely returning something. Ten is `ULTIMATE_END`,
+from the peer hanging up - so the mapping from device code 1, the one the
+generic form cannot express, works end to end. And the close after it is
+refused, which is the rule measured in the probes now holding through the
+wrapper.
+
+That is the whole path: connect, write with the count checked, read with the
+prefix stripped, end of stream, and the close that must not follow it. Plus UDP
+open and close, which need no peer.
 
 **The machine went down three times, and this cost real time.** docs/uci.md,
 "The network stack is fragile", has the table. The short version: socket traffic
@@ -230,18 +256,14 @@ on something that may not be there.
 
 **What is left here:**
 
-1. The socket round trip against a real peer, through the wrappers. The
-   semantics underneath it are all measured (docs/uci.md) and the local logic is
-   in `sdk.suite`, but `ultimate_net_read`'s prefix-stripping and its
-   ULTIMATE_END mapping have not been run end to end on hardware.
-2. The four LISTEN commands stay unwrapped: `tools/gen_protocol.py` marks them
+1. The four LISTEN commands stay unwrapped: `tools/gen_protocol.py` marks them
    INFERRED, their numbers are not in the published specification, and wrapping
    a guessed command number is not something this SDK does. The generic form
    reaches them.
 3. No BASIC keywords. The token table is append-only and a token is a file
    format, so adding `UNET`-anything is a commitment that should follow a
    working demo rather than precede one.
-4. No worked example yet; `tests/hardware/ucitest.c`'s network section is the
+3. No worked example yet; `tests/hardware/ucitest.c`'s network section is the
    only reading of the API end to end.
 
 ### 7.3 The HTTP service
