@@ -373,6 +373,56 @@ uint8_t ultimate_net_read(uint8_t handle, uint8_t *buf, uint16_t bufsize,
 uint8_t ultimate_net_write(uint8_t handle, const uint8_t *buf, uint16_t len,
                            uint16_t *sent);
 
+/* ---------------------------------------------------------------------------
+ * HTTP.
+ *
+ * ultimate_http_get() is the whole of the common case: it creates the request,
+ * runs it, and gives the firmware's slot back whether the exchange worked or
+ * not. The firmware has a finite number of slots and a program that leaks them
+ * in a loop is not told what went wrong, so prefer it to the three calls it
+ * replaces.
+ *
+ *     uint16_t got;
+ *     err = ultimate_http_get(url, buf, sizeof buf, &got);
+ *     if (err == ULTIMATE_ERR_TRUNCATED)  // the page was bigger than buf
+ *         ...got is what was kept, and the rest cannot be asked for...
+ *     else if (err != ULTIMATE_OK)
+ *         ...uci_last_device_code() is the server's status, or the firmware's...
+ *
+ * **ULTIMATE_OK means the server answered below 400.** A 404 or a 500 is
+ * ULTIMATE_ERR_DEVICE with the number in uci_last_device_code() - the request
+ * itself succeeded, and the body of the error page is in your buffer. This
+ * needed a fix in the core to work at all: firmware 3.15 answers an exchange
+ * with the response line ("HTTP/1.0 200 OK...") rather than with a status code,
+ * and before uci_decode_status() knew that shape every successful request came
+ * back as a device error. See docs/uci.md.
+ *
+ * **There is no continuation.** A reply larger than the buffer is truncated and
+ * the rest is gone; nothing in the protocol offers a range or a second block.
+ *
+ * **An exchange is not bounded by the uci_set_timeout() budget**, for the same
+ * reason ultimate_net_connect() is not: it contains a name lookup and a TCP
+ * connect, and those can take tens of seconds. It waits, and restores the
+ * caller's budget afterwards.
+ *
+ * **URLs are case sensitive and cc65 charmaps string literals**, turning source
+ * 'a'-'z' into the bytes ASCII uses for 'A'-'Z'. A URL written as a plain C
+ * literal arrives uppercased. Build it as bytes, or fold it back at runtime.
+ *
+ * The JSON body builder is not wrapped - thirteen commands for a machine with
+ * 38K of BASIC - but a body built through uci_exec() can still be sent, by
+ * passing its handle to ultimate_http_exchange(). Pass HTTP_BODY_NONE to send
+ * no body at all.
+ * ------------------------------------------------------------------------- */
+uint8_t ultimate_http_get(const char *url, uint8_t *buf, uint16_t bufsize,
+                          uint16_t *got);
+uint8_t ultimate_http_open(uint8_t verb, const char *url, uint8_t *handle);
+uint8_t ultimate_http_header(uint8_t handle, const char *line);
+uint8_t ultimate_http_exchange(uint8_t handle, uint8_t body, uint8_t *buf,
+                               uint16_t bufsize, uint16_t *got);
+uint8_t ultimate_http_close(uint8_t handle);
+uint8_t ultimate_http_free_all(void);
+
 /* A short, stable, English description of an ULTIMATE_* code. Never NULL. */
 const char *ultimate_strerror(uint8_t err);
 

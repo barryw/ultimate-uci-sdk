@@ -68,6 +68,11 @@ WRAPPED = {
     "NET_CMD_CLOSE_SOCKET":       ("ultimate_net_close",),
     "NET_CMD_READ_SOCKET":        ("ultimate_net_read",),
     "NET_CMD_WRITE_SOCKET":       ("ultimate_net_write",),
+    "HTTP_CMD_HEADER_CREATE":     ("ultimate_http_open", "ultimate_http_get"),
+    "HTTP_CMD_HEADER_FREE":       ("ultimate_http_close", "ultimate_http_get"),
+    "HTTP_CMD_HEADER_ADD":        ("ultimate_http_header",),
+    "HTTP_CMD_DO_EXCHANGE_RAW":   ("ultimate_http_exchange", "ultimate_http_get"),
+    "HTTP_CMD_FREE_ALL":          ("ultimate_http_free_all",),
     "SOFTIEC_CMD_LOAD_SU":        ("ultimate_load",),
     "SOFTIEC_CMD_LOAD_EX":        ("ultimate_load",),
 }

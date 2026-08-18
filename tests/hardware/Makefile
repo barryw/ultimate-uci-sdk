@@ -33,6 +33,19 @@ NET_DEFS := -DNET_PEER_HOST='"$(word 1,$(subst :, ,$(NET_PEER)))"' \
             -DNET_PEER_PORT=$(word 2,$(subst :, ,$(NET_PEER)))
 endif
 
+# The HTTP checks want a web server on the same terms, and one that answers
+# 200 with a non-empty body at /hello and 404 at /nope:
+#
+#   make HTTP_PEER=192.168.1.242:8099
+#
+# Anything will do - python3 -m http.server in a directory holding a file
+# called hello is enough for the 200, and any path that is not there gives the
+# 404. Same dotted-quad rule as above, and for the same charmap reason.
+ifdef HTTP_PEER
+NET_DEFS += -DHTTP_PEER_HOST='"$(word 1,$(subst :, ,$(HTTP_PEER)))"' \
+            -DHTTP_PEER_PORT=$(word 2,$(subst :, ,$(HTTP_PEER)))
+endif
+
 ucitest.prg: ucitest.c $(LIB)
 	$(CL65) -t $(TARGET) -Osir -I $(ROOT)/include $(NET_DEFS) -o $@ ucitest.c $(LIB)
 

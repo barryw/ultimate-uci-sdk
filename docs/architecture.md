@@ -43,7 +43,7 @@ Constraints it holds itself to:
   transport, 48 in the service layer (16 of which is the buffer capability
   probing compares against, and 22 its own request block), 22 more for the
   caller-facing request block `bindings/asm/ultimate_asm.s` exports as
-  `uci_req`, and 37 shared by the palette, DOS, file, REU and net services.
+  `uci_req`, and 43 shared by the palette, DOS, file, REU, net and http services.
 - Four bytes of zero page, and the caller picks the address.
 - No interrupts. The IRQ-on-completion bit exists in the hardware and is exposed
   as a constant, but nothing in the SDK requires an interrupt handler.
@@ -66,6 +66,7 @@ src/uci/reu.s       stash and fetch over DMA, and the DOS REU pair
 src/uci/palette.s   the running palette, on the control target
 src/uci/turbo.s     CPU speed, which is not a UCI command at all
 src/uci/net.s       TCP and UDP sockets, on the network target
+src/uci/http.s      fetching things over HTTP
 ```
 
 Services are where target-specific knowledge lives — that `82` means something
@@ -74,16 +75,20 @@ answers in binary, that a `READ_DATA` longer than 512 bytes arrives in chunks.
 The core deliberately does not know any of that.
 
 One file per service, flat, because a service is a few hundred bytes of 6502 and
-a directory per file would be filing rather than structure. HTTP is the one that
-does not exist yet; the generic form reaches it today.
+a directory per file would be filing rather than structure. Every target the
+firmware offers now has one.
 
-`net.s` is the clearest case for why this layer exists at all. Every one of its
+`net.s` and `http.s` are the clearest cases for why this layer exists at all. Every one of its
 answers is invisible from `uci_exec()`: a socket read reports data, end of
 stream and "nothing yet" as device codes `0`, `1` and `2`, and all three are
 success in the numbering the status decoder follows — so the generic form
 returns `ULTIMATE_OK` for all three and a caller cannot tell a finished download
 from an idle one. Turning that into `ULTIMATE_END` is target-specific knowledge,
-which is exactly what a service is for. See docs/uci.md.
+which is exactly what a service is for. `http.s` is the same story with a
+different ending: there the fix belonged in the core, because an HTTP exchange
+answers with its response line rather than a status code and the *generic form*
+was reporting a device error for every request that worked. A service-layer
+patch would have left `uci_exec()` callers wrong. See docs/uci.md.
 
 **Two services do not go through `uci_exec` at all, and the list is closed.**
 `turbo.s` and `reu.s` drive hardware registers directly, because the operations

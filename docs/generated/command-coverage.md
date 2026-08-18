@@ -99,10 +99,10 @@ commands as tested that no test has ever sent.
 | SoftwareIEC commands | `SOFTIEC_CMD_GET_FATNAME` | `$22` | no API yet | hardware only |
 | SoftwareIEC commands | `SOFTIEC_CMD_GET_IECNAME` | `$23` | no API yet | hardware only |
 | HTTP commands | `HTTP_CMD_IDENTIFY` | `$01` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_FREE_ALL` | `$10` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_HEADER_CREATE` | `$11` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_HEADER_FREE` | `$12` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_HEADER_ADD` | `$13` | no API yet | hardware only |
+| HTTP commands | `HTTP_CMD_FREE_ALL` | `$10` | tested | hardware only |
+| HTTP commands | `HTTP_CMD_HEADER_CREATE` | `$11` | tested | hardware only |
+| HTTP commands | `HTTP_CMD_HEADER_FREE` | `$12` | tested | hardware only |
+| HTTP commands | `HTTP_CMD_HEADER_ADD` | `$13` | tested | hardware only |
 | HTTP commands | `HTTP_CMD_HEADER_QUERY` | `$14` | no API yet | hardware only |
 | HTTP commands | `HTTP_CMD_HEADER_LIST` | `$15` | no API yet | hardware only |
 | HTTP commands | `HTTP_CMD_BODY_CREATE` | `$21` | no API yet | hardware only |
@@ -120,14 +120,14 @@ commands as tested that no test has ever sent.
 | HTTP commands | `HTTP_CMD_BODY_ADD` | `$2D` | no API yet | hardware only |
 | HTTP commands | `HTTP_CMD_BODY_CLEAR` | `$2E` | no API yet | hardware only |
 | HTTP commands | `HTTP_CMD_DO_EXCHANGE_OBJ` | `$31` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_DO_EXCHANGE_RAW` | `$32` | no API yet | hardware only |
+| HTTP commands | `HTTP_CMD_DO_EXCHANGE_RAW` | `$32` | tested | hardware only |
 
 ## Summary
 
 | | |
 | --- | --- |
 | commands defined | 101 |
-| exercised by a test | 32 (31%) |
+| exercised by a test | 37 (36%) |
 | wrapped but untested | 0 |
 
 The low figure is expected while the SDK is still a vertical slice:

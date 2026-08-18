@@ -390,7 +390,7 @@
 // How much RAM the core needs, and where. All of it is placeable: see
 // UCI_ZP and UCI_VARS in docs/asm-abi.md.
 .label UCI_ZP_SIZE                = $04  // zero page bytes the core needs
-.label UCI_VARS_SIZE              = $7D  // non-zero-page bytes the whole SDK needs
+.label UCI_VARS_SIZE              = $8F  // non-zero-page bytes the whole SDK needs
 
 // ---- ASCII literals ----
 // Bytes that come off the wire are always written numerically. An

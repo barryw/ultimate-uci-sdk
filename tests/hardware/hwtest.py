@@ -35,7 +35,7 @@ from u64_settings import Ultimate, read_settings, restore_settings  # noqa: E402
 
 # The result block ucitest.prg publishes into the cassette buffer.
 RESULT_ADDR = 0x033C
-RESULT_LEN = 16
+RESULT_LEN = 24        # room for the format-3 flags and a little growth
 RESULT_MAGIC = b"UCIT"
 RESULT_DONE = 0xA5
 
@@ -71,6 +71,7 @@ class Result:
         # reported rather than required. See ucitest.c's fixtures.
         self.net_ran = bool(block[14]) if self.format >= 3 else False
         self.net_sock_ran = bool(block[15]) if self.format >= 3 else False
+        self.http_ran = bool(block[16]) if self.format >= 3 else False
 
     def __str__(self):
         if not self.valid:
@@ -135,10 +136,14 @@ def expect_clean_pass_with_net(r, state=None):
     if not r.net_ran:
         return ("the network checks skipped: either this firmware has no "
                 "network target, or no interface had an address")
+    missing = []
     if not r.net_sock_ran:
+        missing.append("the socket round trip (NET_PEER=<dotted-quad>:<port>)")
+    if not r.http_ran:
+        missing.append("the http checks (HTTP_PEER=<dotted-quad>:<port>)")
+    if missing:
         state = state if state is not None else {}
-        state["note"] = ("the socket round trip skipped - no peer was built in; "
-                         "use NET_PEER=<dotted-quad>:<port> to exercise it")
+        state["note"] = ("skipped for want of a peer: " + ", ".join(missing))
     return None
 
 

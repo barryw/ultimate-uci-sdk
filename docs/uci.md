@@ -250,7 +250,7 @@ in the data channel first, before it looks at the status at all.
 
 ## Status encodings
 
-Three incompatible encodings share one channel.
+Four incompatible encodings share one channel.
 
 **`NN,TEXT`** — DOS, network, control, and the placeholder. Two ASCII digits, a
 comma, then text. Observed values, taken from the firmware sources:
@@ -275,12 +275,40 @@ Note `82`. The same number means different things on different targets, which is
 exactly why the SDK's public error model is a small fixed set and the raw code is
 kept separately.
 
-**`NNN TEXT`** — HTTP only. Three ASCII digits and a space. This channel carries
-both firmware errors (`500 BAD FORMAT`, `507 NO HEADER SLOT`) and the response
-code the remote server returned (`200 OK`, `404 ENTRY NOT FOUND`). Nothing
-distinguishes the two, so the SDK maps everything below 400 to success and
-everything at or above it to a device error, and expects HTTP callers to read the
-number.
+**`NNN TEXT`** — HTTP only. Three ASCII digits and a space. On firmware 3.15
+this is what the HTTP target's *own* commands answer with: `000 OK` when a
+header or a body command works, `400 BAD COMMAND` for a handle that does not
+exist, `400 NO VALID JSON` when `DO_EXCHANGE_OBJ` cannot parse the reply. The
+SDK maps everything below 400 to success and everything at or above it to a
+device error, and keeps the number.
+
+**`HTTP/1.1 NNN TEXT`** — an HTTP exchange, and it is not a code at all. The
+status is **the response line the remote server sent, followed by the whole
+header block**:
+
+```
+HTTP/1.0 200 OK\r\nServer: SimpleHTTP/0.6 Python/3.13\r\nContent-Type: ...
+```
+
+Measured, not documented: this file used to say that the `NNN` form carried both
+the firmware's errors and the server's response code with nothing to tell them
+apart. It does not. **They are different shapes**, and that is what makes them
+separable — the firmware's own errors are three digits, and the server's answer
+arrives inside a response line.
+
+The SDK reads the three digits after the first space and applies the same rule:
+below 400 is success, at or above it is a device error with the number kept. The
+rest of the block stays in the caller's status buffer, which is where a
+`Content-Type` or a `Location` has to come from.
+
+**This was a real bug, and it was invisible from a unit test.** Before the
+decoder knew this shape it read the leading `H` as the binary form and answered
+`ULTIMATE_ERR_DEVICE`, so *every successful HTTP request looked like a failure*.
+Two things had to change: the shape had to be recognised, and the core's
+captured status prefix had to grow from four bytes to sixteen — four is enough
+for `NNN ` and nowhere near enough for `HTTP/1.1 404 `. A test that called the
+decoder directly passed the whole status in and never exercised that capture,
+which is why the fault only appeared on hardware.
 
 **A single binary byte** — SoftwareIEC only. `$00` OK, `$01` file not found,
 `$02` save error, `$03` no input channel, `$04` unknown command, `$05` IEC module

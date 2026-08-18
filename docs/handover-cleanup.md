@@ -109,11 +109,11 @@ consumes is a file nothing validates.
 ## 6. Where the SDK stands
 
 ```
-make test         GREEN   114 host unit tests + 199 across 8 suites
+make test         GREEN   114 host unit tests + 211 across 8 suites
 make hardware-run GREEN   5/5 scenarios, 40-52 checks each
 make basic-run    GREEN   32/32 from the .prg and 32/32 from the .crt
-make coverage     GREEN   32/101 commands, and 0 wrapped-but-untested
-make blob         GREEN   5952 bytes at $8000, 392 relocations
+make coverage     GREEN   37/101 commands, and 0 wrapped-but-untested
+make blob         GREEN   6607 bytes at $8000, 466 relocations
 make wedge        GREEN   wedge 2741 of the 4K at $C000, SDK 3498 of the 8K at $A000
 ```
 
@@ -266,12 +266,74 @@ on something that may not be there.
 3. No worked example yet; `tests/hardware/ucitest.c`'s network section is the
    only reading of the API end to end.
 
-### 7.3 The HTTP service
+### ~~7.3 The HTTP service~~ — done
 
-23 commands, no wrapper, and the most argument-shaped family in the protocol —
-JSON bodies, headers, and a status channel that carries both firmware errors and
-the remote server's response code with nothing distinguishing them. The SDK
-already decodes that channel; the service has to decide what a caller sees.
+`src/uci/http.s`: `http_get`, `open`, `header`, `exchange`, `close`,
+`free_all`, in assembly, C and the blob (`+$9D`..`+$AC`). Emulator and hardware
+both green, the hardware half against a web server given to the build with
+`HTTP_PEER=<dotted-quad>:<port>`.
+
+**The status channel was the whole problem, and it was worse than the handover
+thought — and better.** The prediction was that firmware errors and the remote
+server's response code would be indistinguishable. They are not, because they
+are not even the same shape:
+
+| | |
+|---|---|
+| an HTTP command | `000 OK`, or `400 BAD COMMAND` when it is refused |
+| an exchange | `HTTP/1.0 200 OK` and then the whole header block |
+
+An exchange answers with **the response line itself**, not a status code. So the
+two are separable after all, which is what made a clean answer possible: read
+the digits after the first space and apply the same "below 400 is success" rule
+the `NNN` form already used.
+
+**Before that, every successful HTTP request reported failure.** The decoder saw
+a leading `H`, decided it was the binary encoding, and returned
+`ULTIMATE_ERR_DEVICE` for a perfectly good 200. **The fix belongs in the core,
+not here**: the generic form has exactly the same problem, and a service-layer
+workaround would have left every `uci_exec` caller wrong. `uci_decode` learned a
+fourth shape.
+
+**Two bugs, and the second is the one worth remembering.** Recognising the shape
+was not enough: the core keeps its own four-byte copy of the status prefix to
+decode from, and four bytes is `NNN ` exactly — nowhere near `HTTP/1.1 404 `.
+The captured prefix is sixteen bytes now, `UCI_STAT_KEEP`, with an assembly-time
+assert so it cannot shrink back.
+
+**It was invisible from the unit tests, and that is the lesson.** Six emulator
+tests drove `uci_decode` directly with full-length statuses and all six passed
+while the real path was broken, because calling the decoder hands it the whole
+buffer and never goes through the capture that truncates it. Only hardware
+showed it. When a test bypasses a stage to reach the thing it wants to check, it
+stops covering that stage — and here the stage was where the bug was.
+
+**Widening the block moved every address after it.** `blob.suite` pokes
+`uci_req` at a literal address and `bindings/blob/README.md` publishes the
+layout; both shifted by twelve. That is the cost of a published variable block,
+and it is why anything new goes on the end.
+
+Measured, and now in docs/uci.md: an exchange is 47-256 ms against a server on
+the same subnet, so it runs on `UCI_TIMEOUT_FOREVER` for the same reason
+`net_connect` does - it contains a name lookup and a TCP connect. A reply is
+truncated to the caller's buffer and **there is no continuation**; nothing in
+the command set offers a range or a second block. And a URL written as a C
+string literal arrives uppercased, because cc65 charmaps it and an HTTP path is
+case sensitive.
+
+**What is not wrapped, deliberately:** the thirteen `BODY_*` commands, because a
+JSON builder is a large surface for a machine with 38K of BASIC and the generic
+form drives it perfectly well — a body built that way is still usable, by
+passing its handle to `ultimate_http_exchange`. Also `DO_EXCHANGE_OBJ`, which
+parses the *response* as JSON rather than the request and answers `400 NO VALID
+JSON` for anything else; surfacing typed values out of it is a service of its
+own if it is ever wanted. And `HEADER_QUERY` / `HEADER_LIST`, which read back
+what was just set.
+
+One trap found by the hardware test and worth keeping: **`http_get` frees the
+firmware's slot, and the free answers `000 OK`** — which overwrote the device
+code the caller came for, so a 200 read back as 0. The exchange's result *and*
+its code ride the stack across the tidy-up now.
 
 ### 7.4 The boing ball
 

@@ -670,6 +670,135 @@ suites {
       assert([devcode].w == 503, "503")
     }
 
+    ; **A successful HTTP exchange does not answer with a code.** Firmware 3.15
+    ; puts the response line itself in the status - the whole header block - so
+    ; the status begins "HTTP/1.x NNN Text". Before this was decoded, a 200 read
+    ; as the binary form and came back as ULTIMATE_ERR_DEVICE: the SDK reported
+    ; a failure for every request that worked. Measured on hardware; the shapes
+    ; here are transcribed from what the wire really carried.
+    test("sdk-decode-http-response-line", "a 200 is success, and the code is kept") {
+      [dec_target] = $06
+      [dec_len] = $0f
+      [dec_buf] = $48                   ; "HTTP/1.0 200 OK"
+      [dec_buf] + $01 = $54
+      [dec_buf] + $02 = $54
+      [dec_buf] + $03 = $50
+      [dec_buf] + $04 = $2f
+      [dec_buf] + $05 = $31
+      [dec_buf] + $06 = $2e
+      [dec_buf] + $07 = $30
+      [dec_buf] + $08 = $20
+      [dec_buf] + $09 = $32
+      [dec_buf] + $0a = $30
+      [dec_buf] + $0b = $30
+      [dec_buf] + $0c = $20
+      [dec_buf] + $0d = $4f
+      [dec_buf] + $0e = $4b
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([devcode].w == $00c8, "device code 200")
+    }
+
+    ; The server's own failure, which is a device error with the number kept -
+    ; the same rule the NNN form already followed.
+    test("sdk-decode-http-404", "the remote server said no, and that is a device error") {
+      [dec_target] = $06
+      [dec_len] = $0d
+      [dec_buf] = $48                   ; "HTTP/1.1 404 "
+      [dec_buf] + $01 = $54
+      [dec_buf] + $02 = $54
+      [dec_buf] + $03 = $50
+      [dec_buf] + $04 = $2f
+      [dec_buf] + $05 = $31
+      [dec_buf] + $06 = $2e
+      [dec_buf] + $07 = $31
+      [dec_buf] + $08 = $20
+      [dec_buf] + $09 = $34
+      [dec_buf] + $0a = $30
+      [dec_buf] + $0b = $34
+      [dec_buf] + $0c = $20
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+      assert([devcode].w == $0194, "device code 404")
+    }
+
+    ; 399 and 400 are the two sides of the line, and the boundary is worth
+    ; pinning because it is the whole of the success rule.
+    test("sdk-decode-http-boundary", "399 passes, 400 does not") {
+      [dec_target] = $06
+      [dec_len] = $0c
+      [dec_buf] = $48
+      [dec_buf] + $01 = $54
+      [dec_buf] + $02 = $54
+      [dec_buf] + $03 = $50
+      [dec_buf] + $04 = $2f
+      [dec_buf] + $05 = $31
+      [dec_buf] + $06 = $2e
+      [dec_buf] + $07 = $31
+      [dec_buf] + $08 = $20
+      [dec_buf] + $09 = $33            ; "399"
+      [dec_buf] + $0a = $39
+      [dec_buf] + $0b = $39
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "399 is success")
+      assert([devcode].w == $018f, "device code 399")
+
+      [dec_buf] + $09 = $34            ; "400"
+      [dec_buf] + $0a = $30
+      [dec_buf] + $0b = $30
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "400 is not")
+      assert([devcode].w == $0190, "device code 400")
+    }
+
+    ; The firmware's own errors still arrive as three digits and must keep
+    ; working: "400 BAD COMMAND" is what a bad handle answers, and it must not
+    ; be mistaken for a response line just because it shares a number.
+    test("sdk-decode-http-firmware-error", "the NNN form still decodes") {
+      [dec_target] = $06
+      [dec_len] = $04
+      [dec_buf] = $34                   ; "400 "
+      [dec_buf] + $01 = $30
+      [dec_buf] + $02 = $30
+      [dec_buf] + $03 = $20
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+      assert([devcode].w == $0190, "device code 400")
+    }
+
+    ; A truncated response line has no code to read, and inventing one would be
+    ; worse than saying so.
+    test("sdk-decode-http-truncated", "no digits after the space is malformed") {
+      [dec_target] = $06
+      [dec_len] = $09
+      [dec_buf] = $48                   ; "HTTP/1.0 " and nothing after it
+      [dec_buf] + $01 = $54
+      [dec_buf] + $02 = $54
+      [dec_buf] + $03 = $50
+      [dec_buf] + $04 = $2f
+      [dec_buf] + $05 = $31
+      [dec_buf] + $06 = $2e
+      [dec_buf] + $07 = $30
+      [dec_buf] + $08 = $20
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "ULTIMATE_ERR_PROTOCOL")
+    }
+
+    ; "HTTP" without the slash is not a response line, and must not be treated
+    ; as one - it is the DOS case, words instead of a code.
+    test("sdk-decode-http-prefix-is-exact", "five bytes, and all five matter") {
+      [dec_target] = $01
+      [dec_len] = $05
+      [dec_buf] = $48                   ; "HTTPX"
+      [dec_buf] + $01 = $54
+      [dec_buf] + $02 = $54
+      [dec_buf] + $03 = $50
+      [dec_buf] + $04 = $58
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "read as words, which is a device error")
+      assert([devcode].w == $ffff, "and carries no code")
+    }
+
     test("sdk-decode-binary", "a single binary status byte from SoftwareIEC") {
       [dec_target] = $05
       [dec_len] = $01

@@ -132,6 +132,24 @@ ULTIMATE_INC = 1
 .global ult_iface            ; interface index in, interface count out
 .global ult_port             ; TCP or UDP port, little-endian
 
+; --- http.s ----------------------------------------------------------------
+; ULTIMATE_OK means the server answered below 400; the number is in
+; uci_last_code and the response headers are in the caller's status buffer.
+; An exchange is not bounded by the timeout budget - it contains a name lookup
+; and a connect - so it waits and restores the caller's budget, like connect.
+.global ultimate_http_get      ; ult_url, ult_buf/ult_buflen -> A, ult_httplen
+.global ultimate_http_open     ; A = HTTP_VERB_*, ult_url -> A, ult_http
+.global ultimate_http_header   ; ult_http, ult_url = "key: value" -> A
+.global ultimate_http_exchange ; ult_http, ult_body, ult_buf/ult_buflen
+                               ; -> A, ult_httplen
+.global ultimate_http_close    ; ult_http -> A
+.global ultimate_http_free_all ; every slot the firmware is holding -> A
+.global ult_url                ; URL, or a header line
+.global ult_http               ; verb in, header handle out; $FF after a failure
+.global ult_body               ; body handle, or HTTP_BODY_NONE; follows ult_http
+                               ; because an exchange sends the pair
+.global ult_httplen            ; reply bytes stored
+
 ; Reading a directory is one live exchange, one entry per call, and these are
 ; the two halves of it for a caller driving the transport itself:
 .global uci_exec_first, uci_exec_next, uci_more

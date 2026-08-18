@@ -102,6 +102,41 @@ static uint8_t net_buf[288];
 static uint8_t net_ip[UCI_NET_IPCONFIG_BYTES];
 static uint8_t net_mac[UCI_NET_MACADDR_BYTES];
 
+#ifdef HTTP_PEER_HOST
+/* A request header the caller adds. Lowercase source is ASCII uppercase on the
+   wire, which is a perfectly good header name and value. */
+static const char http_hdr[] = "x-from: c64";
+
+/* Built at runtime rather than written as a literal: the URL has to be real
+   lowercase ASCII and cc65 charmaps a literal into the uppercase range. The
+   peer has to answer 200 with a non-empty body at /hello and 404 at /nope. */
+static char http_url[64];
+
+static void build_url(const char *path)
+{
+    static const char host[] = HTTP_PEER_HOST;
+    uint16_t port = HTTP_PEER_PORT;
+    char *w = http_url;
+    const char *r;
+    uint8_t started = 0;
+    uint16_t div;
+
+    for (r = "http://"; *r; ++r) *w++ = *r;
+    for (r = host; *r; ++r)      *w++ = *r;
+    *w++ = 0x3A;                                    /* ':' */
+    for (div = 10000; div; div /= 10) {
+        uint8_t d = (uint8_t)((port / div) % 10);
+        if (d || started || div == 1) { *w++ = (char)(0x30 + d); started = 1; }
+    }
+    for (r = path; *r; ++r) *w++ = *r;
+    *w = 0;
+    /* Source lowercase became ASCII uppercase on the way in; put it back. */
+    for (w = http_url; *w; ++w)
+        if ((uint8_t)*w >= 0x41 && (uint8_t)*w <= 0x5A)
+            *w = (char)(*w + 0x20);
+}
+#endif
+
 #ifdef NET_PEER_HOST
 static const char net_peer[] = NET_PEER_HOST;
 
@@ -222,6 +257,7 @@ static uint8_t readback[UCI_PALETTE_BYTES];
 static uint8_t turbo_ran;
 static uint8_t net_ran;
 static uint8_t net_sock_ran;
+static uint8_t http_ran;
 
 static void publish(void)
 {
@@ -243,6 +279,7 @@ static void publish(void)
        this file is handed rather than one it assumes exists. */
     RESULT_BLOCK[14] = net_ran;
     RESULT_BLOCK[15] = net_sock_ran;
+    RESULT_BLOCK[16] = http_ran;
     RESULT_BLOCK[12] = RESULT_DONE;     /* last, always */
 }
 
@@ -862,6 +899,80 @@ after_write:
         }
 #else
         skip("net-connect", "no peer: build with net_peer=<dotted-quad>:<port>");
+#endif
+    }
+
+    /* ------------------------------------------------------------------
+     * HTTP.
+     *
+     * Same bargain as the sockets: this needs a server, so it takes one or
+     * skips. Build with HTTP_PEER=<dotted-quad>:<port> pointed at something
+     * that answers 200 with a body at /hello and 404 at /nope.
+     * ------------------------------------------------------------------ */
+    if (!ultimate_has_http(&caps)) {
+        skip("http-get", "no http target on this firmware");
+    } else {
+#ifdef HTTP_PEER_HOST
+        uint16_t got = 0;
+        uint8_t  handle = 0xFF;
+
+        build_url("/hello");
+        printf("# url=%s\n", http_url);
+
+        err = ultimate_http_get(http_url, net_buf, sizeof(net_buf), &got);
+        check("http-get", ULTIMATE_OK, err);
+        check("http-get-returned-a-body", 1, got != 0 ? 1 : 0);
+        /*
+         * The number matters as much as the result: ULTIMATE_OK here means the
+         * server answered below 400, and this is what says the response line
+         * was really parsed rather than the status being ignored.
+         */
+        check("http-get-kept-the-status-number", 200,
+              (int)ultimate_device_code());
+        http_ran = 1;
+
+        /* A 404 is the server's answer, not a failure of ours - so it is a
+           device error with the number kept, and the error page still arrives. */
+        build_url("/nope");
+        got = 0;
+        err = ultimate_http_get(http_url, net_buf, sizeof(net_buf), &got);
+        check("http-404-is-a-device-error", ULTIMATE_ERR_DEVICE, err);
+        check("http-404-kept-the-number", 404, (int)ultimate_device_code());
+
+        /* A reply bigger than the buffer is truncated and cannot be resumed.
+           Two bytes is small enough that any real page overflows it. */
+        build_url("/hello");
+        got = 0;
+        err = ultimate_http_get(http_url, net_buf, 2, &got);
+        check("http-truncates-into-a-small-buffer",
+              ULTIMATE_ERR_TRUNCATED, err);
+        check("http-truncated-still-filled-the-buffer", 2, (int)got);
+
+        /* The long form, which is what a caller needs when it has a header to
+           add. The header itself is proved by the request succeeding with it
+           attached; what the server did with it is the server's business. */
+        build_url("/hello");
+        err = ultimate_http_open(HTTP_VERB_GET, http_url, &handle);
+        check("http-open", ULTIMATE_OK, err);
+        if (err != ULTIMATE_OK) {
+            skip("http-header", "nothing opened");
+            skip("http-exchange", "nothing opened");
+            skip("http-close", "nothing opened");
+        } else {
+            check("http-open-gave-a-handle", 1, handle != 0xFF ? 1 : 0);
+            check("http-header", ULTIMATE_OK,
+                  ultimate_http_header(handle, http_hdr));
+            got = 0;
+            check("http-exchange", ULTIMATE_OK,
+                  ultimate_http_exchange(handle, HTTP_BODY_NONE, net_buf,
+                                         sizeof(net_buf), &got));
+            check("http-exchange-returned-a-body", 1, got != 0 ? 1 : 0);
+            check("http-close", ULTIMATE_OK, ultimate_http_close(handle));
+        }
+
+        check("http-free-all", ULTIMATE_OK, ultimate_http_free_all());
+#else
+        skip("http-get", "no peer: build with http_peer=<dotted-quad>:<port>");
 #endif
     }
 

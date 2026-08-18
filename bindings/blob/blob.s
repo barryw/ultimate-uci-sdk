@@ -37,6 +37,10 @@
         .import ult_buf, ult_buflen, ult_outlen, ult_attrib, ult_num
         .import ult_addr, ult_max, ult_end, ult_reu, ult_reulen
         .import ult_sock, ult_socklen, ult_iface, ult_port
+        .import ultimate_http_get, ultimate_http_open, ultimate_http_header
+        .import ultimate_http_exchange, ultimate_http_close
+        .import ultimate_http_free_all
+        .import ult_url, ult_http, ult_body, ult_httplen
 
         .export blob_start
 
@@ -112,6 +116,16 @@ blob_start:
         jmp blob_net_read               ; +$97
         jmp blob_net_write              ; +$9A
 
+; HTTP. bp_result of ULTIMATE_OK means the server answered below 400; the
+; number it answered with is in bp_devcode either way, so a 404 is
+; ULTIMATE_ERR_DEVICE with 404 there and the error page in the buffer.
+        jmp blob_http_get               ; +$9D
+        jmp blob_http_open              ; +$A0
+        jmp blob_http_header            ; +$A3
+        jmp blob_http_exchange          ; +$A6
+        jmp blob_http_close             ; +$A9
+        jmp blob_http_free_all          ; +$AC
+
 ; ---------------------------------------------------------------------------
 ; The parameter block.
 ;
@@ -127,6 +141,7 @@ blob_start:
         .export bp_status, bp_name, bp_reply
         .export bp_attrib, bp_pos, bp_reu, bp_reulen
         .export bp_sock, bp_iface, bp_port
+        .export bp_http, bp_body, bp_verb
 
 BP_STATUS_MAX = 32
 BP_NAME_MAX   = 40
@@ -155,6 +170,11 @@ bp_reulen:  .res 4                  ; +$15A and how many bytes to move
 bp_sock:    .res 1                  ; +$15E socket handle, in and out
 bp_iface:   .res 1                  ; +$15F interface index in, count out
 bp_port:    .res 2                  ; +$160 TCP or UDP port
+
+; And again for HTTP, on the end for the same reason as everything above it.
+bp_http:    .res 1                  ; +$162 header handle, in and out
+bp_body:    .res 1                  ; +$163 body handle, or HTTP_BODY_NONE
+bp_verb:    .res 1                  ; +$164 HTTP_VERB_* for open
 
 ; ---------------------------------------------------------------------------
 ; The shims.
@@ -333,6 +353,70 @@ blob_net_write:
         sta ult_buflen + 1
         jsr ultimate_net_write
         jmp blob_moved
+
+; --- http ---
+;
+; The URL goes in bp_name like every other name, and the reply in bp_addr with
+; bp_len as its size going in and what arrived coming out.
+
+blob_http_get:
+        jsr blob_set_url
+        jsr blob_set_addr_buf
+        jsr ultimate_http_get
+        jmp blob_http_done
+
+blob_http_open:
+        jsr blob_set_url
+        lda bp_verb
+        jsr ultimate_http_open
+        pha
+        lda ult_http
+        sta bp_http
+        pla
+        jmp blob_done
+
+; The header line goes in bp_name too - it is a string the caller supplies, and
+; there is only ever one of them in flight.
+blob_http_header:
+        jsr blob_set_url
+        lda bp_http
+        sta ult_http
+        jsr ultimate_http_header
+        jmp blob_done
+
+blob_http_exchange:
+        lda bp_http
+        sta ult_http
+        lda bp_body
+        sta ult_body
+        jsr blob_set_addr_buf
+        jsr ultimate_http_exchange
+        jmp blob_http_done
+
+blob_http_close:
+        lda bp_http
+        jsr ultimate_http_close
+        jmp blob_done
+
+blob_http_free_all:
+        jsr ultimate_http_free_all
+        jmp blob_done
+
+blob_http_done:
+        pha
+        lda ult_httplen
+        sta bp_len
+        lda ult_httplen + 1
+        sta bp_len + 1
+        pla
+        jmp blob_done
+
+blob_set_url:
+        lda #<bp_name
+        sta ult_url
+        lda #>bp_name
+        sta ult_url + 1
+        rts
 
 ; --- moving the block in and out ---
 

@@ -484,7 +484,7 @@ How much RAM the core needs, and where. All of it is placeable: see UCI_ZP and U
 | Name | Value | Notes |
 | --- | --- | --- |
 | `UCI_ZP_SIZE` | 4 | zero page bytes the core needs |
-| `UCI_VARS_SIZE` | 125 | non-zero-page bytes the whole SDK needs |
+| `UCI_VARS_SIZE` | 143 | non-zero-page bytes the whole SDK needs |
 
 ## ASCII literals
 

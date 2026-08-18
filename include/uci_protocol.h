@@ -382,7 +382,7 @@
 /* How much RAM the core needs, and where. All of it is placeable: see */
 /* UCI_ZP and UCI_VARS in docs/asm-abi.md. */
 #define UCI_ZP_SIZE   4  /* zero page bytes the core needs */
-#define UCI_VARS_SIZE 125  /* non-zero-page bytes the whole SDK needs */
+#define UCI_VARS_SIZE 143  /* non-zero-page bytes the whole SDK needs */
 
 /* ---- ASCII literals ---- */
 /* Bytes that come off the wire are always written numerically. An */

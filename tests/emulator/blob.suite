@@ -49,42 +49,46 @@ suites {
       jsr($8004, stop_on_rts = true, fail_on_brk = true)
       assert(a == $00, "init")
 
-      ; uci_req sits 66 bytes into the SDK's variable block, after the service
+      ; uci_req sits 78 bytes into the SDK's variable block, after the service
       ; layer's own storage. The default VARS is $9F00 - see
-      ; bindings/blob/README.md - so the block is at $9F42.
+      ; bindings/blob/README.md - so the block is at $9F4E.
       ;
-      ; **Every byte is written, one byte at a time.** `$9f44 = $0000` stores
+      ; **These addresses move whenever the variable block grows.** They did
+      ; when the captured status prefix went from four bytes to sixteen, and
+      ; the README table is the thing to re-read rather than to guess from.
+      ;
+      ; **Every byte is written, one byte at a time.** `$9f50 = $0000` stores
       ; the low byte and leaves the high one holding whatever was in RAM,
       ; which is the trap docs/handover.md section 4 names - and with the
       ; variables now outside the loaded image, what was in RAM stopped being
       ; reliably zero and this test started failing differently run to run.
 
-      $9f42 = $01         ; UCI_REQ_TARGET = DOS1
-      $9f43 = $f0         ; UCI_REQ_COMMAND = ECHO
-      $9f44 = $00         ; UCI_REQ_ARGS
-      $9f45 = $00
-      $9f46 = $00         ; UCI_REQ_ARGLEN
-      $9f47 = $00
-      $9f48 = $00         ; UCI_REQ_PAYLOAD
-      $9f49 = $00
-      $9f4a = $00         ; UCI_REQ_PAYLOADLEN
-      $9f4b = $00
-      $9f4c = $51         ; UCI_REQ_DATA -> the reply buffer at $8151
-      $9f4d = $81
-      $9f4e = $00         ; UCI_REQ_DATAMAX = 256
-      $9f4f = $01
-      $9f50 = $00         ; UCI_REQ_DATALEN
+      $9f4e = $01         ; UCI_REQ_TARGET = DOS1
+      $9f4f = $f0         ; UCI_REQ_COMMAND = ECHO
+      $9f50 = $00         ; UCI_REQ_ARGS
       $9f51 = $00
-      $9f52 = $00         ; UCI_REQ_STATUS
+      $9f52 = $00         ; UCI_REQ_ARGLEN
       $9f53 = $00
-      $9f54 = $00         ; UCI_REQ_STATUSMAX
+      $9f54 = $00         ; UCI_REQ_PAYLOAD
       $9f55 = $00
-      $9f56 = $00         ; UCI_REQ_STATUSLEN
+      $9f56 = $00         ; UCI_REQ_PAYLOADLEN
       $9f57 = $00
+      $9f58 = $51         ; UCI_REQ_DATA -> the reply buffer at $8151
+      $9f59 = $81
+      $9f5a = $00         ; UCI_REQ_DATAMAX = 256
+      $9f5b = $01
+      $9f5c = $00         ; UCI_REQ_DATALEN
+      $9f5d = $00
+      $9f5e = $00         ; UCI_REQ_STATUS
+      $9f5f = $00
+      $9f60 = $00         ; UCI_REQ_STATUSMAX
+      $9f61 = $00
+      $9f62 = $00         ; UCI_REQ_STATUSLEN
+      $9f63 = $00
 
       jsr($8007, stop_on_rts = true, fail_on_brk = true)
       assert(a == $00, "ULTIMATE_OK")
-      assert($9f50.w == $0002, "two bytes echoed")
+      assert($9f5c.w == $0002, "two bytes echoed")
       assert($8151 == $01, "target byte")
       assert($8152 == $f0, "command byte")
     }

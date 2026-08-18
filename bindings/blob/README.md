@@ -93,6 +93,12 @@ well as returning it in `A`.
 | `+$94` | `net_close` | `bp_sock` | `bp_result` |
 | `+$97` | `net_read` | `bp_sock`, `bp_addr` = buffer, `bp_len` = its size | `bp_len` = arrived, `bp_result` |
 | `+$9A` | `net_write` | `bp_sock`, `bp_addr`, `bp_len` | `bp_len` = accepted, `bp_result` |
+| `+$9D` | `http_get` | `bp_name` = url, `bp_addr` = buffer, `bp_len` = its size | `bp_len` = arrived, `bp_devcode`, `bp_result` |
+| `+$A0` | `http_open` | `bp_name` = url, `bp_verb` | `bp_http`, `bp_result` |
+| `+$A3` | `http_header` | `bp_http`, `bp_name` = `key: value` | `bp_result` |
+| `+$A6` | `http_exchange` | `bp_http`, `bp_body`, `bp_addr`, `bp_len` | `bp_len` = arrived, `bp_result` |
+| `+$A9` | `http_close` | `bp_http` | `bp_result` |
+| `+$AC` | `http_free_all` | | `bp_result` |
 
 A directory walk is one live exchange: `+$55` then `+$58` until it answers
 `ULTIMATE_END` (`10`), with no other command in between. `+$7F` and `+$82` work
@@ -106,6 +112,14 @@ which the handle is gone and `+$94` would answer an error rather than close
 anything. `bp_len` going in is the size of the buffer, and at most two fewer
 bytes than that are stored, because the firmware sends its own count in front
 of the data and the SDK strips it.
+
+**`bp_result` of `ULTIMATE_OK` from `+$9D` means the server answered below
+400.** A 404 is `ULTIMATE_ERR_DEVICE` with 404 in `bp_devcode` and the error
+page in the buffer, because the request itself worked. A reply bigger than
+`bp_len` is `ULTIMATE_ERR_TRUNCATED` and the rest cannot be asked for — the
+protocol has no continuation. `+$9D` frees the firmware's slot whether the
+exchange worked or not, which `+$A0` does not: a program that opens in a loop
+and forgets `+$A9` runs the Ultimate out of header slots.
 
 **`+$8E` can take thirty seconds.** A connect to an address with nothing at it
 was measured at 30.8 s before the firmware gave up, and no timeout budget
@@ -141,6 +155,9 @@ At `base+$100`, page-aligned so a BASIC program needs no address arithmetic.
 | `+$15E` | `bp_sock` — socket handle, in and out; `$FF` after a failed open | 1 |
 | `+$15F` | `bp_iface` — interface index in, interface count out | 1 |
 | `+$160` | `bp_port` — TCP or UDP port | 2 |
+| `+$162` | `bp_http` — HTTP header handle, in and out | 1 |
+| `+$163` | `bp_body` — HTTP body handle, or `HTTP_BODY_NONE` | 1 |
+| `+$164` | `bp_verb` — `HTTP_VERB_*` for `http_open` | 1 |
 
 Offsets are from the block, so `bp_reu` in a `$8000` build is at `$8256`. The
 block is a fixed 512 bytes whatever is used of it, which is why the four above
@@ -165,11 +182,11 @@ For the default build (`VARS=40704`, i.e. `UCI_VARS = $9F00`):
 
 | Address | Name | Size |
 |---|---|---|
-| `$9F0E` | `uci_dec_target` | 1 |
-| `$9F0F` | `uci_dec_ptr` | 2 |
-| `$9F11` | `uci_dec_len` | 1 |
-| `$9F42` | `uci_req` | `UCI_REQ_SIZE` (22) |
-| `$9F58` | `ult_color` | 4 — index, r, g, b for `+$3D` |
+| `$9F1A` | `uci_dec_target` | 1 |
+| `$9F1B` | `uci_dec_ptr` | 2 |
+| `$9F1D` | `uci_dec_len` | 1 |
+| `$9F4E` | `uci_req` | `UCI_REQ_SIZE` (22) |
+| `$9F64` | `ult_color` | 4 — index, r, g, b for `+$3D` |
 
 A build with `VARS=` set to something else shifts all five by the same
 amount: each is `UCI_VARS` plus the fixed offset above minus `$9F00`.

@@ -37,9 +37,9 @@ it under an emulator and on real hardware, and exposes it to assembly and C.
 
 **Status: early.** The transport, the error model and capability detection are
 complete and tested — under a simulated Ultimate, and on a real Ultimate 64
-Elite running firmware 3.15. So are the palette, turbo, file, REU and network
-services: directories, open/read/write/seek, load and save, both directions of
-the RAM expansion, and TCP and UDP sockets. HTTP is next.
+Elite running firmware 3.15. So are the palette, turbo, file, REU, network and
+HTTP services: directories, open/read/write/seek, load and save, both directions
+of the RAM expansion, TCP and UDP sockets, and fetching a URL.
 
 ## What hardware does it support?
 
@@ -75,11 +75,14 @@ enable it in the ultimate settings menu.
 | the running palette | `palette_get`, `palette_set`, `palette_set_color`, `palette_reset` |
 | CPU speed on an Ultimate 64 | `turbo_set`, `turbo_get`, `turbo_badlines` |
 | TCP and UDP sockets | `net_connect`, `net_udp`, `net_read`, `net_write`, `net_close`, and the machine's own address from `net_ipconfig` |
+| fetching a URL | `http_get` in one call, or `http_open`/`http_header`/`http_exchange` when a request needs headers |
 | anything else the firmware offers | the generic form: any command, on any target, with framing, timeouts and error translation handled |
 
-HTTP has no wrapper yet, and neither do the four TCP listener commands — their
-command numbers are not in the published specification. Both are reachable
-today through the generic form, which is the whole reason it exists.
+The JSON body builder has no wrapper — thirteen commands for a machine with 38K
+of BASIC — and neither do the four TCP listener commands, whose numbers are not
+in the published specification. Both are reachable through the generic form,
+which is the whole reason it exists, and a body built that way can still be sent
+with `http_exchange`.
 
 ## Getting started
 
@@ -244,13 +247,14 @@ public model does not expose them.
 Built for a machine with 38 kilobytes.
 
 - No heap, no hidden buffers. Every byte lands in a buffer you own.
-- 125 bytes of static RAM in total, request block included. No allocation, ever.
+- 143 bytes of static RAM in total, request block included. No allocation, ever.
 - Four bytes of zero page, at an address you choose.
 - No interrupts required, and no interrupt handler installed.
 - Every entry point is bounded: it completes or returns `ULTIMATE_ERR_TIMEOUT`.
-  The one exception is opening a socket, and it is documented as one: a connect
-  was measured at 30.8 s to an address with nothing at it, which no timeout
-  budget can express, so it waits on the firmware's own limit instead.
+  The exceptions are opening a socket and running an HTTP exchange, and both are
+  documented as such: a connect was measured at 30.8 s to an address with
+  nothing at it, which no timeout budget can express, so they wait on the
+  firmware's own limit instead.
 
 ## Testing
 
@@ -261,7 +265,7 @@ make test         # sim6502 in Docker: the assembled SDK, against a simulated Ul
 make -C tests/hardware && copy ucitest.prg to your Ultimate    # the real thing, TAP output
 ```
 
-Current results: **114 host unit tests, 199 emulator tests and 5/5 hardware
+Current results: **114 host unit tests, 211 emulator tests and 5/5 hardware
 scenarios, all passing** — the last of those on an Ultimate 64 Elite running
 firmware 3.15, where the BASIC wedge is also typed at the machine line by line
 and checked on the screen.

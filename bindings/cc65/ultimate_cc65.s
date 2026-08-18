@@ -60,10 +60,13 @@ _uci_decode_status:
         .import ultimate_net_ipconfig, ultimate_net_connect
         .import ultimate_net_udp, ultimate_net_read, ultimate_net_write
         .import ult_sock, ult_socklen, ult_iface, ult_port
+        .import ultimate_http_open, ultimate_http_header
+        .import ultimate_http_exchange, ultimate_http_get
+        .import ult_url, ult_http, ult_body, ult_httplen
         .import ult_addr, ult_max, ult_reu, ult_reulen
         .import ult_buf, ult_buflen, ult_outlen, ult_color
         .import ult_attrib, ult_num
-        .import incsp1, incsp2, incsp4, incsp5, incsp6
+        .import incsp1, incsp2, incsp3, incsp4, incsp5, incsp6
         .importzp sreg
 
         .export _ultimate_identify
@@ -77,6 +80,8 @@ _uci_decode_status:
         .export _ultimate_net_ifcount, _ultimate_net_macaddr
         .export _ultimate_net_ipconfig, _ultimate_net_connect
         .export _ultimate_net_udp, _ultimate_net_read, _ultimate_net_write
+        .export _ultimate_http_open, _ultimate_http_header
+        .export _ultimate_http_exchange, _ultimate_http_get
 
 ; uint8_t ultimate_identify(uint8_t target, char *buf, uint16_t buflen,
 ;                           uint16_t *outlen);
@@ -543,4 +548,109 @@ cc_out_ptr:
         sec
         rts
 @null:  clc
+        rts
+
+; ---------------------------------------------------------------------------
+; http.s. Same convention as the net shims above: the out-parameter waits in
+; ult_outlen while uci_exec runs, because the zero page slots do not survive it.
+; ---------------------------------------------------------------------------
+
+; uint8_t ultimate_http_get(const char *url, uint8_t *buf, uint16_t bufsize,
+;                           uint16_t *got);
+;
+; A/X holds got; the C stack holds bufsize at 0..1, buf at 2..3, url at 4..5.
+_ultimate_http_get:
+        jsr cc_hold_out
+        ldy #$00
+        lda (c_sp),y
+        sta ult_buflen
+        iny
+        lda (c_sp),y
+        sta ult_buflen + 1
+        iny
+        jsr cc_ptr_at_y                 ; buf -> ult_buf
+        iny
+        jsr cc_url_at_y                 ; url -> ult_url
+        jsr incsp6
+        jsr ultimate_http_get
+        jmp cc_out_http
+
+; uint8_t ultimate_http_exchange(uint8_t handle, uint8_t body, uint8_t *buf,
+;                                uint16_t bufsize, uint16_t *got);
+;
+; A/X holds got; the C stack holds bufsize at 0..1, buf at 2..3, body at 4 and
+; the handle at 5.
+_ultimate_http_exchange:
+        jsr cc_hold_out
+        ldy #$00
+        lda (c_sp),y
+        sta ult_buflen
+        iny
+        lda (c_sp),y
+        sta ult_buflen + 1
+        iny
+        jsr cc_ptr_at_y                 ; buf -> ult_buf
+        iny
+        lda (c_sp),y
+        sta ult_body
+        iny
+        lda (c_sp),y
+        sta ult_http
+        jsr incsp6
+        jsr ultimate_http_exchange
+        jmp cc_out_http
+
+; uint8_t ultimate_http_open(uint8_t verb, const char *url, uint8_t *handle);
+;
+; A/X holds handle; the C stack holds url at 0..1 and the verb at 2.
+_ultimate_http_open:
+        jsr cc_hold_out
+        ldy #$00
+        jsr cc_url_at_y
+        iny
+        lda (c_sp),y
+        pha                             ; the verb, past the stack adjustment
+        jsr incsp3
+        pla
+        jsr ultimate_http_open
+        ldx ult_http
+        jmp cc_out_byte
+
+; uint8_t ultimate_http_header(uint8_t handle, const char *line);
+;
+; A/X holds the line; the C stack holds the handle at 0.
+_ultimate_http_header:
+        sta ult_url
+        stx ult_url + 1
+        ldy #$00
+        lda (c_sp),y
+        sta ult_http
+        jsr incsp1
+        jsr ultimate_http_header
+        ldx #$00
+        rts
+
+; The two bytes at (c_sp),y into ult_url, which is cc_ptr_at_y for the other
+; pointer this layer passes.
+cc_url_at_y:
+        lda (c_sp),y
+        sta ult_url
+        iny
+        lda (c_sp),y
+        sta ult_url + 1
+        rts
+
+; A = the result to hand back; ult_httplen is what gets stored.
+cc_out_http:
+        pha
+        jsr cc_out_ptr
+        bcc @none
+        ldy #$00
+        lda ult_httplen
+        sta (uci_ptr),y
+        iny
+        lda ult_httplen + 1
+        sta (uci_ptr),y
+@none:  pla
+        ldx #$00
         rts

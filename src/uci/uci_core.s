@@ -44,7 +44,8 @@
         .export ult_fargs, ult_addr, ult_max, ult_end, ult_got
         .export ult_reu, ult_reulen
         .export ult_sock, ult_socklen, ult_iface, ult_port
-        .export uci_stat
+        .export ult_url, ult_http, ult_body, ult_httplen
+        .export uci_stat, uci_devcode
 
 ; ---------------------------------------------------------------------------
 ; Variables
@@ -70,6 +71,9 @@
 ; uci_exec takes the block by pointer, so it can live wherever you put it.
 ; ---------------------------------------------------------------------------
 
+; Enough to hold "HTTP/1.1 NNN" and a little more; see uci_stat below.
+UCI_STAT_KEEP = 16
+
 .ifdef UCI_VARS
 
 uci_timeout     = UCI_VARS + 0  ; budget, in units of 256 status polls
@@ -78,60 +82,67 @@ uci_devcode     = UCI_VARS + 2  ; last raw device status code (word)
 uci_trunc       = UCI_VARS + 4  ; the reply did not fit the caller's buffer
 uci_cnt         = UCI_VARS + 5  ; 16-bit loop counter
 uci_tmp         = UCI_VARS + 7  ; 16-bit scratch
-uci_stat        = UCI_VARS + 9  ; captured status prefix, 4 bytes
-uci_statlen     = UCI_VARS + 13
-uci_dec_target  = UCI_VARS + 14 ; parameters for uci_decode, which takes more
-uci_dec_ptr     = UCI_VARS + 15 ; than fits in registers
-uci_dec_len     = UCI_VARS + 17
+uci_stat        = UCI_VARS + 9  ; captured status prefix, UCI_STAT_KEEP bytes
+uci_statlen     = UCI_VARS + 25
+uci_dec_target  = UCI_VARS + 26 ; parameters for uci_decode, which takes more
+uci_dec_ptr     = UCI_VARS + 27 ; than fits in registers
+uci_dec_len     = UCI_VARS + 29
 
 ; --- service layer (src/uci/ultimate.s) ---
 ; One block for the whole SDK, so a cartridge places one thing, not two.
-ult_up          = UCI_VARS + 18 ; ultimate_init has succeeded
-ult_buf         = UCI_VARS + 19 ; caller buffer for identify / model
-ult_buflen      = UCI_VARS + 21
-ult_outlen      = UCI_VARS + 23 ; where to write the length, 0 for nowhere
-ult_caps        = UCI_VARS + 25 ; caller capability block
-ult_scratch     = UCI_VARS + 27 ; probe buffer, see ultimate.s for why 16
-ult_req         = UCI_VARS + 43 ; the service layer's own request block
-ult_probe       = UCI_VARS + 43 + UCI_REQ_SIZE  ; capability probe cursor
+ult_up          = UCI_VARS + 30 ; ultimate_init has succeeded
+ult_buf         = UCI_VARS + 31 ; caller buffer for identify / model
+ult_buflen      = UCI_VARS + 33
+ult_outlen      = UCI_VARS + 35 ; where to write the length, 0 for nowhere
+ult_caps        = UCI_VARS + 37 ; caller capability block
+ult_scratch     = UCI_VARS + 39 ; probe buffer, see ultimate.s for why 16
+ult_req         = UCI_VARS + 55 ; the service layer's own request block
+ult_probe       = UCI_VARS + 55 + UCI_REQ_SIZE  ; capability probe cursor
 
 ; --- caller-facing request block (bindings/asm/ultimate_asm.s) ---
-uci_req         = UCI_VARS + 44 + UCI_REQ_SIZE
+uci_req         = UCI_VARS + 56 + UCI_REQ_SIZE
 
 ; Appended after uci_req rather than beside the other service variables, so that
 ; the addresses bindings/blob/README.md publishes stay where they are. Anything
 ; added later goes on the end for the same reason.
-ult_color       = UCI_VARS + 44 + 2 * UCI_REQ_SIZE  ; index, r, g, b for the palette
-uci_more        = UCI_VARS + 48 + 2 * UCI_REQ_SIZE  ; another reply block follows
+ult_color       = UCI_VARS + 56 + 2 * UCI_REQ_SIZE  ; index, r, g, b for the palette
+uci_more        = UCI_VARS + 60 + 2 * UCI_REQ_SIZE  ; another reply block follows
 
 ; --- dos service (src/uci/dos.s) ---
-ult_attrib      = UCI_VARS + 49 + 2 * UCI_REQ_SIZE  ; open's mask in, readdir's out
-ult_dir         = UCI_VARS + 50 + 2 * UCI_REQ_SIZE  ; where a directory walk is up to
-ult_num         = UCI_VARS + 51 + 2 * UCI_REQ_SIZE  ; seek's dword, read's word
+ult_attrib      = UCI_VARS + 61 + 2 * UCI_REQ_SIZE  ; open's mask in, readdir's out
+ult_dir         = UCI_VARS + 62 + 2 * UCI_REQ_SIZE  ; where a directory walk is up to
+ult_num         = UCI_VARS + 63 + 2 * UCI_REQ_SIZE  ; seek's dword, read's word
 
 ; --- file service (src/uci/file.s) ---
 ; ult_fargs is the SoftwareIEC argument block, laid out per command, and
 ; ult_addr is the address field inside it rather than a copy of it - so a caller
 ; that sets the address has already filled the argument.
-ult_fargs       = UCI_VARS + 55 + 2 * UCI_REQ_SIZE  ; sec, verify, addr16, unused16
-ult_addr        = UCI_VARS + 57 + 2 * UCI_REQ_SIZE  ; = ult_fargs + 2
-ult_max         = UCI_VARS + 61 + 2 * UCI_REQ_SIZE  ; bload's limit, save's length
-ult_end         = UCI_VARS + 63 + 2 * UCI_REQ_SIZE  ; after the last byte loaded
-ult_got         = UCI_VARS + 65 + 2 * UCI_REQ_SIZE  ; bytes the last chunk moved
+ult_fargs       = UCI_VARS + 67 + 2 * UCI_REQ_SIZE  ; sec, verify, addr16, unused16
+ult_addr        = UCI_VARS + 69 + 2 * UCI_REQ_SIZE  ; = ult_fargs + 2
+ult_max         = UCI_VARS + 73 + 2 * UCI_REQ_SIZE  ; bload's limit, save's length
+ult_end         = UCI_VARS + 75 + 2 * UCI_REQ_SIZE  ; after the last byte loaded
+ult_got         = UCI_VARS + 77 + 2 * UCI_REQ_SIZE  ; bytes the last chunk moved
 
 ; --- reu service (src/uci/reu.s) ---
-ult_reu         = UCI_VARS + 67 + 2 * UCI_REQ_SIZE  ; REU address, 24 bits of 32
-ult_reulen      = UCI_VARS + 71 + 2 * UCI_REQ_SIZE  ; and the length beside it
+ult_reu         = UCI_VARS + 79 + 2 * UCI_REQ_SIZE  ; REU address, 24 bits of 32
+ult_reulen      = UCI_VARS + 83 + 2 * UCI_REQ_SIZE  ; and the length beside it
 
 ; --- net service (src/uci/net.s) ---
 ; ult_socklen follows ult_sock because READ_SOCKET wants <handle> <len:16> as
 ; three consecutive bytes on the wire, and they are sent straight out of here.
-ult_sock        = UCI_VARS + 75 + 2 * UCI_REQ_SIZE  ; socket handle, in and out
-ult_socklen     = UCI_VARS + 76 + 2 * UCI_REQ_SIZE  ; buffer size in, bytes moved out
-ult_iface       = UCI_VARS + 78 + 2 * UCI_REQ_SIZE  ; interface index in, count out
-ult_port        = UCI_VARS + 79 + 2 * UCI_REQ_SIZE  ; TCP or UDP port, little-endian
+ult_sock        = UCI_VARS + 87 + 2 * UCI_REQ_SIZE  ; socket handle, in and out
+ult_socklen     = UCI_VARS + 88 + 2 * UCI_REQ_SIZE  ; buffer size in, bytes moved out
+ult_iface       = UCI_VARS + 90 + 2 * UCI_REQ_SIZE  ; interface index in, count out
+ult_port        = UCI_VARS + 91 + 2 * UCI_REQ_SIZE  ; TCP or UDP port, little-endian
 
-.assert (81 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+; --- http service (src/uci/http.s) ---
+; ult_body follows ult_http because an exchange sends the two as one pair.
+ult_url         = UCI_VARS + 93 + 2 * UCI_REQ_SIZE  ; URL, or a header line
+ult_http        = UCI_VARS + 95 + 2 * UCI_REQ_SIZE  ; verb in, header handle out
+ult_body        = UCI_VARS + 96 + 2 * UCI_REQ_SIZE  ; body handle, or HTTP_BODY_NONE
+ult_httplen     = UCI_VARS + 97 + 2 * UCI_REQ_SIZE  ; reply bytes stored
+
+.assert (99 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
         .export uci_req
 
@@ -146,11 +157,18 @@ uci_trunc:      .res 1
 uci_cnt:        .res 2
 uci_tmp:        .res 2
 
-; The status prefix, always captured whatever the caller asked for. Four bytes
-; is the widest numeric prefix any encoding uses ("NNN " for HTTP), and the SDK
-; decides which encoding a status is in by looking at exactly these bytes - so
+; The status prefix, always captured whatever the caller asked for. The SDK
+; decides which encoding a status is in by looking at exactly these bytes, so
 ; decoding from a caller buffer that might be shorter would change the answer.
-uci_stat:       .res 4
+;
+; **Four bytes was enough until it was not.** "NNN " is the widest *numeric*
+; prefix, but an HTTP exchange answers with the response line itself, and
+; "HTTP/1.1 404 " is thirteen bytes before the code is even complete. With four
+; captured, every successful request decoded as the binary form and came back
+; as a device error - and the fault was invisible from a unit test, because
+; testing uci_decode directly hands it a full-length buffer and never goes
+; through this capture at all.
+uci_stat:       .res UCI_STAT_KEEP
 uci_statlen:    .res 1
 
 uci_dec_target: .res 1
@@ -201,6 +219,13 @@ ult_sock:       .res 1          ; socket handle, in and out
 ult_socklen:    .res 2          ; buffer size in, bytes moved out
 ult_iface:      .res 1          ; interface index in, interface count out
 ult_port:       .res 2          ; TCP or UDP port, little-endian
+
+; --- http service (src/uci/http.s) ---
+; ult_body follows ult_http because an exchange sends the two as one pair.
+ult_url:        .res 2          ; URL, or a header line
+ult_http:       .res 1          ; verb in, header handle out
+ult_body:       .res 1          ; body handle, or HTTP_BODY_NONE
+ult_httplen:    .res 2          ; reply bytes stored
 
 .endif
 
@@ -937,8 +962,8 @@ uci_read_block:
         beq @stat_done
         lda UCI_REG_STATDATA
         pha
-        ldx uci_statlen         ; keep the first four bytes for the decoder
-        cpx #$04
+        ldx uci_statlen         ; keep the prefix the decoder needs
+        cpx #UCI_STAT_KEEP
         bcs @caller_copy
         sta uci_stat,x
         inc uci_statlen
@@ -1077,7 +1102,16 @@ uci_decode:
         ldx #$00
         rts
 
-@have:  ; is byte 0 a digit?
+@have:  ; **"HTTP/1.0 200 OK" is a status too, and it is not a code.** An HTTP
+        ; exchange answers with the response line itself - the whole header
+        ; block, in fact - rather than with the NNN form the firmware uses for
+        ; its own errors. It starts with a letter, so without this it reads as
+        ; the binary form and a perfectly good 200 comes back as a device
+        ; error. Measured on firmware 3.15; see docs/uci.md.
+        jsr uci_http_line
+        bcc @not_http
+        jmp @http_code
+@not_http:
         ldy #$00
         lda (uci_ptr),y
         jsr uci_is_digit
@@ -1143,19 +1177,27 @@ uci_decode:
         lda uci_tmp + 1
         sta uci_devcode + 1
 
-        ; Below 400 is success. This channel carries both firmware errors and
-        ; the response code a remote server sent, and nothing distinguishes
-        ; them, so a 404 from a web server is a device error with the code kept
+        ; Below 400 is success. This channel carries both the firmware's own
+        ; errors and the response code a remote server sent - "400 BAD COMMAND"
+        ; from the one and "404 NOT FOUND" from the other are the same shape -
+        ; so a 404 from a web server is a device error with the code kept
         ; rather than an SDK misuse.
+@d3_class:
         lda uci_tmp + 1
         cmp #>400
-        bcc @ok
+        bcc @d3_ok
         bne @d3_err
         lda uci_tmp
         cmp #<400
-        bcc @ok
+        bcc @d3_ok
 @d3_err:
         lda #ULTIMATE_ERR_DEVICE
+        ldx #$00
+        rts
+
+; Its own success return rather than the shared one: two encodings now land
+; here and the shared @ok is no longer inside a relative branch of either.
+@d3_ok: lda #ULTIMATE_OK
         ldx #$00
         rts
 
@@ -1178,6 +1220,80 @@ uci_decode:
         sta uci_devcode + 1
         lda uci_devcode
         jmp uci_map_decimal2
+
+; --- "HTTP/1.1 404 Not Found\r\nServer: ..." ---
+;
+; The code is the three digits after the first space, and everything past it is
+; the server's own words plus the rest of the header block. Only the digits are
+; read; the caller still has the whole thing in its status buffer, which is
+; where a Content-Type or a Location has to come from.
+@http_code:
+        ldy #$05                ; past "HTTP/"
+@sp:    cpy uci_dec_len
+        bcs @http_bad
+        lda (uci_ptr),y
+        cmp #UCI_ASCII_SPACE
+        beq @sp_found
+        iny
+        bne @sp
+        beq @http_bad          ; a 256-byte version string is not one
+
+; Three digits have to fit between here and the end.
+@sp_found:
+        iny
+        tya
+        clc
+        adc #$02
+        cmp uci_dec_len
+        bcs @http_bad
+
+        lda (uci_ptr),y         ; hundreds
+        jsr uci_is_digit
+        bcc @http_bad
+        sec
+        sbc #UCI_ASCII_ZERO
+        tax
+        lda uci_hundreds_lo,x
+        sta uci_tmp
+        lda uci_hundreds_hi,x
+        sta uci_tmp + 1
+
+        iny                     ; tens
+        lda (uci_ptr),y
+        jsr uci_is_digit
+        bcc @http_bad
+        sec
+        sbc #UCI_ASCII_ZERO
+        tax
+        clc
+        lda uci_tens,x
+        adc uci_tmp
+        sta uci_tmp
+        bcc @http_units
+        inc uci_tmp + 1
+
+@http_units:
+        iny
+        lda (uci_ptr),y
+        jsr uci_is_digit
+        bcc @http_bad
+        sec
+        sbc #UCI_ASCII_ZERO
+        clc
+        adc uci_tmp
+        sta uci_tmp
+        bcc @http_store
+        inc uci_tmp + 1
+
+@http_store:
+        lda uci_tmp
+        sta uci_devcode
+        lda uci_tmp + 1
+        sta uci_devcode + 1
+        jmp @d3_class           ; the same "below 400 is success" rule
+
+@http_bad:
+        jmp @malformed          ; trampoline: the real target is out of range
 
 ; --- a single binary byte ---
 @binary_form:
@@ -1237,6 +1353,8 @@ uci_decode:
 ; faster than shift-and-add, and there are only ten possible digits.
 ; ---------------------------------------------------------------------------
         .rodata
+uci_http_prefix:
+        .byte $48, $54, $54, $50, $2F   ; "HTTP/"
 uci_tens:
         .byte 0, 10, 20, 30, 40, 50, 60, 70, 80, 90
 uci_hundreds_lo:
@@ -1252,6 +1370,29 @@ uci_hundreds_hi:
 ; of what character set the target uses, must not reach bytes that came off the
 ; wire - the status channel carries ASCII whatever the screen wants.
 ; ---------------------------------------------------------------------------
+; "HTTP/1.1 NNN" is thirteen bytes, and the decoder only ever sees what the
+; capture kept - so if that ever shrinks, this is what says so at assembly time
+; rather than at the far end of a request that quietly reports a device error.
+.assert UCI_STAT_KEEP >= 13, error, "uci_stat must hold HTTP/1.1 NNN"
+
+; Carry set when the status begins "HTTP/". Five bytes is a cheap test and
+; nothing else in any encoding can start that way: the other three begin with a
+; digit or with a byte below $20.
+uci_http_line:
+        lda uci_dec_len
+        cmp #$05
+        bcc @no
+        ldy #$04
+@byte:  lda (uci_ptr),y
+        cmp uci_http_prefix,y
+        bne @no
+        dey
+        bpl @byte
+        sec
+        rts
+@no:    clc
+        rts
+
 uci_is_digit:
         cmp #UCI_ASCII_ZERO
         bcc @no
