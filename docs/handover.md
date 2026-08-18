@@ -44,7 +44,7 @@ make wedge            GREEN     uci.prg 5948 bytes, uci.crt 8272. The wedge
                                 holds 2741 of the 4K at $C000, and the SDK runs
                                 at $A000 under BASIC ROM: 3498 of 8K, reached
                                 through the stubs in src/basic/bank.s
-make test             GREEN     114 host unit tests + 187 tests across 8 suites
+make test             GREEN     114 host unit tests + 199 tests across 8 suites
 make basic-run        GREEN     32/32 from the .prg and 32/32 from the .crt, the
                                 same checks typed at a real C64. The cartridge
                                 costs BASIC 8K: 38911 bytes free becomes 30719
@@ -55,7 +55,7 @@ make hardware-run     GREEN     5/5 scenarios on real hardware: 40 checks in
                                 is off, which is what those scenarios exist to
                                 turn on. uci-disabled asserts one clean failure
                                 and reports failed=1 on purpose
-make coverage         GREEN     0 wrapped-but-untested
+make coverage         GREEN     32/101 commands, 0 wrapped-but-untested
 make time-run         n/a       not a test: it times a UCI round trip on the
                                 machine and prints the numbers. A whole-palette
                                 rotation is 0.24 frames

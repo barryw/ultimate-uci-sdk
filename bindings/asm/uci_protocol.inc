@@ -151,6 +151,12 @@ NET_CMD_LISTEN_SOCKET       = $15  ; INFERRED: not in the published spec
 ; Fixed-width blobs the network target exchanges.
 UCI_NET_MACADDR_BYTES  = $06  ; bytes in a MAC address
 UCI_NET_IPCONFIG_BYTES = $0C  ; bytes in an ip/mask/gateway triple
+UCI_NET_READ_PREFIX    = $02  ; 16-bit count the firmware puts in front of socket data
+UCI_NET_READ_MAX       = $0200  ; largest READ_SOCKET this SDK will ask for - see docs/uci.md
+UCI_NET_NO_DATA        = $FFFF  ; that count, when nothing was available to read
+UCI_NET_DEV_OK         = $00  ; network device code: the reply carries data
+UCI_NET_DEV_CLOSED     = $01  ; network device code: the peer hung up, reported once
+UCI_NET_DEV_NO_DATA    = $02  ; network device code: nothing pending, try again
 
 ; ---- Control commands (target $04) ----
 CTRL_CMD_IDENTIFY          = $01
@@ -377,7 +383,7 @@ UCI_REQ_SIZE       = $16  ; total size of the block
 ; How much RAM the core needs, and where. All of it is placeable: see
 ; UCI_ZP and UCI_VARS in docs/asm-abi.md.
 UCI_ZP_SIZE   = $04  ; zero page bytes the core needs
-UCI_VARS_SIZE = $77  ; non-zero-page bytes the whole SDK needs
+UCI_VARS_SIZE = $7D  ; non-zero-page bytes the whole SDK needs
 
 ; ---- ASCII literals ----
 ; Bytes that come off the wire are always written numerically. An

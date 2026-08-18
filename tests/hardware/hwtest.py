@@ -66,6 +66,8 @@ class Result:
         self.done = block[12] == RESULT_DONE
         # Format 2 and later: whether the turbo checks ran rather than skipped.
         self.turbo_ran = bool(block[13]) if self.format >= 2 else False
+        # Format 3 and later: the same question for the socket checks.
+        self.net_ran = bool(block[14]) if self.format >= 3 else False
 
     def __str__(self):
         if not self.valid:
@@ -108,6 +110,25 @@ def expect_clean_pass(r, state=None):
         return "expected at least 13 tests, saw %d" % r.tests
     if r.ident != 0xC9:
         return "expected the identification register to read $C9, saw $%02x" % r.ident
+    return None
+
+
+def expect_clean_pass_with_net(r, state=None):
+    """A clean pass, and the socket checks really connected to something.
+
+    u64sim implements no network command at all, so tests/hardware is the only
+    place they are exercised - which makes a silent skip here the difference
+    between covered and not covered. The peer is the Ultimate's own web server,
+    so the only ways to skip are a firmware with no network target or a machine
+    with no address, and both are worth being told about rather than passing
+    quietly.
+    """
+    problem = expect_clean_pass(r)
+    if problem:
+        return problem
+    if not r.net_ran:
+        return ("the socket checks skipped: either this firmware has no "
+                "network target, or no interface had an address")
     return None
 
 
@@ -185,10 +206,11 @@ SCENARIOS = [
     },
     {
         "name": "uci-enabled",
-        "why": "the baseline: everything passes with the interface on",
+        "why": "the baseline: everything passes with the interface on, and "
+               "the sockets reach the machine's own web server",
         "steps": [
             ({CMD_IF: "Enabled", REU: "Disabled", TURBO: "Off"},
-             expect_clean_pass),
+             expect_clean_pass_with_net),
         ],
     },
     {

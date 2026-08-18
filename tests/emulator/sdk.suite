@@ -401,6 +401,79 @@ suites {
       assert([req_datalen].w == $0000, "and nothing went on the wire")
     }
 
+    ; -------------------------------------------------------------------- net
+
+    ; u64sim implements no network command, so what these pin is the half of
+    ; net.s that never reaches the wire. The sockets that carry bytes are in
+    ; tests/hardware, against the Ultimate's own web server - see docs/uci.md.
+
+    test("sdk-net-read-refuses-a-null-buffer", "a caller bug, caught before the wire") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [result] = $ff
+      jsr([t_net_read_null], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+      assert([net_got].w == $0000, "and nothing is claimed to have arrived")
+    }
+
+    ; The firmware sends a 16-bit count in front of the data, so a buffer that
+    ; can hold only the count has no room for a single byte of payload. Asking
+    ; anyway would truncate every read.
+    test("sdk-net-read-refuses-a-buffer-with-no-room", "two bytes is the count and nothing else") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [result] = $ff
+      jsr([t_net_read_tiny], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    test("sdk-net-write-refuses-a-null-buffer", "the same rule, sending") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [result] = $ff
+      jsr([t_net_write_null], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    ; A failed open must not leave a handle behind: $FF is not a socket, so a
+    ; caller that forgets to check the result closes nothing rather than
+    ; closing whatever happened to be in the variable.
+    test("sdk-net-connect-refuses-a-null-host", "and leaves no handle") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [net_sock] = $07
+      [result] = $ff
+      jsr([t_net_connect_null], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+      assert([net_sock] == $ff, "no socket was opened")
+    }
+
+    test("sdk-net-connect-refuses-an-empty-host", "a zero-length name is not a name") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [reply0] = $00
+      [net_sock] = $07
+      [result] = $ff
+      jsr([t_net_connect], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+      assert([net_sock] == $ff, "no socket was opened")
+    }
+
+    ; The device this suite runs against has no network target, and that has to
+    ; arrive as "not supported" rather than as a hang or a wrong success. It is
+    ; the same path ultimate_identify takes for an absent target, reached
+    ; through a service instead of through the generic form.
+    test("sdk-net-on-a-device-without-the-target", "absent is answered, not waited for") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [net_iface] = $ff
+      [result] = $00
+      jsr([t_net_ifcount], stop_on_rts = true, fail_on_brk = true)
+      assert([result] != $00, "the command did not succeed")
+      assert([result] != $02, "and it did not time out waiting")
+      assert([net_iface] == $00, "no interface count was invented")
+    }
+
     ; ---------------------------------------------------------------- identity
 
     test("sdk-identify", "ultimate_identify reads the DOS version string") {

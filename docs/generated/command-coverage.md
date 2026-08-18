@@ -48,15 +48,15 @@ commands as tested that no test has ever sent.
 | Ultimate DOS commands | `DOS_CMD_SET_TIME` | `$27` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_ECHO` | `$F0` | tested | simulator + hardware |
 | Network commands | `NET_CMD_IDENTIFY` | `$01` | no API yet | hardware only |
-| Network commands | `NET_CMD_GET_INTERFACE_COUNT` | `$02` | no API yet | hardware only |
-| Network commands | `NET_CMD_GET_NETADDR` | `$04` | no API yet | hardware only |
-| Network commands | `NET_CMD_GET_IPADDR` | `$05` | no API yet | hardware only |
+| Network commands | `NET_CMD_GET_INTERFACE_COUNT` | `$02` | tested | hardware only |
+| Network commands | `NET_CMD_GET_NETADDR` | `$04` | tested | hardware only |
+| Network commands | `NET_CMD_GET_IPADDR` | `$05` | tested | hardware only |
 | Network commands | `NET_CMD_SET_IPADDR` | `$06` | no API yet | hardware only |
-| Network commands | `NET_CMD_OPEN_TCP` | `$07` | no API yet | hardware only |
-| Network commands | `NET_CMD_OPEN_UDP` | `$08` | no API yet | hardware only |
-| Network commands | `NET_CMD_CLOSE_SOCKET` | `$09` | no API yet | hardware only |
-| Network commands | `NET_CMD_READ_SOCKET` | `$10` | no API yet | hardware only |
-| Network commands | `NET_CMD_WRITE_SOCKET` | `$11` | no API yet | hardware only |
+| Network commands | `NET_CMD_OPEN_TCP` | `$07` | tested | hardware only |
+| Network commands | `NET_CMD_OPEN_UDP` | `$08` | tested | hardware only |
+| Network commands | `NET_CMD_CLOSE_SOCKET` | `$09` | tested | hardware only |
+| Network commands | `NET_CMD_READ_SOCKET` | `$10` | tested | hardware only |
+| Network commands | `NET_CMD_WRITE_SOCKET` | `$11` | tested | hardware only |
 | Network commands | `NET_CMD_LISTEN_START` | `$12` | no API yet | hardware only |
 | Network commands | `NET_CMD_LISTEN_STOP` | `$13` | no API yet | hardware only |
 | Network commands | `NET_CMD_LISTEN_STATE` | `$14` | no API yet | hardware only |
@@ -127,7 +127,7 @@ commands as tested that no test has ever sent.
 | | |
 | --- | --- |
 | commands defined | 101 |
-| exercised by a test | 24 (23%) |
+| exercised by a test | 32 (31%) |
 | wrapped but untested | 0 |
 
 The low figure is expected while the SDK is still a vertical slice:

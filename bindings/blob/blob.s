@@ -30,8 +30,13 @@
         .import ultimate_reu_available
         .import ultimate_reu_stash, ultimate_reu_fetch
         .import ultimate_reu_load, ultimate_reu_save
+        .import ultimate_net_ifcount, ultimate_net_macaddr
+        .import ultimate_net_ipconfig, ultimate_net_connect
+        .import ultimate_net_udp, ultimate_net_close
+        .import ultimate_net_read, ultimate_net_write
         .import ult_buf, ult_buflen, ult_outlen, ult_attrib, ult_num
         .import ult_addr, ult_max, ult_end, ult_reu, ult_reulen
+        .import ult_sock, ult_socklen, ult_iface, ult_port
 
         .export blob_start
 
@@ -94,6 +99,19 @@ blob_start:
         jmp blob_reu_load               ; +$7F
         jmp blob_reu_save               ; +$82
 
+; The sockets. A blob caller gets the same three answers ultimate_net_read
+; gives anyone: bp_result of ULTIMATE_OK with bp_len set is data, ULTIMATE_OK
+; with bp_len zero means nothing pending yet, and ULTIMATE_END means the peer
+; hung up. Poll - a read never waits for the wire.
+        jmp blob_net_ifcount            ; +$85
+        jmp blob_net_macaddr            ; +$88
+        jmp blob_net_ipconfig           ; +$8B
+        jmp blob_net_connect            ; +$8E
+        jmp blob_net_udp                ; +$91
+        jmp blob_net_close              ; +$94
+        jmp blob_net_read               ; +$97
+        jmp blob_net_write              ; +$9A
+
 ; ---------------------------------------------------------------------------
 ; The parameter block.
 ;
@@ -108,6 +126,7 @@ blob_start:
         .export bp_result, bp_devcode, bp_addr, bp_len, bp_end
         .export bp_status, bp_name, bp_reply
         .export bp_attrib, bp_pos, bp_reu, bp_reulen
+        .export bp_sock, bp_iface, bp_port
 
 BP_STATUS_MAX = 32
 BP_NAME_MAX   = 40
@@ -130,6 +149,12 @@ bp_attrib:  .res 1                  ; +$151 open's DOS_FA_* mask in,
 bp_pos:     .res 4                  ; +$152 seek's 32-bit position
 bp_reu:     .res 4                  ; +$156 address in the RAM expansion
 bp_reulen:  .res 4                  ; +$15A and how many bytes to move
+
+; Appended again when the sockets reached the table, on the end for the same
+; reason: the offsets above are published and do not move.
+bp_sock:    .res 1                  ; +$15E socket handle, in and out
+bp_iface:   .res 1                  ; +$15F interface index in, count out
+bp_port:    .res 2                  ; +$160 TCP or UDP port
 
 ; ---------------------------------------------------------------------------
 ; The shims.
@@ -249,6 +274,66 @@ blob_reu_save:
         jsr ultimate_reu_save
         jmp blob_done
 
+; --- the sockets ---
+
+blob_net_ifcount:
+        jsr ultimate_net_ifcount
+        pha
+        lda ult_iface
+        sta bp_iface
+        pla
+        jmp blob_done
+
+blob_net_macaddr:
+        jsr blob_set_iface_reply
+        jsr ultimate_net_macaddr
+        jmp blob_done
+
+blob_net_ipconfig:
+        jsr blob_set_iface_reply
+        jsr ultimate_net_ipconfig
+        jmp blob_done
+
+; The host goes in bp_name like every other name, and the handle comes back in
+; bp_sock whether the open worked or not - $FF when it did not, which is what
+; the SDK leaves and is not a handle.
+blob_net_connect:
+        jsr blob_set_host_port
+        jsr ultimate_net_connect
+        jmp blob_opened
+
+blob_net_udp:
+        jsr blob_set_host_port
+        jsr ultimate_net_udp
+        jmp blob_opened
+
+blob_net_close:
+        lda bp_sock
+        sta ult_sock
+        jsr ultimate_net_close
+        jmp blob_done
+
+; bp_len goes in as the size of the buffer at bp_addr and comes back as how
+; many bytes are in it - which for a read is at most two fewer than asked for,
+; because the firmware's own count is stripped off the front.
+blob_net_read:
+        jsr blob_set_sock_buf
+        lda bp_len
+        sta ult_socklen
+        lda bp_len + 1
+        sta ult_socklen + 1
+        jsr ultimate_net_read
+        jmp blob_moved
+
+blob_net_write:
+        jsr blob_set_sock_buf
+        lda bp_len
+        sta ult_buflen
+        lda bp_len + 1
+        sta ult_buflen + 1
+        jsr ultimate_net_write
+        jmp blob_moved
+
 ; --- moving the block in and out ---
 
 blob_done:
@@ -312,6 +397,48 @@ blob_set_addr_len:
         sta ult_max
         lda bp_len + 1
         sta ult_max + 1
+        rts
+
+blob_opened:
+        pha
+        lda ult_sock
+        sta bp_sock
+        pla
+        jmp blob_done
+
+blob_moved:
+        pha
+        lda ult_socklen
+        sta bp_len
+        lda ult_socklen + 1
+        sta bp_len + 1
+        pla
+        jmp blob_done
+
+blob_set_iface_reply:
+        lda bp_iface
+        sta ult_iface
+        lda #<bp_reply
+        sta ult_buf
+        lda #>bp_reply
+        sta ult_buf + 1
+        rts
+
+blob_set_host_port:
+        jsr blob_set_name
+        lda bp_port
+        sta ult_port
+        lda bp_port + 1
+        sta ult_port + 1
+        rts
+
+blob_set_sock_buf:
+        lda bp_sock
+        sta ult_sock
+        lda bp_addr
+        sta ult_buf
+        lda bp_addr + 1
+        sta ult_buf + 1
         rts
 
 ; The expansion's two numbers, and the C64 end for the DMA pair.

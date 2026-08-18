@@ -42,6 +42,11 @@ _main:  rts
 ; Copy the whole blob down to $8000, then fix up the addresses. One unrolled
 ; page per page of the built binary, rounded up, so this cannot fall behind the
 ; SDK the way a fixed count did.
+;
+; The loop closes with beq/jmp rather than bne, because the body is six bytes
+; per page of blob and a relative branch stopped reaching over it once the SDK
+; passed twenty-one pages. A jmp keeps the "one page per page" property from
+; having a size limit of its own.
 t_reloc:
         ldx #$00
 @page:
@@ -50,7 +55,9 @@ t_reloc:
         sta BLOB_DST + page * $100,x
         .endrepeat
         inx
-        bne @page
+        beq @copied
+        jmp @page
+@copied:
 
         lda #<BLOB_DST
         ldx #>BLOB_DST

@@ -37,9 +37,9 @@ it under an emulator and on real hardware, and exposes it to assembly and C.
 
 **Status: early.** The transport, the error model and capability detection are
 complete and tested — under a simulated Ultimate, and on a real Ultimate 64
-Elite running firmware 3.15. So are the palette, turbo, file and REU services:
-directories, open/read/write/seek, load and save, and both directions of the
-RAM expansion. The network and HTTP services are next.
+Elite running firmware 3.15. So are the palette, turbo, file, REU and network
+services: directories, open/read/write/seek, load and save, both directions of
+the RAM expansion, and TCP and UDP sockets. HTTP is next.
 
 ## What hardware does it support?
 
@@ -74,10 +74,12 @@ enable it in the ultimate settings menu.
 | the RAM expansion | `reu_stash`, `reu_fetch`, and file-to-expansion without the C64 in between |
 | the running palette | `palette_get`, `palette_set`, `palette_set_color`, `palette_reset` |
 | CPU speed on an Ultimate 64 | `turbo_set`, `turbo_get`, `turbo_badlines` |
+| TCP and UDP sockets | `net_connect`, `net_udp`, `net_read`, `net_write`, `net_close`, and the machine's own address from `net_ipconfig` |
 | anything else the firmware offers | the generic form: any command, on any target, with framing, timeouts and error translation handled |
 
-Networking and HTTP have no wrappers yet. They are reachable today through the
-generic form, which is the whole reason it exists.
+HTTP has no wrapper yet, and neither do the four TCP listener commands — their
+command numbers are not in the published specification. Both are reachable
+today through the generic form, which is the whole reason it exists.
 
 ## Getting started
 
@@ -242,10 +244,13 @@ public model does not expose them.
 Built for a machine with 38 kilobytes.
 
 - No heap, no hidden buffers. Every byte lands in a buffer you own.
-- 119 bytes of static RAM in total, request block included. No allocation, ever.
+- 125 bytes of static RAM in total, request block included. No allocation, ever.
 - Four bytes of zero page, at an address you choose.
 - No interrupts required, and no interrupt handler installed.
 - Every entry point is bounded: it completes or returns `ULTIMATE_ERR_TIMEOUT`.
+  The one exception is opening a socket, and it is documented as one: a connect
+  was measured at 30.8 s to an address with nothing at it, which no timeout
+  budget can express, so it waits on the firmware's own limit instead.
 
 ## Testing
 
@@ -256,7 +261,7 @@ make test         # sim6502 in Docker: the assembled SDK, against a simulated Ul
 make -C tests/hardware && copy ucitest.prg to your Ultimate    # the real thing, TAP output
 ```
 
-Current results: **114 host unit tests, 187 emulator tests and 5/5 hardware
+Current results: **114 host unit tests, 199 emulator tests and 5/5 hardware
 scenarios, all passing** — the last of those on an Ultimate 64 Elite running
 firmware 3.15, where the BASIC wedge is also typed at the machine line by line
 and checked on the screen.

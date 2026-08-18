@@ -43,6 +43,7 @@
         .export ult_attrib, ult_dir, ult_num
         .export ult_fargs, ult_addr, ult_max, ult_end, ult_got
         .export ult_reu, ult_reulen
+        .export ult_sock, ult_socklen, ult_iface, ult_port
         .export uci_stat
 
 ; ---------------------------------------------------------------------------
@@ -122,7 +123,15 @@ ult_got         = UCI_VARS + 65 + 2 * UCI_REQ_SIZE  ; bytes the last chunk moved
 ult_reu         = UCI_VARS + 67 + 2 * UCI_REQ_SIZE  ; REU address, 24 bits of 32
 ult_reulen      = UCI_VARS + 71 + 2 * UCI_REQ_SIZE  ; and the length beside it
 
-.assert (75 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+; --- net service (src/uci/net.s) ---
+; ult_socklen follows ult_sock because READ_SOCKET wants <handle> <len:16> as
+; three consecutive bytes on the wire, and they are sent straight out of here.
+ult_sock        = UCI_VARS + 75 + 2 * UCI_REQ_SIZE  ; socket handle, in and out
+ult_socklen     = UCI_VARS + 76 + 2 * UCI_REQ_SIZE  ; buffer size in, bytes moved out
+ult_iface       = UCI_VARS + 78 + 2 * UCI_REQ_SIZE  ; interface index in, count out
+ult_port        = UCI_VARS + 79 + 2 * UCI_REQ_SIZE  ; TCP or UDP port, little-endian
+
+.assert (81 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
         .export uci_req
 
@@ -184,6 +193,14 @@ ult_got:        .res 2
 ; consecutive bytes on the wire and the DMA half wants the same two numbers.
 ult_reu:        .res 4          ; REU address, 24 bits used of 32
 ult_reulen:     .res 4          ; how many bytes; the DMA half uses the low word
+
+; --- net service (src/uci/net.s) ---
+; ult_socklen follows ult_sock because READ_SOCKET wants <handle> <len:16> as
+; three consecutive bytes on the wire, and they are sent straight out of here.
+ult_sock:       .res 1          ; socket handle, in and out
+ult_socklen:    .res 2          ; buffer size in, bytes moved out
+ult_iface:      .res 1          ; interface index in, interface count out
+ult_port:       .res 2          ; TCP or UDP port, little-endian
 
 .endif
 

@@ -352,6 +352,99 @@ commands `$51`-`$54`; and on the network target, the TCP listener commands
 
 ---
 
+## Sockets, and what the network target really does
+
+The protocol document gives the argument shapes for target `$03` and stops
+there. Everything below was measured against firmware 3.15 on an Ultimate 64
+Elite, because the parts it stops before are the parts a caller trips over.
+`src/uci/net.s` is built on these and nothing else.
+
+### A read never waits for the wire
+
+`NET_CMD_READ_SOCKET` answers immediately whether or not anything has arrived —
+a read issued straight after a connect reports "nothing yet" even when the peer
+sent its greeting on accept. **Callers poll.** That is the right behaviour for a
+C64: a blocking read would freeze the machine for as long as the other end felt
+like being quiet.
+
+### The reply carries its own count
+
+A read answers `<count:16 LE> <bytes>`, and a count of `$FFFF` means nothing was
+available. `ultimate_net_read()` strips the count, which is why the buffer it is
+given holds `UCI_NET_READ_PREFIX` fewer bytes of payload than its size.
+
+### The device code is the whole state machine
+
+| code | status text | what it means |
+|---|---|---|
+| `0` | `00,OK` | the reply carries data |
+| `1` | `01,CONNECTION CLOSED BY HOST` | end of stream, said exactly once |
+| `2` | `02,NO DATA: 11` | the socket is open and nothing is pending |
+| `2` | `02,NO DATA: 9` | the handle is dead, closed, or was never opened |
+
+**All three decode to `ULTIMATE_OK`.** `00`, `01` and `02` are success in the CBM
+DOS numbering that [status decoding](#status-encodings) follows, so `uci_exec()`
+cannot tell them apart and neither can a caller using it directly. Reading
+`uci_last_device_code()` back is what separates them, and it is what
+`ultimate_net_read()` does to turn code `1` into `ULTIMATE_END`. Nothing needs to
+parse the status text.
+
+Once end of stream has been reported the firmware has already released the
+handle, so closing it answers `12,ERROR ON CLOSE`. A caller that reads to the end
+must not then close.
+
+### A connect can take thirty seconds
+
+| operation | cycles at 1 MHz | wall clock |
+|---|---|---|
+| connect to a host that is up | 47,585–74,939 | 48–75 ms |
+| **connect to an address with nothing at it** | **30,787,778** | **30.8 s** |
+| name that does not resolve | 28,258 | 28 ms |
+| read with data waiting | 3,577–21,218 | 4–21 ms |
+| read with nothing pending | 41,862–44,860 | 42–45 ms |
+| write | 3,279–6,635 | 3–7 ms |
+
+The SDK's timeout budget is a byte of 256-poll units: about 0.65 s at
+`UCI_TIMEOUT_DEFAULT` and about 1 s at its maximum. **No value of it reaches 30
+seconds**, so `ultimate_net_connect()` and `ultimate_net_udp()` run on
+`UCI_TIMEOUT_FOREVER` and rely on the firmware's own connect timeout, which fired
+every time it was tested. They restore the caller's budget afterwards, and they
+are the only entry points in the SDK not bounded by the SDK. Every other network
+command finished in 75 ms or less.
+
+### Read lengths between 769 and 1023 are dangerous
+
+The firmware range-checks the requested length at 1024 and answers
+`82,PARAMETER(S) OUT OF RANGE` above it. Its response queue is
+`UCI_MAX_RESPONSE` = `$380` = 896 bytes, which is smaller than the largest
+request it accepts.
+
+**A probe stepping through that gap took the machine off the network entirely
+and needed a power cycle.** The exact edge has not been pinned, deliberately —
+finding it means wedging the machine again to no useful end. `UCI_NET_READ_MAX`
+is 512, which has been verified with 700 bytes queued behind it, and
+`ultimate_net_read()` will not ask for more however large a buffer it is given.
+
+Writes are bounded by the SDK instead: the whole command must fit
+`UCI_MAX_COMMAND_USABLE` (`$37F`), and `uci_exec()` answers
+`ULTIMATE_ERR_INVALID_ARGUMENT` before anything reaches the wire.
+
+### Interfaces are numbered from zero, and one of them may be idle
+
+`NET_CMD_GET_INTERFACE_COUNT` reported 2 on the bench machine. Interface 1 was
+the live Ethernet; interface 0 had a MAC address and an all-zero IP
+configuration. **A count is not a list of usable interfaces** — ask
+`NET_CMD_GET_IPADDR` and use the one with an address. An index past the count is
+`82,PARAMETER(S) OUT OF RANGE`.
+
+### The listener commands stay unwrapped
+
+`$12`-`$15` are marked `INFERRED`: their numbers are not in the published
+specification. The generic form reaches them, so issuing one remains a
+deliberate act rather than something the SDK appears to vouch for.
+
+---
+
 ## Timing
 
 Nothing in the protocol is specified in time. The Ultimate runs its own

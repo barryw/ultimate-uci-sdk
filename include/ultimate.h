@@ -321,6 +321,58 @@ uint8_t ultimate_reu_fetch(uint16_t addr, uint32_t reuaddr, uint16_t len);
 uint8_t ultimate_reu_load(uint32_t reuaddr, uint32_t len);
 uint8_t ultimate_reu_save(uint32_t reuaddr, uint32_t len);
 
+/* ---------------------------------------------------------------------------
+ * Network: TCP and UDP sockets.
+ *
+ * Everything below was measured against firmware 3.15 on real hardware. Three
+ * of those measurements decide how this is used, and none of them is in the
+ * protocol document:
+ *
+ * **Reads do not wait.** A read issued straight after a connect answers "not
+ * yet" even when the peer greeted you on accept. Poll:
+ *
+ *     for (;;) {
+ *         err = ultimate_net_read(h, buf, sizeof buf, &got);
+ *         if (err == ULTIMATE_END)  break;          // the peer hung up
+ *         if (err != ULTIMATE_OK)   return err;
+ *         if (got == 0)             continue;       // nothing yet
+ *         ...use buf[0..got-1]...
+ *     }
+ *
+ * **ULTIMATE_END is end of stream**, the same code ultimate_readdir() uses at
+ * the end of a directory. It is reported exactly once, and after it the handle
+ * is already gone - do not call ultimate_net_close() on it.
+ *
+ * **A connect can take thirty seconds.** 48-75 ms to a host that is up, and
+ * 30.8 s to an address with nothing at it before the firmware gives up. No
+ * value of the uci_set_timeout() budget reaches that, so ultimate_net_connect()
+ * and ultimate_net_udp() wait without a limit of their own and restore your
+ * budget afterwards. They are the only entry points in the SDK that do.
+ *
+ * bufsize in ultimate_net_read() is the size of the buffer, and at most
+ * UCI_NET_READ_PREFIX fewer bytes than that are stored: the firmware sends its
+ * own 16-bit count in front of the data, which this strips. The request is also
+ * capped at UCI_NET_READ_MAX; larger reads have taken the machine off the
+ * network, so this SDK will not issue one. See docs/uci.md.
+ *
+ * A write reports how many bytes the firmware took. It has matched the length
+ * asked for every time it has been measured, which is why it is worth checking
+ * rather than assuming.
+ *
+ * The four LISTEN commands are deliberately absent - their command numbers are
+ * not in the published specification. uci_exec() still reaches them.
+ * ------------------------------------------------------------------------- */
+uint8_t ultimate_net_ifcount(uint8_t *count);
+uint8_t ultimate_net_macaddr(uint8_t iface, uint8_t *mac);
+uint8_t ultimate_net_ipconfig(uint8_t iface, uint8_t *ipconfig);
+uint8_t ultimate_net_connect(const char *host, uint16_t port, uint8_t *handle);
+uint8_t ultimate_net_udp(const char *host, uint16_t port, uint8_t *handle);
+uint8_t ultimate_net_close(uint8_t handle);
+uint8_t ultimate_net_read(uint8_t handle, uint8_t *buf, uint16_t bufsize,
+                          uint16_t *got);
+uint8_t ultimate_net_write(uint8_t handle, const uint8_t *buf, uint16_t len,
+                           uint16_t *sent);
+
 /* A short, stable, English description of an ULTIMATE_* code. Never NULL. */
 const char *ultimate_strerror(uint8_t err);
 

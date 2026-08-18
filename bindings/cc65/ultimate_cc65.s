@@ -56,10 +56,14 @@ _uci_decode_status:
         .import ultimate_load, ultimate_bload, ultimate_save
         .import ultimate_reu_stash, ultimate_reu_fetch
         .import ultimate_reu_load, ultimate_reu_save
+        .import ultimate_net_ifcount, ultimate_net_macaddr
+        .import ultimate_net_ipconfig, ultimate_net_connect
+        .import ultimate_net_udp, ultimate_net_read, ultimate_net_write
+        .import ult_sock, ult_socklen, ult_iface, ult_port
         .import ult_addr, ult_max, ult_reu, ult_reulen
         .import ult_buf, ult_buflen, ult_outlen, ult_color
         .import ult_attrib, ult_num
-        .import incsp2, incsp4, incsp5, incsp6
+        .import incsp1, incsp2, incsp4, incsp5, incsp6
         .importzp sreg
 
         .export _ultimate_identify
@@ -70,6 +74,9 @@ _uci_decode_status:
         .export _ultimate_load, _ultimate_bload, _ultimate_save
         .export _ultimate_reu_stash, _ultimate_reu_fetch
         .export _ultimate_reu_load, _ultimate_reu_save
+        .export _ultimate_net_ifcount, _ultimate_net_macaddr
+        .export _ultimate_net_ipconfig, _ultimate_net_connect
+        .export _ultimate_net_udp, _ultimate_net_read, _ultimate_net_write
 
 ; uint8_t ultimate_identify(uint8_t target, char *buf, uint16_t buflen,
 ;                           uint16_t *outlen);
@@ -375,3 +382,165 @@ cc_reu_file:
         lda (c_sp),y
         sta ult_reu + 3
         jmp incsp4
+
+; ---------------------------------------------------------------------------
+; net.s.
+;
+; Four of these have an out-parameter, and the pointer to it rides in on
+; ult_outlen - "where to write the length, 0 for nowhere" - exactly as
+; _ultimate_readdir's attribute pointer does. The shared block is the only
+; place a pointer can wait while uci_exec runs: the zero page slots do not
+; survive the call, which is the whole reason that convention exists.
+;
+; A null out-pointer stores nothing rather than faulting, so a caller that only
+; wants the result code can pass one.
+; ---------------------------------------------------------------------------
+
+; uint8_t ultimate_net_ifcount(uint8_t *count);
+_ultimate_net_ifcount:
+        jsr cc_hold_out
+        jsr ultimate_net_ifcount
+        ldx ult_iface
+        jmp cc_out_byte
+
+; uint8_t ultimate_net_macaddr(uint8_t iface, uint8_t *mac);
+; uint8_t ultimate_net_ipconfig(uint8_t iface, uint8_t *ipconfig);
+;
+; A/X holds the buffer; the C stack holds iface at 0. The reply is a fixed size
+; the caller is told about in the header, so there is no length to pass and
+; nothing to write back.
+_ultimate_net_macaddr:
+        jsr cc_iface_buf
+        jsr ultimate_net_macaddr
+        ldx #$00
+        rts
+
+_ultimate_net_ipconfig:
+        jsr cc_iface_buf
+        jsr ultimate_net_ipconfig
+        ldx #$00
+        rts
+
+cc_iface_buf:
+        sta ult_buf
+        stx ult_buf + 1
+        ldy #$00
+        lda (c_sp),y
+        sta ult_iface
+        jmp incsp1
+
+; uint8_t ultimate_net_connect(const char *host, uint16_t port, uint8_t *handle);
+; uint8_t ultimate_net_udp    (const char *host, uint16_t port, uint8_t *handle);
+;
+; A/X holds handle; the C stack holds port at 0..1 and host at 2..3.
+_ultimate_net_connect:
+        jsr cc_host_port
+        jsr ultimate_net_connect
+        ldx ult_sock
+        jmp cc_out_byte
+
+_ultimate_net_udp:
+        jsr cc_host_port
+        jsr ultimate_net_udp
+        ldx ult_sock
+        jmp cc_out_byte
+
+cc_host_port:
+        jsr cc_hold_out
+        ldy #$00
+        lda (c_sp),y
+        sta ult_port
+        iny
+        lda (c_sp),y
+        sta ult_port + 1
+        iny
+        jsr cc_ptr_at_y
+        jmp incsp4
+
+; uint8_t ultimate_net_read (uint8_t handle, uint8_t *buf, uint16_t bufsize,
+;                            uint16_t *got);
+; uint8_t ultimate_net_write(uint8_t handle, const uint8_t *buf, uint16_t len,
+;                            uint16_t *sent);
+;
+; A/X holds the out-parameter; the C stack holds the length at 0..1, the buffer
+; at 2..3 and the handle at 4. The two differ only in which variable the length
+; belongs in: a read is given the size of the buffer, a write the number of
+; bytes to send.
+_ultimate_net_read:
+        jsr cc_hold_out
+        ldy #$00
+        lda (c_sp),y
+        sta ult_socklen
+        iny
+        lda (c_sp),y
+        sta ult_socklen + 1
+        iny
+        jsr cc_sock_buf
+        jsr ultimate_net_read
+        jmp cc_out_word
+
+_ultimate_net_write:
+        jsr cc_hold_out
+        ldy #$00
+        lda (c_sp),y
+        sta ult_buflen
+        iny
+        lda (c_sp),y
+        sta ult_buflen + 1
+        iny
+        jsr cc_sock_buf
+        jsr ultimate_net_write
+        jmp cc_out_word
+
+; Y points at the buffer pointer; the handle is the two bytes past it.
+cc_sock_buf:
+        jsr cc_ptr_at_y
+        iny
+        lda (c_sp),y
+        sta ult_sock
+        jmp incsp5
+
+cc_hold_out:
+        sta ult_outlen
+        stx ult_outlen + 1
+        rts
+
+; A = the result to hand back, X = the byte to store through ult_outlen.
+cc_out_byte:
+        pha
+        jsr cc_out_ptr
+        bcc @none
+        txa
+        ldy #$00
+        sta (uci_ptr),y
+@none:  pla
+        ldx #$00
+        rts
+
+; A = the result to hand back; ult_socklen is what gets stored.
+cc_out_word:
+        pha
+        jsr cc_out_ptr
+        bcc @none
+        ldy #$00
+        lda ult_socklen
+        sta (uci_ptr),y
+        iny
+        lda ult_socklen + 1
+        sta (uci_ptr),y
+@none:  pla
+        ldx #$00
+        rts
+
+; ult_outlen into uci_ptr. Carry set when there is somewhere to write.
+cc_out_ptr:
+        lda ult_outlen
+        sta uci_ptr
+        ora ult_outlen + 1
+        beq @null
+        lda ult_outlen + 1
+        sta uci_ptr + 1
+        sec
+        rts
+@null:  clc
+        rts

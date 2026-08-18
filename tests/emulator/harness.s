@@ -51,6 +51,9 @@
         .import ultimate_reu_available, ultimate_reu_stash, ultimate_reu_fetch
         .import ultimate_reu_load, ultimate_reu_save
         .import ult_reu, ult_reulen
+        .import ultimate_net_ifcount, ultimate_net_ipconfig
+        .import ultimate_net_connect, ultimate_net_read, ultimate_net_write
+        .import ult_sock, ult_socklen, ult_iface, ult_port
         .import ult_buf, ult_buflen, ult_outlen, ult_color
 
         ; --- entry points ---
@@ -77,6 +80,10 @@
         .export t_load, t_bload, t_save, load_addr, load_max, load_end
         .export t_reu_avail, t_reu_stash, t_reu_fetch
         .export t_reu_load, t_reu_save, reu_at, reu_len
+        .export t_net_ifcount, t_net_ipconfig
+        .export t_net_connect, t_net_connect_null
+        .export t_net_read_null, t_net_read_tiny, t_net_write_null
+        .export net_iface, net_sock, net_got
         .export dir_attrib
         .export t_req_reset
         .export t_abort
@@ -136,6 +143,10 @@ devcode:    .res 2
 reply_len:  .res 2
 caps:       .res 4      ; ultimate_capabilities: present, ident, targets(2)
 reply:      .res REPLY_MAX
+
+net_iface:  .res 1
+net_sock:   .res 1
+net_got:    .res 2
 
 ident_target: .res 1
 ident_buflen: .res 2
@@ -724,6 +735,105 @@ t_strerror:
 @done:  rts
 
 ; ---------------------------------------------------------------- timeout ---
+
+; --------------------------------------------------------------------- net ---
+;
+; u64sim implements no network command at all, so what these can prove is the
+; half of net.s that never reaches the wire: the argument checks, and that a
+; command aimed at a target this device does not have comes back as
+; ULTIMATE_ERR_NOT_SUPPORTED rather than as a hang or a wrong success.
+;
+; The other half - sockets that actually carry bytes - is in tests/hardware,
+; against the Ultimate's own web server. See docs/uci.md.
+
+t_net_ifcount:
+        jsr ultimate_net_ifcount
+        sta result
+        lda ult_iface
+        sta net_iface
+        rts
+
+t_net_ipconfig:
+        lda net_iface
+        sta ult_iface
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        jsr ultimate_net_ipconfig
+        sta result
+        rts
+
+; The host name is put in `reply` by the suite, like every other name here -
+; which is also how the empty-name case is reached, with a single zero byte.
+t_net_connect:
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda #<8080
+        sta ult_port
+        lda #>8080
+        sta ult_port + 1
+        jsr ultimate_net_connect
+        sta result
+        lda ult_sock
+        sta net_sock
+        rts
+
+; A null host pointer is a caller bug, refused before anything is sent.
+t_net_connect_null:
+        lda #$00
+        sta ult_buf
+        sta ult_buf + 1
+        jsr ultimate_net_connect
+        sta result
+        lda ult_sock
+        sta net_sock
+        rts
+
+t_net_read_null:
+        lda #$00
+        sta ult_buf
+        sta ult_buf + 1
+        lda #$40
+        sta ult_socklen
+        lda #$00
+        sta ult_socklen + 1
+        jsr ultimate_net_read
+        sta result
+        lda ult_socklen
+        sta net_got
+        lda ult_socklen + 1
+        sta net_got + 1
+        rts
+
+; A buffer with no room for the firmware's own count and a byte of data can
+; carry nothing, so it is refused here rather than asked for and truncated.
+t_net_read_tiny:
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda #UCI_NET_READ_PREFIX
+        sta ult_socklen
+        lda #$00
+        sta ult_socklen + 1
+        jsr ultimate_net_read
+        sta result
+        rts
+
+t_net_write_null:
+        lda #$00
+        sta ult_buf
+        sta ult_buf + 1
+        lda #$10
+        sta ult_buflen
+        lda #$00
+        sta ult_buflen + 1
+        jsr ultimate_net_write
+        sta result
+        rts
 
 t_set_timeout:
         lda timeout_val

@@ -150,6 +150,12 @@
 /* Fixed-width blobs the network target exchanges. */
 #define UCI_NET_MACADDR_BYTES  6  /* bytes in a MAC address */
 #define UCI_NET_IPCONFIG_BYTES 12  /* bytes in an ip/mask/gateway triple */
+#define UCI_NET_READ_PREFIX    2  /* 16-bit count the firmware puts in front of socket data */
+#define UCI_NET_READ_MAX       512  /* largest READ_SOCKET this SDK will ask for - see docs/uci.md */
+#define UCI_NET_NO_DATA        65535  /* that count, when nothing was available to read */
+#define UCI_NET_DEV_OK         0  /* network device code: the reply carries data */
+#define UCI_NET_DEV_CLOSED     1  /* network device code: the peer hung up, reported once */
+#define UCI_NET_DEV_NO_DATA    2  /* network device code: nothing pending, try again */
 
 /* ---- Control commands (target $04) ---- */
 #define CTRL_CMD_IDENTIFY          0x01
@@ -376,7 +382,7 @@
 /* How much RAM the core needs, and where. All of it is placeable: see */
 /* UCI_ZP and UCI_VARS in docs/asm-abi.md. */
 #define UCI_ZP_SIZE   4  /* zero page bytes the core needs */
-#define UCI_VARS_SIZE 119  /* non-zero-page bytes the whole SDK needs */
+#define UCI_VARS_SIZE 125  /* non-zero-page bytes the whole SDK needs */
 
 /* ---- ASCII literals ---- */
 /* Bytes that come off the wire are always written numerically. An */

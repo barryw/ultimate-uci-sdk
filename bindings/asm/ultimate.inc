@@ -110,6 +110,28 @@ ULTIMATE_INC = 1
 .global ult_reu, ult_reulen  ; REU address, then length: eight bytes, in that
                               ; order, because the DOS pair sends them as one span
 
+; --- net.s -----------------------------------------------------------------
+; Measured behaviour, not documented behaviour - see src/uci/net.s for all of
+; it. The three that decide how these are called: a read never waits, so poll;
+; ULTIMATE_END means the peer hung up and is said once; and a connect can take
+; 30 seconds, which no timeout budget can express, so the two open calls wait
+; without a limit and put the caller's budget back.
+.global ultimate_net_ifcount ; -> A = result, ult_iface = interfaces
+.global ultimate_net_macaddr ; ult_iface, ult_buf = 6 bytes -> A = result
+.global ultimate_net_ipconfig ; ult_iface, ult_buf = 12 bytes -> A = result
+.global ultimate_net_connect ; ult_port, ult_buf = host -> A, ult_sock = handle
+.global ultimate_net_udp     ; the same, for UDP
+.global ultimate_net_close   ; ult_sock -> A = result
+.global ultimate_net_read    ; ult_sock, ult_buf, ult_socklen = buffer size
+                             ; -> A = result, ult_socklen = bytes stored
+.global ultimate_net_write   ; ult_sock, ult_buf, ult_buflen
+                             ; -> A = result, ult_socklen = bytes accepted
+.global ult_sock             ; socket handle, in and out
+.global ult_socklen          ; buffer size in, bytes moved out; follows ult_sock
+                             ; because the wire wants the two adjacent
+.global ult_iface            ; interface index in, interface count out
+.global ult_port             ; TCP or UDP port, little-endian
+
 ; Reading a directory is one live exchange, one entry per call, and these are
 ; the two halves of it for a caller driving the transport itself:
 .global uci_exec_first, uci_exec_next, uci_more

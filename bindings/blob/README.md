@@ -85,10 +85,32 @@ well as returning it in `A`.
 | `+$7C` | `reu_fetch` | the same, the other way | `bp_result` |
 | `+$7F` | `reu_load` | `bp_reu`, `bp_reulen`, and an open file | `bp_result` |
 | `+$82` | `reu_save` | the same, out of the expansion | `bp_result` |
+| `+$85` | `net_ifcount` | | `bp_iface` = interfaces, `bp_result` |
+| `+$88` | `net_macaddr` | `bp_iface` | `bp_reply` = 6 bytes, `bp_result` |
+| `+$8B` | `net_ipconfig` | `bp_iface` | `bp_reply` = 12 bytes, `bp_result` |
+| `+$8E` | `net_connect` | `bp_name` = host, `bp_port` | `bp_sock`, `bp_result` |
+| `+$91` | `net_udp` | the same, for a UDP socket | `bp_sock`, `bp_result` |
+| `+$94` | `net_close` | `bp_sock` | `bp_result` |
+| `+$97` | `net_read` | `bp_sock`, `bp_addr` = buffer, `bp_len` = its size | `bp_len` = arrived, `bp_result` |
+| `+$9A` | `net_write` | `bp_sock`, `bp_addr`, `bp_len` | `bp_len` = accepted, `bp_result` |
 
 A directory walk is one live exchange: `+$55` then `+$58` until it answers
 `ULTIMATE_END` (`10`), with no other command in between. `+$7F` and `+$82` work
 on whatever `+$5B` left open and carry no filename of their own.
+
+**A socket read never waits for the wire.** `+$97` answers straight away
+whether or not anything has arrived, so a caller polls: `bp_result` of
+`ULTIMATE_OK` with `bp_len` non-zero is data, `ULTIMATE_OK` with `bp_len` zero
+means nothing yet, and `ULTIMATE_END` (`10`) means the peer hung up — after
+which the handle is gone and `+$94` would answer an error rather than close
+anything. `bp_len` going in is the size of the buffer, and at most two fewer
+bytes than that are stored, because the firmware sends its own count in front
+of the data and the SDK strips it.
+
+**`+$8E` can take thirty seconds.** A connect to an address with nothing at it
+was measured at 30.8 s before the firmware gave up, and no timeout budget
+reaches that, so this one waits without a limit of its own. Everything else
+here answered in 75 ms or less.
 
 The signature is checked before calling anything:
 
@@ -116,6 +138,9 @@ At `base+$100`, page-aligned so a BASIC program needs no address arithmetic.
 | `+$152` | `bp_pos` — seek's 32-bit position | 4 |
 | `+$156` | `bp_reu` — address in the RAM expansion | 4 |
 | `+$15A` | `bp_reulen` — how many bytes it moves | 4 |
+| `+$15E` | `bp_sock` — socket handle, in and out; `$FF` after a failed open | 1 |
+| `+$15F` | `bp_iface` — interface index in, interface count out | 1 |
+| `+$160` | `bp_port` — TCP or UDP port | 2 |
 
 Offsets are from the block, so `bp_reu` in a `$8000` build is at `$8256`. The
 block is a fixed 512 bytes whatever is used of it, which is why the four above

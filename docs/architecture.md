@@ -43,7 +43,7 @@ Constraints it holds itself to:
   transport, 48 in the service layer (16 of which is the buffer capability
   probing compares against, and 22 its own request block), 22 more for the
   caller-facing request block `bindings/asm/ultimate_asm.s` exports as
-  `uci_req`, and 31 shared by the palette, DOS, file and REU services.
+  `uci_req`, and 37 shared by the palette, DOS, file, REU and net services.
 - Four bytes of zero page, and the caller picks the address.
 - No interrupts. The IRQ-on-completion bit exists in the hardware and is exposed
   as a constant, but nothing in the SDK requires an interrupt handler.
@@ -65,6 +65,7 @@ src/uci/file.s      load, bload, save - two-tier, over dos or SoftwareIEC
 src/uci/reu.s       stash and fetch over DMA, and the DOS REU pair
 src/uci/palette.s   the running palette, on the control target
 src/uci/turbo.s     CPU speed, which is not a UCI command at all
+src/uci/net.s       TCP and UDP sockets, on the network target
 ```
 
 Services are where target-specific knowledge lives — that `82` means something
@@ -73,8 +74,16 @@ answers in binary, that a `READ_DATA` longer than 512 bytes arrives in chunks.
 The core deliberately does not know any of that.
 
 One file per service, flat, because a service is a few hundred bytes of 6502 and
-a directory per file would be filing rather than structure. Network and HTTP are
-the two that do not exist yet; the generic form reaches both today.
+a directory per file would be filing rather than structure. HTTP is the one that
+does not exist yet; the generic form reaches it today.
+
+`net.s` is the clearest case for why this layer exists at all. Every one of its
+answers is invisible from `uci_exec()`: a socket read reports data, end of
+stream and "nothing yet" as device codes `0`, `1` and `2`, and all three are
+success in the numbering the status decoder follows — so the generic form
+returns `ULTIMATE_OK` for all three and a caller cannot tell a finished download
+from an idle one. Turning that into `ULTIMATE_END` is target-specific knowledge,
+which is exactly what a service is for. See docs/uci.md.
 
 **Two services do not go through `uci_exec` at all, and the list is closed.**
 `turbo.s` and `reu.s` drive hardware registers directly, because the operations

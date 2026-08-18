@@ -109,11 +109,11 @@ consumes is a file nothing validates.
 ## 6. Where the SDK stands
 
 ```
-make test         GREEN   114 host unit tests + 187 across 8 suites
+make test         GREEN   114 host unit tests + 199 across 8 suites
 make hardware-run GREEN   5/5 scenarios, 40-52 checks each
 make basic-run    GREEN   32/32 from the .prg and 32/32 from the .crt
-make coverage     GREEN   24/101 commands, and 0 wrapped-but-untested
-make blob         GREEN   5037 bytes at $8000, 305 relocations
+make coverage     GREEN   32/101 commands, and 0 wrapped-but-untested
+make blob         GREEN   5952 bytes at $8000, 392 relocations
 make wedge        GREEN   wedge 2741 of the 4K at $C000, SDK 3498 of the 8K at $A000
 ```
 
@@ -155,14 +155,77 @@ nowhere; the range widened without a vector; a vector dropped; `UTURBO`'s
 statement comparison deleted; `UBYTE(`'s eval comparison deleted; and the
 constant range narrowed from `UHTTP` to `UIEC`.
 
-### 7.2 The network service
+### 7.2 The network service — built, hardware run still owed
 
-14 commands, no wrapper. `u64sim` implements none of them, so every test is
-hardware — and the bench machine is on a network, so they can be real tests
-rather than "the command was accepted".
+`src/uci/net.s`, nine of the fifteen commands, in assembly, C and the blob
+(`+$85`..`+$9A`). **The emulator half passes; the hardware half has not been run
+yet**, because the bench machine went off the network twice during this work —
+see "the machine" below, which is the first thing to read.
 
-Read handover-next.md §2 for the measured round-trip figures first: they decide
-whether anything here can be synchronous.
+Everything in the file was measured rather than read out of the protocol
+document, which gives the argument shapes and stops exactly where the trouble
+starts. The four findings that shaped the API are in docs/uci.md under
+"Sockets, and what the network target really does", and repeated at the top of
+`net.s`. In short:
+
+- **A read never waits for the wire.** One issued straight after a connect
+  reports "nothing yet" even though the peer greeted us on accept. Callers poll,
+  and that is the right answer on a C64 — a blocking read would freeze the
+  machine for as long as the far end stayed quiet.
+- **The device code is the whole state machine, and `uci_exec` hides it.** Data,
+  end-of-stream and would-block are codes 0, 1 and 2, and `00`/`01`/`02` are all
+  success in the CBM DOS numbering the status decoder follows. The generic form
+  therefore answers `ULTIMATE_OK` to all three, and a caller cannot tell a
+  finished download from an idle socket. `ultimate_net_read` reads the code back
+  and turns 1 into `ULTIMATE_END` — the same code `ultimate_readdir` ends a
+  directory with. This is the clearest argument the service layer has ever had
+  for existing.
+- **A connect can take 30.8 seconds.** Measured, to an address on the same
+  subnet with nothing at it, before the firmware gave up. The timeout budget is
+  a byte of 256-poll units: 0.65 s at the default and about 1 s at its maximum.
+  **No value of it reaches thirty seconds**, so the two open calls run on
+  `UCI_TIMEOUT_FOREVER` and restore the caller's budget afterwards. They are the
+  only entry points in the SDK not bounded by the SDK, and they say so.
+- **Read lengths of 769..1023 are dangerous.** The firmware range-checks at 1024
+  but its response queue is 896 bytes. A probe stepping through that gap took
+  the machine off the network and needed a power cycle. `UCI_NET_READ_MAX` is
+  512, verified with 700 bytes queued behind it, and the SDK will not ask for
+  more however large a buffer it is handed. **The exact edge is deliberately not
+  pinned** — finding it means wedging the machine again for a number nothing
+  needs.
+
+Answering handover-next.md §2's question directly: the figures there are all
+*local* commands and do not transfer. A socket read or write is 3-21 ms, which
+is frame-scale and fine; a connect is not, and cannot be made so.
+
+**The machine.** It dropped off the network twice, once during the read-length
+probe and once about fifteen minutes after a probe run had finished cleanly.
+Both needed a power cycle. That may be the same firmware fragility from two
+angles, or the second may be unrelated; it is not established either way, and it
+is the reason `make hardware-run` has not been run against this yet. Anyone
+picking this up should expect it and should not read a hang as their own bug.
+
+**What is left here:**
+
+1. `make hardware-run U64_HOST=<ip>`. The scenario `uci-enabled` now uses
+   `expect_clean_pass_with_net`, which fails if the socket checks skip rather
+   than run — so a pass means they really connected.
+2. The four LISTEN commands stay unwrapped: `tools/gen_protocol.py` marks them
+   INFERRED, their numbers are not in the published specification, and wrapping
+   a guessed command number is not something this SDK does. The generic form
+   reaches them.
+3. No BASIC keywords. The token table is append-only and a token is a file
+   format, so adding `UNET`-anything is a commitment that should follow a
+   working demo rather than precede one.
+4. No worked example yet; `tests/hardware/ucitest.c`'s network section is the
+   only end-to-end reading of the API.
+
+**The peer is the Ultimate itself.** The hardware test connects to the machine's
+own web server, found by asking `ultimate_net_ipconfig` for the address of
+whichever interface has one. That keeps the fixture policy intact: nothing on
+the network has to exist for the test to run. It also means a second interface
+that reports a MAC and an all-zero address — which is what the bench machine
+does — is handled rather than tripped over.
 
 ### 7.3 The HTTP service
 
