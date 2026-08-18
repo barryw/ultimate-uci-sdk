@@ -68,6 +68,20 @@ suites {
       assert(uci_data(5) == $ef, "...")
     }
 
+    ; The status shape that is not in the protocol documentation at all: DOS
+    ; answers a failure that came from the filesystem with the bare FatFS text
+    ; and no "NN," code in front of it. software/filemanager/dos.cc does this
+    ; for OPEN_FILE, WRITE_DATA, FILE_SEEK, DELETE_FILE, RENAME_FILE, COPY_FILE
+    ; and CREATE_DIR - most of what a program does with files - and only its own
+    ; canned statuses carry a code.
+    ;
+    ; A decoder that requires a code reports the transport as broken when it is
+    ; the disk that is; see docs/uci.md, "Status encodings".
+    test("filesystem-error-has-no-code", "a failed open answers in words, not in a code") {
+      uci($01, $02, $01, $6e, $6f, $73, $75, $63, $68, $2e, $78, $79, $7a)
+      assert(uci_status("FILE DOESN'T EXIST"), "no NN, prefix anywhere in it")
+    }
+
     test("hwinfo-model", "the control target names the machine") {
       uci($04, $28, $00)
       assert(uci_status("00,OK"), "GET_HWINFO succeeded")

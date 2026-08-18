@@ -1131,7 +1131,32 @@ uci_decode:
         jsr uci_status_fmt
         cmp #UCI_STATUS_FMT_BINARY
         beq @binary_ok
-        jmp @malformed
+
+        ; Not a binary target, and it did not start with a digit. Two bytes or
+        ; more of it is the firmware reporting a failure in words rather than
+        ; in a code, which is a device error and not a transport violation.
+        ;
+        ; Ultimate DOS does this for every failure that comes back from the
+        ; filesystem rather than from DOS itself: software/filemanager/dos.cc
+        ; answers OPEN_FILE, WRITE_DATA, FILE_SEEK, DELETE_FILE, RENAME_FILE,
+        ; COPY_FILE and CREATE_DIR with FileSystem::get_error_string(res), which
+        ; is a bare "DISK IS FULL" or "FILE DOESN'T EXIST" with no "NN," in
+        ; front of it. Only the canned DOS-level statuses carry a code.
+        ;
+        ; Seen on the wire, not deduced: a WRITE_DATA to a full USB stick on
+        ; firmware 3.15 answers "DISK IS FULL", and reading that as a protocol
+        ; error told the caller the SDK was broken when the disk was.
+        ;
+        ; The code is left as UCI_DEVICE_CODE_NONE because there is none; the
+        ; text is in the caller's status buffer either way.
+        lda uci_dec_len
+        cmp #$02
+        bcc @malformed          ; one byte is the binary shape, and this target
+                                ; has no binary vocabulary to read it with
+        lda #ULTIMATE_ERR_DEVICE
+        ldx #$00
+        rts
+
 @binary_ok:
         ldy #$00
         lda (uci_ptr),y

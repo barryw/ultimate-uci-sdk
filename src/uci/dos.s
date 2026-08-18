@@ -35,6 +35,7 @@
         .import ult_req_clear, ult_exec_string
 
         .export ultimate_chdir,   _ultimate_chdir
+        .export ultimate_delete,  _ultimate_delete
         .export ultimate_getpath
         .export ultimate_opendir, _ultimate_opendir
         .export ultimate_readdir
@@ -57,6 +58,21 @@ _ultimate_chdir:
         stx ult_buf + 1
 ultimate_chdir:
         lda #DOS_CMD_CHANGE_DIR
+        jmp ult_str_cmd
+
+; ---------------------------------------------------------------------------
+; ultimate_delete   ult_buf = NUL-terminated name  ->  A = ULTIMATE_* result
+;
+; The same shape as chdir - one string argument and nothing else - which is why
+; it shares its marshalling. It is here because the test data policy needs it:
+; a test that writes a file has to be able to take it away again, and a delete
+; done from the host over FTP would not be the SDK's own delete.
+; ---------------------------------------------------------------------------
+_ultimate_delete:
+        sta ult_buf
+        stx ult_buf + 1
+ultimate_delete:
+        lda #DOS_CMD_DELETE_FILE
         jmp ult_str_cmd
 
 ; ---------------------------------------------------------------------------

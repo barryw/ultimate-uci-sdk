@@ -44,8 +44,9 @@
         .import ultimate_chdir, ultimate_getpath
         .import ultimate_opendir, ultimate_readdir
         .import ultimate_open, ultimate_close, ultimate_read
-        .import ult_attrib, ult_addr, ult_max, ult_end
-        .import ultimate_load, ultimate_bload
+        .import ultimate_write, ultimate_seek, ultimate_delete
+        .import ult_attrib, ult_addr, ult_max, ult_end, ult_num
+        .import ultimate_load, ultimate_bload, ultimate_save
         .import ult_buf, ult_buflen, ult_outlen, ult_color
 
         ; --- entry points ---
@@ -67,7 +68,9 @@
         .export t_turbo_set, t_turbo_badlines
         .export t_chdir, t_getpath, t_opendir, t_readdir
         .export t_open, t_close, t_read
-        .export t_load, t_bload, load_addr, load_max, load_end
+        .export t_create, t_write, t_seek, t_delete
+        .export wr_len, seek_pos
+        .export t_load, t_bload, t_save, load_addr, load_max, load_end
         .export dir_attrib
         .export t_req_reset
         .export t_exec
@@ -142,6 +145,8 @@ dir_attrib:   .res 1
 load_addr:    .res 2
 load_max:     .res 2
 load_end:     .res 2
+wr_len:       .res 2      ; how many bytes t_write sends from buf_data
+seek_pos:     .res 4      ; t_seek's 32-bit position, little endian
 
 req:         .res UCI_REQ_SIZE
 buf_args:    .res ARGS_MAX
@@ -419,6 +424,52 @@ t_read:
         sta result
         rts
 
+; The write half of the same service. The name goes in `reply`, as it does for
+; t_open; the data is whatever the suite poked into buf_data, and wr_len says
+; how much of it to send.
+t_create:
+        jsr set_ult_buf
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda #DOS_FA_CREATE_ALWAYS | DOS_FA_WRITE | DOS_FA_READ
+        jsr ultimate_open
+        sta result
+        rts
+
+t_write:
+        lda #<buf_data
+        sta ult_buf
+        lda #>buf_data
+        sta ult_buf + 1
+        lda wr_len
+        sta ult_buflen
+        lda wr_len + 1
+        sta ult_buflen + 1
+        jsr ultimate_write
+        sta result
+        rts
+
+t_seek:
+        ldx #$03
+@copy:  lda seek_pos,x
+        sta ult_num,x
+        dex
+        bpl @copy
+        jsr ultimate_seek
+        sta result
+        rts
+
+t_delete:
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        jsr ultimate_delete
+        sta result
+        rts
+
 ; --- load and save ---
 ;
 ; The simulator has no SoftwareIEC target, so ultimate_load's fast path always
@@ -437,6 +488,14 @@ t_bload:
         jsr ultimate_bload
         sta result
         jsr save_load_end
+        rts
+
+; save takes the same three arguments in the same places, so it shares the
+; setter: the name in `reply`, the start address in load_addr, the length in
+; load_max.
+t_save: jsr set_load_args
+        jsr ultimate_save
+        sta result
         rts
 
 ; The name is in `reply`, put there by the suite; the address and the limit come

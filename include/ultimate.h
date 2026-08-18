@@ -248,6 +248,9 @@ uint8_t ultimate_write(const uint8_t *buf, uint16_t len);
 /* Seek to an absolute byte position in the open file. */
 uint8_t ultimate_seek(uint32_t pos);
 
+/* Delete a file, by name in the current directory or by path. */
+uint8_t ultimate_delete(const char *name);
+
 /*
  * Loading and saving, which is what most programs actually want from a
  * filesystem.

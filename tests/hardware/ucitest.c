@@ -139,6 +139,17 @@ static const char hello_path[] = {
     0x2E, 0x74, 0x78, 0x74, 0x00                /* .txt   */
 };
 
+/*
+ * The scratch file the write tests make, use and take away again. Numeric for
+ * the same reason hello_path is: what goes on the wire is bytes, and cc65 would
+ * charmap a string literal into PETSCII on its way there.
+ */
+static const char scratch_path[] = {
+    0x2F, 0x55, 0x73, 0x62, 0x31, 0x2F,         /* /Usb1/ */
+    0x64, 0x61, 0x74, 0x61, 0x2F,               /* data/  */
+    0x77, 0x72, 0x2E, 0x74, 0x6D, 0x70, 0x00    /* wr.tmp */
+};
+
 static uint8_t saved[UCI_PALETTE_BYTES];
 static uint8_t readback[UCI_PALETTE_BYTES];
 
@@ -465,6 +476,76 @@ int main(void)
             skip("bload-honours-its-limit", "the fixture is not on the device");
         }
     }
+
+    /*
+     * 32-40: the write half, against a real filesystem.
+     *
+     * Every byte this touches is a byte it made: the file is created here,
+     * written, read back, and deleted, which is the test data policy in
+     * docs/handover.md section 6. Nothing pre-existing on the device is opened
+     * for writing at any point.
+     *
+     * The emulator suite runs the same sequence against u64sim's filesystem.
+     * This is the one that runs it against FAT on a real USB stick, where a
+     * create can fail for reasons a simulator has never heard of - no medium,
+     * write protection, a full volume - and where failing cleanly is the
+     * behaviour that matters.
+     */
+    err = ultimate_open(scratch_path,
+                        DOS_FA_CREATE_ALWAYS | DOS_FA_WRITE | DOS_FA_READ);
+    if (err != ULTIMATE_OK) {
+        skip("write-creates-a-file", "no writable /usb1/data on this machine");
+    } else {
+        static const uint8_t written[] = { 0xDE, 0xAD, 0xBE, 0xEF };
+        uint8_t back[4];
+
+        ok("write-creates-a-file");
+
+        /*
+         * A write can fail for a reason no test can fix: the bench machine's
+         * stick was full the first time this ran, and the firmware said so -
+         * "DISK IS FULL", which the SDK now reports as ULTIMATE_ERR_DEVICE.
+         * That is the medium refusing, not the SDK failing, so it skips and
+         * says which. Anything else is a real failure and is reported as one.
+         */
+        err = ultimate_write(written, sizeof(written));
+        if (err == ULTIMATE_ERR_DEVICE) {
+            skip("write-data", "the device refused the write: full, or read-only");
+            ultimate_close();
+            ultimate_delete(scratch_path);
+            goto after_write;
+        }
+        check("write-data", ULTIMATE_OK, err);
+        check("write-close", ULTIMATE_OK, ultimate_close());
+
+        /* Reopen for reading, seek past the first two bytes, and read the rest.
+           A read that ignored the seek would answer four bytes from $DE. */
+        check("reopen-for-read", ULTIMATE_OK,
+              ultimate_open(scratch_path, DOS_FA_READ));
+        check("seek", ULTIMATE_OK, ultimate_seek(2));
+
+        len = 0;
+        back[0] = 0x00;
+        check("read-after-seek", ULTIMATE_OK,
+              ultimate_read(back, sizeof(back), &len));
+        check("read-stops-at-the-end", 2, (int)len);
+        check("seek-landed", 0xBE, (int)back[0]);
+        ultimate_close();
+
+        check("delete", ULTIMATE_OK, ultimate_delete(scratch_path));
+
+        /*
+         * And it is really gone - which is what makes the cleanup a test.
+         * ULTIMATE_ERR_DEVICE exactly: the firmware answers a missing file with
+         * "FILE DOESN'T EXIST", bare text with no code, and reading that as a
+         * device error rather than a protocol one is the whole point.
+         */
+        err = ultimate_open(scratch_path, DOS_FA_READ);
+        check("delete-removed-it", ULTIMATE_ERR_DEVICE, err);
+        if (err == ULTIMATE_OK)
+            ultimate_close();
+    }
+after_write:
 
     printf("1..%u\n", test_no);
     printf("# %u passed, %u failed, %u skipped\n", passed, failed, skipped);

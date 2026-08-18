@@ -303,6 +303,23 @@ digit, so the two are always distinguishable. This one cost real debugging time 
 it made capability probing declare a working SoftwareIEC target absent, and only
 hardware testing showed it.
 
+**A fourth shape: bare text with no code at all.** Ultimate DOS answers every
+failure that came out of the *filesystem* rather than out of DOS itself with
+`FileSystem::get_error_string(res)` and nothing else — `DISK IS FULL`,
+`FILE DOESN'T EXIST`, `WRITE PROTECTED`, `ACCESS DENIED`. Only the canned
+DOS-level statuses in the table above carry a `NN,` prefix. In
+`software/filemanager/dos.cc` the commands that can answer this way are
+`OPEN_FILE`, `WRITE_DATA`, `FILE_SEEK`, `DELETE_FILE`, `RENAME_FILE`,
+`COPY_FILE` and `CREATE_DIR` — which is most of what a program does with files.
+
+Found on the wire on firmware 3.15, writing to a full USB stick, and confirmed
+against the source afterwards. The SDK reads a status of two bytes or more that
+begins with a non-digit, on a target whose status is meant to be decimal, as
+`ULTIMATE_ERR_DEVICE` with no device code: the target reported a failure in
+words, and the words are in the caller's status buffer. Reading it as a protocol
+error — which is what the SDK did until this was seen — tells a program the
+transport is broken when the disk is.
+
 **Silence is success.** Several commands, `DOS_CMD_READ_DATA` among them, send no
 status at all when everything went well.
 

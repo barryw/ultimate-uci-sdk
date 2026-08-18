@@ -140,6 +140,7 @@ sharing them.
 | `ultimate_read` | `ult_buf`, `ult_buflen`, `ult_outlen` | `A` = result code |
 | `ultimate_write` | `ult_buf`, `ult_buflen` | `A` = result code |
 | `ultimate_seek` | `ult_num` = 32-bit position | `A` = result code |
+| `ultimate_delete` | `ult_buf` = name | `A` = result code |
 | `uci_exec_first` | `A`/`X` = request block | `A` = result, one block |
 | `uci_exec_next` | — | `A` = result, the next block |
 | `ultimate_load` | `ult_buf` = name, `ult_addr` = address (0 = the file's own) | `A` = result, `ult_end` = end |

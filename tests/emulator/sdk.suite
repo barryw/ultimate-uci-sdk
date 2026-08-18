@@ -652,7 +652,7 @@ suites {
       assert([result] == $03, "and the same from the network target")
     }
 
-    test("sdk-decode-malformed", "anything that matches no encoding is a protocol error") {
+    test("sdk-decode-malformed", "what matches no encoding, and what only looks like it") {
       [dec_target] = $01
 
       [dec_len] = $00                   ; silence is success
@@ -660,22 +660,45 @@ suites {
       assert([result] == $00, "ULTIMATE_OK")
       assert([devcode].w == $ffff, "UCI_DEVICE_CODE_NONE")
 
-      [dec_len] = $02                   ; "OK" - no digits at all
-      [dec_buf] = $4f
-      [dec_buf] + $01 = $4b
+      [dec_len] = $01                   ; a lone digit matches no encoding, and
+      [dec_buf] = $34                   ; DOS has no binary status to read it as
       jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $03, "ULTIMATE_ERR_PROTOCOL")
 
-      [dec_len] = $01                   ; a lone digit matches no encoding
-      [dec_buf] = $34
-      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
-      assert([result] == $03, "ULTIMATE_ERR_PROTOCOL")
-
-      [dec_len] = $02                   ; one digit and one letter
-      [dec_buf] = $30
+      [dec_len] = $02                   ; one digit and one letter: it claimed to
+      [dec_buf] = $30                   ; be a code and then was not one
       [dec_buf] + $01 = $4b
       jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $03, "ULTIMATE_ERR_PROTOCOL")
+    }
+
+    ; Ultimate DOS answers every failure that came from the filesystem rather
+    ; than from DOS itself with a bare FileSystem::get_error_string(res) - no
+    ; "NN," in front of it - and only its own canned statuses carry a code. See
+    ; software/filemanager/dos.cc: OPEN_FILE, WRITE_DATA, FILE_SEEK,
+    ; DELETE_FILE, RENAME_FILE, COPY_FILE and CREATE_DIR all do it.
+    ;
+    ; This was found on the wire, not read out of the source: a WRITE_DATA to a
+    ; full USB stick on firmware 3.15 answers "DISK IS FULL", and the SDK used
+    ; to report that as ULTIMATE_ERR_PROTOCOL - telling a program the transport
+    ; was broken when the disk was.
+    test("sdk-decode-text-status", "words instead of a code are a device error") {
+      [dec_target] = $01
+
+      [dec_len] = $04                   ; "FULL", the shape of the real thing
+      [dec_buf] = $46
+      [dec_buf] + $01 = $55
+      [dec_buf] + $02 = $4c
+      [dec_buf] + $03 = $4c
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE, not a transport failure")
+      assert([devcode].w == $ffff, "UCI_DEVICE_CODE_NONE: there is no code to keep")
+
+      [dec_len] = $02                   ; "OK" - still no code, still the target
+      [dec_buf] = $4f                   ; reporting rather than the wire failing
+      [dec_buf] + $01 = $4b
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
     }
 
     ; These are the SDK's only strings meant for a screen rather than for the
@@ -1062,6 +1085,31 @@ suites {
       assert([result] == $00, "CLOSE_FILE succeeded")
     }
 
+    ; A file that is not there. The firmware answers "FILE DOESN'T EXIST" - bare
+    ; text, no "NN," code, which is what every filesystem-level DOS failure looks
+    ; like - so this is the SDK end of the assertion in protocol.suite.
+    test("sdk-open-missing-file", "a missing file is a device error, not a protocol one") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $6e            ; "nosuch.xyz"
+      [reply1] = $6f
+      [reply2] = $73
+      [reply3] = $75
+      [reply0] + $04 = $63
+      [reply0] + $05 = $68
+      [reply0] + $06 = $2e
+      [reply0] + $07 = $78
+      [reply0] + $08 = $79
+      [reply0] + $09 = $7a
+      [reply0] + $0a = $00
+      [result] = $ff
+      jsr([t_open], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+    }
+
     ; --- load ---
     ;
     ; There is no SoftwareIEC target under the simulator, so ultimate_load's
@@ -1144,6 +1192,187 @@ suites {
       ; and were consumed, so the first byte stored is $02.
       assert([buf_data] == $02, "the header is gone, not merely skipped over")
       assert(([buf_data] + $01).b == $03, "then 3")
+    }
+
+    ; --- the write half ---
+    ;
+    ; Everything above reads. These write, and they write into the fixture tree
+    ; itself, so they follow the test data policy in docs/handover.md section 6
+    ; to the letter: the file is created here, used here, and deleted here.
+    ;
+    ; It goes in `data`, not in the root: the readdir test asserts the root has
+    ; exactly two entries and then ends, so a scratch file left behind by a run
+    ; that died halfway would fail a test that has nothing to do with writing.
+
+    test("sdk-write-seek-read", "a file is created, written, and read back from an offset") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $2f            ; "/Usb0/data"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $2f
+      [reply0] + $06 = $64
+      [reply0] + $07 = $61
+      [reply0] + $08 = $74
+      [reply0] + $09 = $61
+      [reply0] + $0a = $00
+      [result] = $ff
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "in the fixture's subdirectory")
+
+      ; "wr.tmp", and four bytes to put in it.
+      [reply0] = $77
+      [reply1] = $72
+      [reply2] = $2e
+      [reply3] = $74
+      [reply0] + $04 = $6d
+      [reply0] + $05 = $70
+      [reply0] + $06 = $00
+
+      [buf_data] = $41
+      [buf_data] + $01 = $42
+      [buf_data] + $02 = $43
+      [buf_data] + $03 = $44
+      [wr_len] = $04
+      [wr_len] + $01 = $00
+
+      [result] = $ff
+      jsr([t_create], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "OPEN_FILE created it")
+
+      [result] = $ff
+      jsr([t_write], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "WRITE_DATA succeeded")
+
+      [result] = $ff
+      jsr([t_close], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and it closed")
+
+      ; Reopen for reading. The name is still in `reply` - t_create did not
+      ; disturb it - and t_open asks for DOS_FA_READ.
+      [result] = $ff
+      jsr([t_open], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the file that was just written opens")
+
+      ; Two bytes in, so a read that ignored the seek would answer $41 and four
+      ; bytes rather than $43 and two.
+      [seek_pos] = $02
+      [seek_pos] + $01 = $00
+      [seek_pos] + $02 = $00
+      [seek_pos] + $03 = $00
+      [result] = $ff
+      jsr([t_seek], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "FILE_SEEK succeeded")
+
+      [reply_len] = $ff
+      [reply_len] + $01 = $ff
+      [result] = $ff
+      jsr([t_read], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "READ_DATA succeeded")
+      assert([reply_len] == $02, "two bytes left after the seek")
+      assert(([reply_len] + $01).b == $00, "and no more: short is the end of the file")
+      assert([reply0] == $43, "'C' - the third byte written, so the seek landed")
+      assert([reply1] == $44, "'D'")
+
+      [result] = $ff
+      jsr([t_close], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "closed again")
+
+      ; t_read overwrote `reply` with the file's own bytes, so the name goes
+      ; back before the delete asks for it.
+      [reply0] = $77            ; "wr.tmp"
+      [reply1] = $72
+      [reply2] = $2e
+      [reply3] = $74
+      [reply0] + $04 = $6d
+      [reply0] + $05 = $70
+      [reply0] + $06 = $00
+      [result] = $ff
+      jsr([t_delete], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "DELETE_FILE succeeded")
+
+      ; And it is really gone, which is what makes the cleanup a test rather
+      ; than a hope.
+      [result] = $00
+      jsr([t_open], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "opening it again is a device error: the file is gone")
+    }
+
+    ; save is the same three arguments as bload, in the other direction: a
+    ; region of memory becomes a file. It writes through DOS open/write/close,
+    ; so this is also the second caller of the write path.
+    test("sdk-save-round-trips", "what save wrote is what bload reads back") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $2f            ; "/Usb0/data"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $2f
+      [reply0] + $06 = $64
+      [reply0] + $07 = $61
+      [reply0] + $08 = $74
+      [reply0] + $09 = $61
+      [reply0] + $0a = $00
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "in the fixture's subdirectory")
+
+      [reply0] = $73            ; "sv.tmp"
+      [reply1] = $76
+      [reply2] = $2e
+      [reply3] = $74
+      [reply0] + $04 = $6d
+      [reply0] + $05 = $70
+      [reply0] + $06 = $00
+
+      [buf_data] = $de
+      [buf_data] + $01 = $ad
+      [buf_data] + $02 = $be
+      [buf_data] + $03 = $ef
+      [load_addr] = [buf_data].l
+      [load_addr] + $01 = [buf_data].h
+      [load_max] = $04
+      [load_max] + $01 = $00
+      [result] = $ff
+      jsr([t_save], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the region became a file")
+
+      ; Read it back over the top of itself after wiping it, so the assertion
+      ; cannot pass on the bytes that were already there.
+      [buf_data] = $00
+      [buf_data] + $01 = $00
+      [buf_data] + $02 = $00
+      [buf_data] + $03 = $00
+      [load_max] = $04
+      [load_max] + $01 = $00
+      [result] = $ff
+      jsr([t_bload], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and it reads back")
+      assert([load_end].w == [buf_data] + $0004, "four bytes, the four that were saved")
+      assert([buf_data] == $de, "byte for byte")
+      assert(([buf_data] + $01).b == $ad, "still")
+      assert(([buf_data] + $02).b == $be, "and")
+      assert(([buf_data] + $03).b == $ef, "again")
+
+      [reply0] = $73            ; "sv.tmp", back over what bload did not touch
+      [reply1] = $76
+      [reply2] = $2e
+      [reply3] = $74
+      [reply0] + $04 = $6d
+      [reply0] + $05 = $70
+      [reply0] + $06 = $00
+      [result] = $ff
+      jsr([t_delete], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and the fixture tree is as it was found")
     }
   }
 }

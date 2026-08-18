@@ -25,17 +25,17 @@ commands as tested that no test has ever sent.
 | Ultimate DOS commands | `DOS_CMD_OPEN_FILE` | `$02` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_CLOSE_FILE` | `$03` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_READ_DATA` | `$04` | tested | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_WRITE_DATA` | `$05` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_FILE_SEEK` | `$06` | no API yet | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_WRITE_DATA` | `$05` | tested | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_FILE_SEEK` | `$06` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_FILE_INFO` | `$07` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_FILE_STAT` | `$08` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_DELETE_FILE` | `$09` | no API yet | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_DELETE_FILE` | `$09` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_RENAME_FILE` | `$0A` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_COPY_FILE` | `$0B` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_CHANGE_DIR` | `$11` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_GET_PATH` | `$12` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_OPEN_DIR` | `$13` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_READ_DIR` | `$14` | no API yet | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_CHANGE_DIR` | `$11` | tested | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_GET_PATH` | `$12` | tested | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_OPEN_DIR` | `$13` | tested | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_READ_DIR` | `$14` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_COPY_UI_PATH` | `$15` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_CREATE_DIR` | `$16` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_COPY_HOME_PATH` | `$17` | no API yet | simulator + hardware |
@@ -87,8 +87,8 @@ commands as tested that no test has ever sent.
 | Control commands | `CTRL_CMD_SET_PALETTE_COLOR` | `$53` | tested | hardware only |
 | Control commands | `CTRL_CMD_RESET_PALETTE` | `$54` | tested | hardware only |
 | SoftwareIEC commands | `SOFTIEC_CMD_IDENTIFY` | `$01` | no API yet | hardware only |
-| SoftwareIEC commands | `SOFTIEC_CMD_LOAD_SU` | `$10` | no API yet | hardware only |
-| SoftwareIEC commands | `SOFTIEC_CMD_LOAD_EX` | `$11` | no API yet | hardware only |
+| SoftwareIEC commands | `SOFTIEC_CMD_LOAD_SU` | `$10` | tested | hardware only |
+| SoftwareIEC commands | `SOFTIEC_CMD_LOAD_EX` | `$11` | tested | hardware only |
 | SoftwareIEC commands | `SOFTIEC_CMD_SAVE` | `$12` | no API yet | hardware only |
 | SoftwareIEC commands | `SOFTIEC_CMD_OPEN` | `$13` | no API yet | hardware only |
 | SoftwareIEC commands | `SOFTIEC_CMD_CLOSE` | `$14` | no API yet | hardware only |
@@ -127,10 +127,11 @@ commands as tested that no test has ever sent.
 | | |
 | --- | --- |
 | commands defined | 101 |
-| exercised by a test | 13 (12%) |
+| exercised by a test | 22 (21%) |
 | wrapped but untested | 0 |
 
 The low figure is expected while the SDK is still a vertical slice:
-detection and identity are implemented, the file, network and HTTP
-services are not. Coverage grows as each service lands, not before -
-writing tests against commands no API reaches would measure nothing.
+detection, identity, the palette and the file service are implemented;
+the network and HTTP services are not, and neither is most of what DOS
+can do. Coverage grows as each service lands, not before - writing
+tests against commands no API reaches would measure nothing.

@@ -34,6 +34,11 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # byte never appears in its source at all. Scanning for the byte alone would
 # report every wrapped command as untested for ever, which is the opposite of
 # what this file is for.
+# A command is listed against the entry points that *always* send it. That
+# qualifier is what keeps this honest for ultimate_load, which tries the
+# SoftwareIEC pair first and falls back to DOS OPEN/READ/CLOSE: it always
+# attempts LOAD_SU, so it is credited with that, and it is not credited with
+# READ_DATA, which a machine with an IEC drive never sees it send.
 WRAPPED = {
     "UCI_CMD_IDENTIFY":           ("ultimate_identify", "ultimate_detect"),
     "CTRL_CMD_GET_HWINFO":        ("ultimate_get_model",),
@@ -41,6 +46,20 @@ WRAPPED = {
     "CTRL_CMD_SET_PALETTE":       ("ultimate_palette_set",),
     "CTRL_CMD_SET_PALETTE_COLOR": ("ultimate_palette_set_color",),
     "CTRL_CMD_RESET_PALETTE":     ("ultimate_palette_reset",),
+    "DOS_CMD_CHANGE_DIR":         ("ultimate_chdir",),
+    "DOS_CMD_GET_PATH":           ("ultimate_getpath",),
+    "DOS_CMD_OPEN_DIR":           ("ultimate_opendir",),
+    "DOS_CMD_READ_DIR":           ("ultimate_readdir",),
+    "DOS_CMD_OPEN_FILE":          ("ultimate_open", "ultimate_bload",
+                                   "ultimate_save"),
+    "DOS_CMD_CLOSE_FILE":         ("ultimate_close", "ultimate_bload",
+                                   "ultimate_save"),
+    "DOS_CMD_READ_DATA":          ("ultimate_read", "ultimate_bload"),
+    "DOS_CMD_WRITE_DATA":         ("ultimate_write", "ultimate_save"),
+    "DOS_CMD_FILE_SEEK":          ("ultimate_seek",),
+    "DOS_CMD_DELETE_FILE":        ("ultimate_delete",),
+    "SOFTIEC_CMD_LOAD_SU":        ("ultimate_load",),
+    "SOFTIEC_CMD_LOAD_EX":        ("ultimate_load",),
 }
 
 # Where a test could plausibly send a command from.
@@ -129,11 +148,43 @@ def test_corpus():
     return strip_comments(text)
 
 
-def called_entry_points(corpus):
-    """SDK entry points the tests actually call, as `name(`."""
+# The emulator suites never write ultimate_chdir(): the sim6502 DSL cannot call
+# a C function, so it jsr's a stub in tests/emulator/harness.s instead. The stub
+# bodies are read rather than listed here, because a hand-kept stub-to-entry-
+# point table is the same thing this file exists to abolish.
+HARNESS = "tests/emulator/harness.s"
+
+STUB_LABEL = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):")
+STUB_CALL = re.compile(r"\b(?:jsr|jmp)\s+_?(ultimate_[a-z0-9_]+)")
+
+
+def harness_stubs():
+    """Harness stub name -> the SDK entry points its body reaches."""
+    stubs = {}
+    label = None
+    with open(os.path.join(REPO, HARNESS)) as fh:
+        for line in fh:
+            found = STUB_LABEL.match(line)
+            if found:
+                label = found.group(1)
+            call = STUB_CALL.search(line)
+            if call and label:
+                stubs.setdefault(label, set()).add(call.group(1))
+    return stubs
+
+
+def called_entry_points(corpus, stubs):
+    """SDK entry points the tests reach, directly or through a harness stub.
+
+    Bare words, not `name(`: a C test calls ultimate_load(name, addr) and a
+    suite writes jsr([t_load]), and both have to count.
+    """
     wanted = {name for points in WRAPPED.values() for name in points}
-    return {m for m in re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", corpus)
-            if m in wanted}
+    words = set(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", corpus))
+    called = words & wanted
+    for stub in words & set(stubs):
+        called |= stubs[stub] & wanted
+    return called
 
 
 # The three ways a test names a target or a command, in the order they appear:
@@ -204,7 +255,7 @@ def main():
     check = "--check" in sys.argv
     corpus = test_corpus()
     sent_names, sent_pairs = sent_commands(corpus)
-    called = called_entry_points(corpus)
+    called = called_entry_points(corpus, harness_stubs())
 
     rows = []
     totals = {"total": 0, "covered": 0, "gap": 0}
@@ -272,9 +323,10 @@ def main():
         "| wrapped but untested | %d |" % totals["gap"],
         "",
         "The low figure is expected while the SDK is still a vertical slice:",
-        "detection and identity are implemented, the file, network and HTTP",
-        "services are not. Coverage grows as each service lands, not before -",
-        "writing tests against commands no API reaches would measure nothing.",
+        "detection, identity, the palette and the file service are implemented;",
+        "the network and HTTP services are not, and neither is most of what DOS",
+        "can do. Coverage grows as each service lands, not before - writing",
+        "tests against commands no API reaches would measure nothing.",
         "",
     ]
 
