@@ -457,16 +457,50 @@ either way, so `ULOAD` has no setting to talk the user through. And detection
 still cannot tell you a *file* is loadable, which is why the fallback hangs off
 the command failing.
 
-### `reu.s` — the one service that does not go through `uci_exec`
+### The services that do not go through `uci_exec`
+
+There are exactly two, and the test that admits them is the same one:
+**does the operation exist on the UCI at all?** If it does, a service uses
+`uci_exec` and nothing else. If it does not exist there — if the only way to
+reach it is a memory-mapped register — then the rule about not reimplementing
+the transport has nothing to bite on, because there is no transport involved.
+
+**This is a deliberate and closed list, not the rule eroding.** It is written
+down so that a future service author does not read it as permission. Adding to
+it means showing that `docs/generated/protocol-constants.md` has no command for
+the job.
+
+#### `turbo.s` — CPU speed (built)
+
+The control target's full command set is generated into
+`docs/generated/protocol-constants.md` and nothing in it touches CPU speed.
+Turbo is `$D031`: bits 0-3 a speed index into the machine's own table, bit 7
+badlines off. `$D030` bit 0 belongs to the machine's other turbo mode and the
+SDK does not use it.
+
+```c
+uint8_t ultimate_turbo_available(void);          /* 1 or 0 */
+uint8_t ultimate_turbo_get(void);                /* index, or $FF */
+uint8_t ultimate_turbo_set(uint8_t index);
+uint8_t ultimate_turbo_badlines(uint8_t on);
+```
+
+```basic
+UTURBO 3 : IF UERR THEN PRINT "no turbo here"
+PRINT UTURBO
+```
+
+Two things shape the API and are not negotiable. **The register reads `$FF`
+when turbo is unavailable**, which makes availability testable rather than
+assumed — and unavailable is the common case, because it depends on a setting
+only the machine's owner can change. **The index above `U64_SPEED_4MHZ` means
+different speeds on the U64 and the U64-II**, so the SDK passes the index
+through and never pretends to know megahertz.
+
+#### `reu.s` — RAM to REU (Phase 3)
 
 There is no UCI command that moves bytes between C64 RAM and the REU. That is
 the REU's own DMA controller at `$DF00-$DF0A`, and the C64 drives it directly.
-So `reu.s` touches hardware, which every other service is forbidden to do.
-
-**This is a deliberate exception, not the rule eroding.** It is stated here so
-that a future service author does not read it as permission. The test for
-whether a service may touch hardware is whether the operation exists on the UCI
-at all; for RAM-to-REU transfer it does not.
 
 ```c
 uint8_t ultimate_reu_stash (uint16_t c64, uint16_t reu, uint8_t bank, uint16_t len);

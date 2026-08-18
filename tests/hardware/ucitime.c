@@ -25,59 +25,9 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <peekpoke.h>
 #include <ultimate.h>
 
-/* ---- CIA #2, chained into a 32-bit cycle counter --------------------------
- *
- * CIA #2 is the free one: the KERNAL drives its timers only for RS232, and
- * nothing here touches $DD00, so the VIC bank and the serial bus are unharmed.
- * Timer A counts phi2, timer B counts timer A's underflows.
- */
-#define CIA2_TA_LO 0xDD04
-#define CIA2_TA_HI 0xDD05
-#define CIA2_TB_LO 0xDD06
-#define CIA2_TB_HI 0xDD07
-#define CIA2_ICR   0xDD0D
-#define CIA2_CRA   0xDD0E
-#define CIA2_CRB   0xDD0F
-
-#define CRA_RUN    0x11            /* force load, count phi2, start */
-#define CRB_RUN    0x51            /* force load, count timer A underflows, start */
-
-#define VIC_RASTER 0xD012
-#define VIC_TURBO  0xD031          /* $FF when the Ultimate's turbo is not available */
-#define PAL_FLAG   0x02A6          /* KERNAL: 1 = PAL, 0 = NTSC */
-
-static void timer_start(void)
-{
-    POKE(CIA2_CRA, 0x00);
-    POKE(CIA2_CRB, 0x00);
-    POKE(CIA2_ICR, 0x7F);          /* no NMI from either timer, whatever ran before */
-    (void)PEEK(CIA2_ICR);          /* reading clears the latched flags */
-    POKE(CIA2_TA_LO, 0xFF);
-    POKE(CIA2_TA_HI, 0xFF);
-    POKE(CIA2_TB_LO, 0xFF);
-    POKE(CIA2_TB_HI, 0xFF);
-    POKE(CIA2_CRB, CRB_RUN);       /* B first: it must already be counting when A wraps */
-    POKE(CIA2_CRA, CRA_RUN);
-}
-
-/*
- * Both timers count down from $FFFF and reload on underflow, so a timer A
- * period is $FFFF + 1 cycles. Stop before reading: a rollover between the two
- * reads would otherwise be worth 65536 cycles of nonsense.
- */
-static uint32_t timer_stop(void)
-{
-    uint16_t a, b;
-
-    POKE(CIA2_CRA, 0x00);
-    POKE(CIA2_CRB, 0x00);
-    a = PEEK(CIA2_TA_LO) | ((uint16_t)PEEK(CIA2_TA_HI) << 8);
-    b = PEEK(CIA2_TB_LO) | ((uint16_t)PEEK(CIA2_TB_HI) << 8);
-    return ((uint32_t)(0xFFFFu - b) << 16) | (uint32_t)(uint16_t)(0xFFFFu - a);
-}
+#include "cycles.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -88,8 +38,11 @@ static uint32_t cycles[MAX_SLOTS];
 static uint8_t  errors[MAX_SLOTS];
 static uint8_t  slots;
 
-static uint32_t overhead;          /* timer start + stop, charged once per measurement */
 static uint32_t frame_cycles;      /* one raster frame, on the same clock */
+
+/* The KERNAL's PAL/NTSC flag. Informational: every ratio below comes from
+ * frame_cycles, which is measured rather than looked up. */
+#define PAL_FLAG 0x02A6
 
 /*
  * Interrupts off for the whole burst. The KERNAL's own IRQ is not part of a
@@ -109,44 +62,7 @@ static uint32_t time_exec(uci_request *req, uint8_t slot)
     total = timer_stop();
     __asm__("cli");
 
-    return total > overhead ? total - overhead : 0;
-}
-
-/*
- * Ten frames on the same counter. This is the calibration: everything else is
- * reported as a ratio against it, so nothing here has to know how long a frame
- * is supposed to be.
- *
- * Raster line 250 exists once per frame on PAL and on NTSC alike - $D012 is the
- * low eight bits of a line number that never reaches 506 - so one wait-for-250
- * plus one wait-to-leave-250 is exactly one frame.
- *
- * Sync before starting the timer, not after. Starting it first puts a partial
- * frame in front of the ten: the first measurement read 16245 cycles where an
- * NTSC frame is 17095, which is 9.5 frames divided by 10 and looked like a
- * plausible number rather than an obviously broken one.
- */
-static uint32_t time_ten_frames(void)
-{
-    uint8_t i;
-    uint32_t total;
-
-    __asm__("sei");
-    while (PEEK(VIC_RASTER) != 250)
-        ;
-    while (PEEK(VIC_RASTER) == 250)
-        ;
-    timer_start();
-    for (i = 0; i < 10; ++i) {
-        while (PEEK(VIC_RASTER) != 250)
-            ;
-        while (PEEK(VIC_RASTER) == 250)
-            ;
-    }
-    total = timer_stop();
-    __asm__("cli");
-
-    return (total > overhead ? total - overhead : 0) / 10;
+    return cycles_net(total);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -186,10 +102,10 @@ static void publish(void)
     RESULT_BLOCK[5] = slots;
     RESULT_BLOCK[6] = PEEK(PAL_FLAG);
     RESULT_BLOCK[7] = ITERS;
-    RESULT_BLOCK[8] = PEEK(VIC_TURBO);
+    RESULT_BLOCK[8] = PEEK(U64_REG_TURBO);
     RESULT_BLOCK[9] = 0;
     put32(RESULT_BLOCK + 10, frame_cycles);
-    put32(RESULT_BLOCK + 14, overhead);
+    put32(RESULT_BLOCK + 14, cycles_overhead);
     for (i = 0; i < MAX_SLOTS; ++i) {
         put32(RESULT_BLOCK + 18 + 4 * i, cycles[i]);
         RESULT_BLOCK[50 + i] = errors[i];
@@ -239,14 +155,11 @@ int main(void)
     }
 
     /* The zero baseline: what the timer costs to start and stop. */
-    __asm__("sei");
-    timer_start();
-    overhead = timer_stop();
-    __asm__("cli");
+    cycles_calibrate();
 
-    frame_cycles = time_ten_frames();
+    frame_cycles = cycles_frame();
     printf("frame          %6lu cycles\n", frame_cycles);
-    printf("timer overhead %6lu\n\n", overhead);
+    printf("timer overhead %6lu\n\n", cycles_overhead);
 
     /* 0: identify. A short reply, and the command every program starts with. */
     memset(&req, 0, sizeof(req));

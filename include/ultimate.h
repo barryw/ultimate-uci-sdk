@@ -138,6 +138,54 @@ uint8_t ultimate_palette_set_color(uint8_t index, uint8_t r, uint8_t g, uint8_t 
 /* Back to the machine's built-in palette. */
 uint8_t ultimate_palette_reset(void);
 
+/*
+ * The Ultimate 64's CPU speed.
+ *
+ * Not a UCI command - there is none for speed - but memory-mapped I/O at
+ * $D031, which is why these four are the SDK's only entry points that touch a
+ * hardware register directly. See src/uci/turbo.s.
+ *
+ * **Turbo may simply not be there**, and a program cannot switch it on for
+ * itself: it depends on the machine's "Turbo Control" setting, which its owner
+ * chooses. ultimate_turbo_available() is the test, and it is honest on a plain
+ * C64 too, where the same register reads $FF because unimplemented VIC
+ * registers do. Treat turbo as an optimisation, never as a requirement.
+ *
+ * **The index above U64_SPEED_4MHZ does not mean the same thing on every
+ * machine.** The U64's table is 1,2,3,4,5,6,8..48 and the U64-II's is
+ * 1,2,3,4,6,8..64, so index 4 is 5MHz on one and 6MHz on the other. Only
+ * U64_SPEED_1MHZ..U64_SPEED_4MHZ are portable; U64_SPEED_MAX is "as fast as
+ * this machine goes", whatever that is.
+ */
+
+/* 1 when the turbo registers answer, 0 when turbo is off in the machine's
+ * configuration - or when this is not an Ultimate 64 at all. */
+uint8_t ultimate_turbo_available(void);
+
+/* The current speed index, or U64_TURBO_UNAVAILABLE ($FF), which is not a
+ * speed: the index is four bits, so the two can never be confused. */
+uint8_t ultimate_turbo_get(void);
+
+/*
+ * Set the speed index. Leaves the badline setting alone.
+ *
+ * Returns ULTIMATE_ERR_INVALID_ARGUMENT for an index above U64_SPEED_MAX -
+ * refused rather than masked - and ULTIMATE_ERR_NOT_SUPPORTED when turbo is
+ * unavailable.
+ */
+uint8_t ultimate_turbo_set(uint8_t index);
+
+/*
+ * Badlines on (non-zero) or off (zero). Leaves the speed alone.
+ *
+ * Off means the VIC stops stealing the CPU's cycles on a character row, which
+ * is a measurable win at 1MHz as well as under turbo. What it does to the
+ * display is the machine's business and is not documented here: look at a real
+ * screen before shipping it, because a badline is how the VIC fetches the
+ * characters it is about to draw.
+ */
+uint8_t ultimate_turbo_badlines(uint8_t on);
+
 /* A short, stable, English description of an ULTIMATE_* code. Never NULL. */
 const char *ultimate_strerror(uint8_t err);
 

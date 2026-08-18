@@ -14,5 +14,6 @@
 UCI_SRC := src/uci/uci_core.s \
            src/uci/ultimate.s \
            src/uci/palette.s \
+           src/uci/turbo.s \
            src/uci/ultimate_strerror.s \
            bindings/asm/ultimate_asm.s

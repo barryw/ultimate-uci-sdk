@@ -45,6 +45,10 @@ from screen import decode_screen, SCREEN_ADDR, SCREEN_LEN  # noqa: E402
 CMD_IF = ("C64 and Cartridge Settings", "Command Interface")
 REU = ("C64 and Cartridge Settings", "RAM Expansion Unit")
 IEC_DRIVE = ("SoftIEC Drive Settings", "IEC Drive")
+# "Off", "Manual", "U64 Turbo Registers" or "TurboEnable Bit". Only the third
+# gives a program control of $D031; the others leave it reading $FF, which is
+# the state every other scenario here runs in.
+TURBO = ("U64 Specific Settings", "Turbo Control")
 
 TARGET_SOFTIEC_BIT = 1 << 5
 
@@ -60,6 +64,8 @@ class Result:
         self.ident = block[9]
         self.targets = block[10] | (block[11] << 8)
         self.done = block[12] == RESULT_DONE
+        # Format 2 and later: whether the turbo checks ran rather than skipped.
+        self.turbo_ran = bool(block[13]) if self.format >= 2 else False
 
     def __str__(self):
         if not self.valid:
@@ -149,20 +155,40 @@ def expect_softiec_present(r, state):
     return None
 
 
+def expect_turbo_measured(r, state=None):
+    """The turbo checks must have run, not skipped.
+
+    Every other scenario leaves "Turbo Control" alone, so ucitest.c skips its
+    turbo section and says so - which is the normal case in the field and not a
+    failure. This scenario is the one that switches the registers on, so a skip
+    here means the setting did not take, and a passing run that quietly proved
+    nothing is exactly what this file exists to prevent.
+    """
+    problem = expect_clean_pass(r)
+    if problem:
+        return problem
+    if not r.turbo_ran:
+        return ("the turbo checks skipped with Turbo Control set to "
+                "U64 Turbo Registers - the setting did not reach the machine")
+    return None
+
+
 SCENARIOS = [
     {
         "name": "uci-disabled",
         "why": "with the command interface switched off the SDK must report "
                "no device and return, not hang or misread open bus",
         "steps": [
-            ({CMD_IF: "Disabled", REU: "Disabled"}, expect_no_device),
+            ({CMD_IF: "Disabled", REU: "Disabled", TURBO: "Off"},
+             expect_no_device),
         ],
     },
     {
         "name": "uci-enabled",
         "why": "the baseline: everything passes with the interface on",
         "steps": [
-            ({CMD_IF: "Enabled", REU: "Disabled"}, expect_clean_pass),
+            ({CMD_IF: "Enabled", REU: "Disabled", TURBO: "Off"},
+             expect_clean_pass),
         ],
     },
     {
@@ -170,7 +196,8 @@ SCENARIOS = [
         "why": "the interface overlays the last five REU registers, so an "
                "enabled REU must not disturb it",
         "steps": [
-            ({CMD_IF: "Enabled", REU: "Enabled"}, expect_clean_pass),
+            ({CMD_IF: "Enabled", REU: "Enabled", TURBO: "Off"},
+             expect_clean_pass),
         ],
     },
     {
@@ -179,10 +206,20 @@ SCENARIOS = [
                "switched off - see #794, it is the path the hyperspeed kernal "
                "uses, and the SDK's fast load depends on it",
         "steps": [
-            ({CMD_IF: "Enabled", REU: "Disabled", IEC_DRIVE: "Disabled"},
-             record_softiec),
-            ({CMD_IF: "Enabled", REU: "Disabled", IEC_DRIVE: "Enabled"},
-             expect_softiec_present),
+            ({CMD_IF: "Enabled", REU: "Disabled", IEC_DRIVE: "Disabled",
+              TURBO: "Off"}, record_softiec),
+            ({CMD_IF: "Enabled", REU: "Disabled", IEC_DRIVE: "Enabled",
+              TURBO: "Off"}, expect_softiec_present),
+        ],
+    },
+    {
+        "name": "turbo-registers",
+        "why": "turbo is memory-mapped I/O rather than a UCI command, and the "
+               "only way to show it works is to time a loop against the raster "
+               "with the registers switched on - which only their owner can do",
+        "steps": [
+            ({CMD_IF: "Enabled", REU: "Disabled",
+              TURBO: "U64 Turbo Registers"}, expect_turbo_measured),
         ],
     },
 ]
@@ -212,7 +249,7 @@ def main():
           % (info.get("product"), info.get("firmware_version"),
              info.get("fpga_version"), info.get("core_version")))
 
-    touched = {CMD_IF, REU, IEC_DRIVE}
+    touched = {CMD_IF, REU, IEC_DRIVE, TURBO}
     saved = read_settings(u, touched)
     print("# saved settings: %s"
           % ", ".join("%s=%s" % (k[1], v) for k, v in saved.items()))

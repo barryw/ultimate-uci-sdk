@@ -62,6 +62,9 @@ KEYWORDS = [
     ("UCTRL",  CONSTANT,  "target $04, machine and cartridge control"),
     ("UIEC",   CONSTANT,  "target $05, SoftwareIEC"),
     ("UHTTP",  CONSTANT,  "target $06, HTTP client"),
+    ("UTURBO", STATEMENT, "CPU speed index as a statement, and the current "
+                          "index as a function - 255 when the machine's turbo "
+                          "is switched off in its settings"),
 ]
 
 # Constants resolve to a protocol value rather than to a handler.

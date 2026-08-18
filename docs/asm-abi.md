@@ -127,6 +127,10 @@ sharing them.
 | `ultimate_palette_set` | `A`/`X` = pointer to 48 bytes of RGB | `A` = result code |
 | `ultimate_palette_set_color` | `ult_color` = index, r, g, b | `A` = result code |
 | `ultimate_palette_reset` | — | `A` = result code |
+| `ultimate_turbo_available` | — | `A` = 1 when the turbo registers answer |
+| `ultimate_turbo_get` | — | `A` = speed index, or `$FF` when unavailable |
+| `ultimate_turbo_set` | `A` = speed index 0-15 | `A` = result code |
+| `ultimate_turbo_badlines` | `A` = 0 for none, non-zero for normal | `A` = result code |
 | `uci_present` | — | `A` = 1 when the signature is on the bus |
 | `uci_ident` | — | `A` = the raw identification register |
 | `uci_req_clear` | — | zeroes the request block |

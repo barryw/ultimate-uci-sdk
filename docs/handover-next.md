@@ -5,7 +5,7 @@ the state of the SDK; this one is what is left over from Phase 2 and what the
 next interesting thing looks like.
 
 Phases 1 and 2 are done and proven on hardware. `make basic-run` types at a real
-C64 and passes 8/8 from the `.prg` and 8/8 from the `.crt`.
+C64 and passes 13/13 from the `.prg` and 13/13 from the `.crt`.
 
 ---
 
@@ -78,7 +78,7 @@ never returns to a test harness.
 
 ### Phase 3 will outgrow the `$C000` block
 
-The resident wedge plus SDK is 3159 bytes of the 4K at `$C000`. The design's §8
+The resident wedge plus SDK is 3464 bytes of the 4K at `$C000`, so 632 are left. The design's §8
 says Phase 3 pushes past it, at which point **the SDK alone** moves to `$A000`
 under the BASIC ROM — which needs one shared trampoline, not banking discipline
 throughout, because the SDK is never called by BASIC ROM. The wedge keeps
@@ -97,7 +97,7 @@ throughout, because the SDK is never called by BASIC ROM. The wedge keeps
 
 ---
 
-## 2. Turbo: the registers, and what is half-built
+## 2. Turbo: built, and what it measured
 
 **There is no UCI command for CPU speed** - the control target's full command
 set is in `docs/generated/protocol-constants.md` and nothing in it touches
@@ -117,7 +117,7 @@ Three facts that shape the API:
 
 - **Both registers read `$FF` when turbo is unavailable**, which makes
   availability testable rather than assumed. Availability means the Ultimate's
-  `Turbo Control` setting is `U64 Turbo Registers` or `Turbo Enable Bit` - a
+  `Turbo Control` setting is `U64 Turbo Registers` or `TurboEnable Bit` - a
   program cannot set that itself, so a demo shipping to other people must cope
   with turbo simply not being there.
 - **The speed index is not portable above 4 MHz.** The U64's table is
@@ -127,44 +127,71 @@ Three facts that shape the API:
 - **Bit 7 disables badlines**, which is a real speed win for a demo and is worth
   exposing rather than hiding.
 
-### Done already
+### Built, and proved on hardware
 
-The constants are generated for C, ca65, KickAssembler and ACME, in a group
-that says plainly it is not UCI: `U64_REG_TURBO`, `U64_REG_TURBO_ENABLE`,
-`U64_TURBO_SPEED_MASK`, `U64_TURBO_NO_BADLINES`, `U64_TURBO_UNAVAILABLE`, and
-`U64_SPEED_1MHZ`..`U64_SPEED_4MHZ` plus `U64_SPEED_MAX`. Nothing yet writes to
-any of them.
+`src/uci/turbo.s`, in all three languages, plus the constants that were already
+generated. The measured proof, from `make hardware-run`:
 
-### Still to build
+```
+# work/frame: 2616 at 1mhz, 655 at 4mhz     <- 3.99x, on a fixed RAM-only loop
+# work/frame: 2616 with badlines, 2452 without   <- 6.3% back from the VIC
+```
 
-`src/uci/turbo.s`, the documented sibling of Phase 3's `reu.s`: the only other
-module allowed to touch hardware directly, for the same reason - there is no UCI
-command for it. It belongs in the design's exception list with that
-justification, and the rule it looks like it breaks stays intact, because the
-rule is about services not reimplementing the *transport*.
-
-Proposed shape, roughly 40 bytes:
+The badline figure is worth keeping: 43 cycles on each of 25 character rows out
+of a 17095-cycle frame predicts 6.3%, and the measurement says 6.3%, which is
+two independent routes to the same number.
 
 | | |
 |---|---|
-| `ultimate_turbo_available` | A = 1 or 0, from `$D031` reading `$FF` |
-| `ultimate_turbo_set` | A = speed index 0-15, masked to bits 0-3, bit 7 preserved |
-| `ultimate_turbo_get` | A = current index; carry set when unavailable |
-| `ultimate_turbo_badlines` | A = 0 to stop the VIC stealing cycles, non-zero to restore |
+| `ultimate_turbo_available()` | 1 or 0, from `$D031` reading `$FF` |
+| `ultimate_turbo_get()` | the index, or `U64_TURBO_UNAVAILABLE` — `$FF` is not a speed, the index is four bits |
+| `ultimate_turbo_set(index)` | index 0-15; anything larger is refused rather than masked, and the badline bit is preserved |
+| `ultimate_turbo_badlines(on)` | the other half of the register, and the speed is preserved |
 
-Then the three exposures, in the order they are worth doing:
+BASIC gets one appended token, `$DB`, in both forms:
 
-1. **C**, through the existing cc65 binding, so it links only if referenced.
-2. **BASIC**, one appended keyword: `UTURBO 8` as a statement and `UTURBO` as a
-   function returning the current index, sharing one token exactly as `UCI`
-   does. Remember `gen_keywords.py` is append-only - a token is a file format.
-3. **The blob**, appended to the jump table, never reordered.
+```basic
+UTURBO 3 : IF UERR THEN PRINT "no turbo here"
+PRINT UTURBO
+```
 
-**The test that matters is on hardware.** Setting a register proves nothing;
-time a loop against the raster before and after and assert it actually got
-faster. `tests/hardware/basictest.py` is the place - it already types at the
-machine and reads memory back, and `tools/u64_settings.py` can set
-`Turbo Control` for the duration and put it back.
+and the blob gets `+$43`..`+$4C`.
+
+Three things learned doing it, all of them things the next person would
+otherwise re-derive:
+
+- **The machine's speed table really is 1,2,3,4,5,6,8,10,12,14,16,20,24,32,40,48**
+  — read off `/v1/configs/U64 Specific Settings/CPU Speed`, sixteen entries for
+  sixteen indices. `Turbo Control` takes `Off`, `Manual`, `U64 Turbo Registers`
+  or `TurboEnable Bit` — note that last one has no space, unlike what this file
+  used to say.
+- **`$D031` under sim6502 is ordinary RAM**, not a VIC returning `$FF` for its
+  unimplemented registers. That is a fidelity gap, and it turns out to be the
+  useful kind: the register can be put in any state from a suite, so the bit
+  arithmetic — speed not clobbering badlines, badlines not clobbering speed — is
+  proved exhaustively in the emulator, and only "the machine actually runs
+  faster" needs hardware.
+- **`src/basic/Makefile` had no dependency from its objects to the generated
+  includes.** The keyword table lives in `wedge.o` and dispatch in
+  `dispatch.o`; regenerating `uci_keywords.inc` rebuilt neither, so the first
+  build with `UTURBO` shipped a wedge whose dispatcher knew the token and whose
+  tokeniser did not. Fixed, and it would have bitten every future keyword.
+
+### What is deliberately not built
+
+**Badlines from BASIC.** `UTURBO` takes a speed and nothing else. The keyword
+table is append-only and a token is a file format, but an *argument* is not:
+`UTURBO speed, badlines` can be added later without a second token, which is
+why there is no `UBADLINE` sitting in the table waiting.
+
+**`$D030`'s TurboEnable Bit mode.** `U64_REG_TURBO_ENABLE` is generated and
+nothing uses it. That mode takes its speed from the machine's own menu rather
+than from a program, so there is no API to give it that the register does not
+already have.
+
+**Anything that claims to know megahertz.** The SDK passes the index through.
+Above `U64_SPEED_4MHZ` the same index is a different speed on a U64 and a
+U64-II, and a helper that pretended otherwise would be wrong on one of them.
 
 ## 3. The boing ball
 
@@ -318,8 +345,10 @@ buys — do it last.
 3. ~~Wrap the palette commands and add `make coverage` entries.~~ **Done** —
    `src/uci/palette.s`, coverage 9/101 → 13/101. A `UPAL` wedge keyword is the
    obvious next sugar, and is not done.
-4. Build `turbo.s` and its three exposures. The registers are known now; what
-   is left is the module, and proving on hardware that the speed really changes.
+4. ~~Build `turbo.s` and its three exposures.~~ **Done** — C, BASIC (`UTURBO`,
+   token `$DB`) and the blob (`+$43`..`+$4C`), with the speed change measured
+   against the raster on real hardware: 3.99x at index 3, and 6.3% back from
+   turning badlines off.
 5. Phase 3 proper: `dos.s`, `file.s`, the SoftwareIEC fast path, `reu.s`, and
    `ULOAD`/`USAVE`/`UDIR` in all three languages at once.
 

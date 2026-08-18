@@ -39,6 +39,8 @@
         .import ultimate_strerror
         .import ultimate_palette_get, ultimate_palette_set
         .import ultimate_palette_set_color, ultimate_palette_reset
+        .import ultimate_turbo_available, ultimate_turbo_get
+        .import ultimate_turbo_set, ultimate_turbo_badlines
         .import ult_buf, ult_buflen, ult_outlen, ult_color
 
         ; --- entry points ---
@@ -56,6 +58,8 @@
         .export t_palette_get, t_palette_set
         .export t_palette_color, t_palette_reset
         .export t_palette_get_null, t_palette_set_null
+        .export t_turbo_available, t_turbo_get
+        .export t_turbo_set, t_turbo_badlines
         .export t_req_reset
         .export t_exec
         .export t_decode
@@ -79,6 +83,7 @@
         .export err_code, err_text
         .export timeout_val
         .export pal_index
+        .export turbo_arg
 
         ; --- the request block and the buffers it points at ---
         .export req
@@ -123,6 +128,7 @@ err_code:     .res 1
 err_text:     .res ERR_TEXT_MAX
 timeout_val:  .res 1
 pal_index:    .res 1
+turbo_arg:    .res 1
 
 req:         .res UCI_REQ_SIZE
 buf_args:    .res ARGS_MAX
@@ -306,6 +312,37 @@ t_palette_color:
 
 t_palette_reset:
         jsr ultimate_palette_reset
+        sta result
+        rts
+
+; --- turbo ---
+;
+; A simulated C64 has no Ultimate turbo, and $D031 reads $FF there for the same
+; reason it does on a real machine with turbo switched off in its settings: an
+; unimplemented VIC register. So this is not a stand-in for the hardware test -
+; it is the no-turbo case itself, which is what every program shipping to other
+; people has to survive. The speed really changing is proved in
+; tests/hardware/ucitest.c, on a machine that has one.
+
+t_turbo_available:
+        jsr ultimate_turbo_available
+        sta result
+        rts
+
+t_turbo_get:
+        jsr ultimate_turbo_get
+        sta result
+        rts
+
+t_turbo_set:
+        lda turbo_arg
+        jsr ultimate_turbo_set
+        sta result
+        rts
+
+t_turbo_badlines:
+        lda turbo_arg
+        jsr ultimate_turbo_badlines
         sta result
         rts
 

@@ -799,5 +799,121 @@ suites {
       jsr([t_palette_color], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $04, "reached the firmware: ULTIMATE_ERR_NOT_SUPPORTED")
     }
+
+    ; --- turbo ---
+    ;
+    ; The SDK's only entry points that touch a hardware register directly.
+    ;
+    ; $D031 under sim6502 is ordinary read/write memory rather than a VIC that
+    ; returns $FF for its unimplemented registers, and that is what makes these
+    ; tests worth having: the register can be put into any state and the bit
+    ; arithmetic checked exactly. Speed and badlines share one byte, so the way
+    ; this goes wrong is one of them quietly clobbering the other, which no
+    ; hardware test would notice and every demo would.
+    ;
+    ; What cannot be proved here is that the machine actually runs faster. That
+    ; is tests/hardware/ucitest.c, timing a loop against the raster on a real
+    ; Ultimate 64 with "Turbo Control" switched on.
+
+    test("sdk-turbo-absent", "no turbo is reported as no turbo, not as speed $ff") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      $d031 = $ff                       ; what a machine with turbo off reads
+
+      [result] = $ff
+      jsr([t_turbo_available], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "not available")
+
+      [result] = $00
+      jsr([t_turbo_get], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $ff, "U64_TURBO_UNAVAILABLE, which is not a speed index")
+
+      [result] = $00
+      [turbo_arg] = $03
+      jsr([t_turbo_set], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+      assert($d031 == $ff, "and nothing was written")
+
+      [result] = $00
+      [turbo_arg] = $00
+      jsr([t_turbo_badlines], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+      assert($d031 == $ff, "and nothing was written")
+    }
+
+    test("sdk-turbo-reads-the-index", "the speed index is the low four bits") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+
+      $d031 = $03
+      [result] = $ff
+      jsr([t_turbo_available], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $01, "available")
+
+      [result] = $ff
+      jsr([t_turbo_get], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "U64_SPEED_4MHZ")
+
+      ; ...and the badline bit is not part of the speed.
+      $d031 = $83
+      [result] = $ff
+      jsr([t_turbo_get], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "still 3, with badlines off")
+    }
+
+    ; The two halves of the register belong to different callers. Setting one
+    ; must leave the other exactly as it was, in both directions.
+    test("sdk-turbo-set-keeps-badlines", "changing speed does not touch bit 7") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+
+      $d031 = $83                       ; 4MHz, badlines already off
+      [turbo_arg] = $06
+      jsr([t_turbo_set], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert($d031 == $86, "speed 6, and badlines still off")
+
+      $d031 = $03                       ; 4MHz, badlines on
+      [turbo_arg] = $06
+      jsr([t_turbo_set], stop_on_rts = true, fail_on_brk = true)
+      assert($d031 == $06, "speed 6, and badlines still on")
+    }
+
+    test("sdk-turbo-badlines-keeps-speed", "changing bit 7 does not touch the speed") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+
+      $d031 = $06                       ; badlines on
+      [turbo_arg] = $00                 ; ask for no badlines
+      jsr([t_turbo_badlines], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert($d031 == $86, "bit 7 set, speed untouched")
+
+      [turbo_arg] = $01                 ; and back
+      jsr([t_turbo_badlines], stop_on_rts = true, fail_on_brk = true)
+      assert($d031 == $06, "bit 7 clear, speed still 6")
+    }
+
+    ; $10 is the first index that does not exist; $0f is the last that does, so
+    ; this proves a bound rather than a blanket refusal - and proves the check
+    ; happens before the register is written, not after.
+    test("sdk-turbo-rejects-bad-index", "index 16 is refused, and never written") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      $d031 = $05
+
+      [result] = $00
+      [turbo_arg] = $10
+      jsr([t_turbo_set], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+      assert($d031 == $05, "the register was left alone")
+
+      [result] = $00
+      [turbo_arg] = $ff
+      jsr([t_turbo_set], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+      assert($d031 == $05, "the register was left alone")
+
+      [result] = $ff
+      [turbo_arg] = $0f
+      jsr([t_turbo_set], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the last real index is accepted")
+      assert($d031 == $0f, "and written")
+    }
   }
 }

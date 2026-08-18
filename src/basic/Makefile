@@ -22,7 +22,16 @@ LIB    := $(ROOT)/bindings/cc65/build/ultimate.lib
 
 all: uci.prg uci.crt
 
-%.o: %.s
+# Every object here includes at least one generated table, and the tables are
+# what the wedge *is*: the keyword list, the token numbers, the argument
+# shapes. Without this line a regenerated include leaves the objects that only
+# read it untouched, and the wedge ships half-knowing a keyword - the tokeniser
+# missing it while dispatch handles it, or the other way round, with nothing in
+# the build complaining.
+GENERATED := $(ASMINC)/uci_protocol.inc $(ASMINC)/uci_keywords.inc \
+             $(ASMINC)/uci_argtable.inc
+
+%.o: %.s $(GENERATED) c64rom.inc
 	$(CA65) -t c64 -g -I . -I $(ASMINC) -o $@ $<
 
 $(LIB):

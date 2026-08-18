@@ -42,6 +42,11 @@ from screen import decode_screen  # noqa: E402
 from keyboard import type_line    # noqa: E402
 
 CMD_IF = ("C64 and Cartridge Settings", "Command Interface")
+# UTURBO writes $D031, which only answers when its owner has chosen to let it.
+# Required here for the same reason the command interface is: the point of this
+# script is to type at a machine set up the way the keyword needs, and both
+# settings are read first and put back afterwards.
+TURBO = ("U64 Specific Settings", "Turbo Control")
 
 BASIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "..", "..", "src", "basic")
@@ -71,6 +76,25 @@ CHECKS = [
 
     ("PRINT UDAT$", "ULTIMATE",
      "and as a string - this is the real Ultimate naming itself through BASIC"),
+
+    # UTURBO is the one keyword that does not go through UCI at all: turbo is
+    # memory-mapped I/O, because the firmware has no command for CPU speed.
+    # One token, two forms, so both are typed.
+    ("UTURBO 3", "READY.",
+     "the statement writes the speed index and does not error"),
+
+    ("PRINT UERR", " 0",
+     "and the machine accepted it - anything else means Turbo Control is not "
+     "set to U64 Turbo Registers, which this script requires"),
+
+    ("PRINT UTURBO", " 3",
+     "the function form reads back what the statement wrote, sharing its token"),
+
+    ("UTURBO 0", "READY.",
+     "back to 1MHz, so the machine is left as it was found"),
+
+    ("PRINT UTURBO", " 0",
+     "and it really went back"),
 ]
 
 
@@ -95,7 +119,8 @@ def run(host, port, verbose, as_crt):
           % (info["product"], info["firmware_version"],
              info["fpga_version"], info["core_version"]))
 
-    changed = require_settings(u, {CMD_IF: "Enabled"})
+    changed = require_settings(u, {CMD_IF: "Enabled",
+                                   TURBO: "U64 Turbo Registers"})
     if changed:
         print("# saved settings: %s"
               % ", ".join("%s=%s" % (k[1], v) for k, v in changed.items()))

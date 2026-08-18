@@ -6,8 +6,8 @@ why, the traps that have already cost debugging time, and what to do next.
 **Short version:** the transport is done and heavily tested, and it now ships in
 a second form — a standalone relocatable binary with a jump table — so every
 toolchain that cannot link a ca65 object can reach it. The service layer is
-still just bring-up, detection and identity. The BASIC wedge now tokenises and
-lists its own keywords; what is left of it is dispatch.
+bring-up, detection and identity, plus two services that needed no Phase 3
+work to be useful: the palette, and turbo. The BASIC wedge is complete.
 
 **Verify with `git log` rather than trusting this file's counts.** As of writing:
 15 commits, `main`, clean tree, HEAD `3e2bd71`.
@@ -21,27 +21,28 @@ lists its own keywords; what is left of it is dispatch.
 | Layer 1 — UCI transport | complete, assembly |
 | Layer 2 — bring-up, detection, identity | complete, assembly |
 | Layer 2 — the palette, on the control target | complete, assembly — `src/uci/palette.s` |
+| Layer 2 — turbo, on `$D031` | complete, assembly — `src/uci/turbo.s`, in all three languages |
 | Layer 2 — dos, file, network, http, reu | **not started** — Phase 3 |
 | Layer 3 — ca65 / cc65 bindings | working |
 | Layer 3 — the blob (any toolchain, no linking) | **working** — Phase 1, done |
-| Layer 3 — BASIC wedge | **Phase 2 complete** — `.prg` and `.crt`, 33 tests |
+| Layer 3 — BASIC wedge | **Phase 2 complete** — `.prg` and `.crt`, 41 tests |
 | Layer 3 — Oscar64, llvm-mos, KickC | not started; the blob is now their route in |
 
 ```
 make lib              GREEN
-make blob             GREEN     3060 bytes, 108 relocations
+make blob             GREEN     3162 bytes, 112 relocations
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make wedge            GREEN     uci.prg 2940 bytes, uci.crt 8272; the resident
-                                wedge + SDK at $C000 is 3159
-make test             GREEN     100 host unit tests + 126 tests across 8 suites
-make basic-run        GREEN     8/8 from the .prg and 8/8 from the .crt, the
+make wedge            GREEN     uci.prg 3153 bytes, uci.crt 8272; the resident
+                                wedge + SDK at $C000 is 3464, of 4096
+make test             GREEN     100 host unit tests + 141 tests across 8 suites
+make basic-run        GREEN     13/13 from the .prg and 13/13 from the .crt, the
                                 same checks typed at a real C64. The cartridge
                                 costs BASIC 8K: 38911 bytes free becomes 30719
-make hardware-run     GREEN     4/4 scenarios on real hardware, 13 checks each
-                                except uci-disabled, which asserts one clean
-                                failure and is meant to report failed=1
+make hardware-run     GREEN     5/5 scenarios on real hardware, 22 checks each
+                                (29 in the turbo one) except uci-disabled, which
+                                asserts one clean failure and reports failed=1
 make coverage         GREEN     0 wrapped-but-untested
 make time-run         n/a       not a test: it times a UCI round trip on the
                                 machine and prints the numbers. A whole-palette
@@ -168,10 +169,19 @@ link.
 When a service wraps a command, add it to `WRAPPED` in `tools/gen_coverage.py`.
 `make coverage` then **fails** until a test sends it.
 
-**The one exception to "services never touch hardware"** will be `reu.s` in
-Phase 3: there is no UCI command that moves bytes between C64 RAM and the REU,
-so that module drives `$DF00-$DF0A` directly. It is an exception, not the rule
-eroding — see the design doc.
+**Two services do not go through `uci_exec`, and the list is closed.** The test
+that admits one is the same both times: does the operation exist on the UCI at
+all? If it does, use `uci_exec`. If the only way to reach it is a memory-mapped
+register, the rule about not reimplementing the transport has nothing to bite
+on, because there is no transport.
+
+- `src/uci/turbo.s`, built: nothing in the control target's command set touches
+  CPU speed, so it drives `$D031` directly.
+- `reu.s`, Phase 3: no UCI command moves bytes between C64 RAM and the REU, so
+  it will drive `$DF00-$DF0A` directly.
+
+Adding a third means showing that `docs/generated/protocol-constants.md` has no
+command for the job. See the design doc.
 
 ---
 

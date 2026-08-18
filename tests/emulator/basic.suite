@@ -106,11 +106,14 @@ suites {
     }
 
     ; The last entry, so the walk has to step over every other one - including
-    ; the one in the middle that carries an extra field.
+    ; the one in the middle that carries an extra field. Keep this pointing at
+    ; whatever the final token is: the keyword table is append-only, so the
+    ; last entry moves every time one is added, and a test aimed at the
+    ; second-to-last stops proving the walk reaches the end.
     test("list-finds-the-last-keyword", "the table walk reaches the end") {
-      a = $da
+      a = $db
       jsr([wedge_find_keyword], stop_on_rts = true, fail_on_brk = true)
-      assert([wedge_len] == $05, "UHTTP is five bytes")
+      assert([wedge_len] == $06, "UTURBO is six bytes")
       assert(a == $55, "'U'")
     }
 
@@ -866,6 +869,106 @@ suites {
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
       assert($0200 == $cc, "UCI became one token")
       assert(y == $0a, "and Y came down from the ROM's $0c")
+    }
+
+    ; ----------------------------------------------------------------------
+    ; UTURBO - the one keyword that does not reach the Ultimate over UCI.
+    ;
+    ; $D031 is ordinary read/write memory under this backend rather than a VIC
+    ; returning $FF for its unimplemented registers, which is what makes the
+    ; whole keyword testable here: the register can be put in any state and the
+    ; statement and the function checked against it. That the machine really
+    ; runs faster is tests/hardware/ucitest.c, on an Ultimate 64 that has turbo.
+    ; ----------------------------------------------------------------------
+
+    test("tokenize-uturbo", "UTURBO becomes one token with its argument intact") {
+      $0200 = $55
+      $0201 = $54
+      $0202 = $55
+      $0203 = $52
+      $0204 = $42
+      $0205 = $4f
+      $0206 = $20
+      $0207 = $33
+      $0208 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $db, "UTURBO tokenized")
+      assert($0201 == $20, "the space survived")
+      assert($0202 == $33, "and so did the 3")
+      assert($0203 == $00, "line terminated")
+    }
+
+    test("uturbo-statement-sets-the-speed", "the statement writes the index and nothing else") {
+      $d031 = $86                       ; 8MHz-ish, badlines already off
+      $0200 = $55
+      $0201 = $54
+      $0202 = $55
+      $0203 = $52
+      $0204 = $42
+      $0205 = $4f
+      $0206 = $20
+      $0207 = $33
+      $0208 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $00
+      $007b = $02
+      jsr([wedge_do_turbo], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "ULTIMATE_OK")
+      assert($d031 == $83, "speed 3, and the badline bit untouched")
+    }
+
+    ; The common case in the field: the machine's owner has left turbo off, so
+    ; the register reads $FF and there is nothing a program can do about it
+    ; except notice. UERR is how it notices.
+    test("uturbo-statement-reports-no-turbo", "UERR carries the refusal") {
+      $d031 = $ff
+      $0200 = $55
+      $0201 = $54
+      $0202 = $55
+      $0203 = $52
+      $0204 = $42
+      $0205 = $4f
+      $0206 = $20
+      $0207 = $33
+      $0208 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $00
+      $007b = $02
+      jsr([wedge_do_turbo], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+      assert($d031 == $ff, "and nothing was written")
+    }
+
+    ; The function form, sharing the statement's token. IEVAL is entered with
+    ; TXTPTR before the term, so the token goes at $0200 and the pointer one
+    ; byte behind it - same as the observers above.
+    test("uturbo-function-reads-the-speed", "UTURBO evaluates to the current index") {
+      $d031 = $86
+      $0200 = $db
+      $0201 = $00
+      $007a = $ff
+      $007b = $01
+      jsr([wedge_eval], stop_on_rts = true, fail_on_brk = true)
+      assert($0061 == $83, "6.0 is 1.5 x 2^2")
+      assert($0062 == $c0, "...with this mantissa, so the badline bit is not in it")
+      assert($000d == $00, "a number, not a string")
+    }
+
+    test("uturbo-function-reports-no-turbo", "255 is not a speed, so it can be tested for") {
+      $d031 = $ff
+      $0200 = $db
+      $0201 = $00
+      $007a = $ff
+      $007b = $01
+      jsr([wedge_eval], stop_on_rts = true, fail_on_brk = true)
+      assert($0061 == $88, "255.0 is 0.99609375 x 2^8")
+      assert($0062 == $ff, "...with this mantissa")
     }
 
   }

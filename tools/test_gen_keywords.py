@@ -22,6 +22,7 @@ class TestTokenAssignment(unittest.TestCase):
         "UST$": 0xD0, "UDAT$": 0xD1, "UBYTE(": 0xD2, "UW(": 0xD3,
         "UL(": 0xD4, "UDOS1": 0xD5, "UDOS2": 0xD6, "UNET": 0xD7,
         "UCTRL": 0xD8, "UIEC": 0xD9, "UHTTP": 0xDA,
+        "UTURBO": 0xDB,
     }
 
     def test_tokens_have_not_moved(self):

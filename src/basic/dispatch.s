@@ -23,8 +23,10 @@
         .include "uci_argtable.inc"
 
         .import uci_init, uci_exec, uci_abort, uci_last_code, uci_req
+        .import ultimate_turbo_set, ultimate_turbo_get
 
-        .export wedge_gone, wedge_eval, wedge_do_uci, wedge_sdk_init
+        .export wedge_gone, wedge_eval, wedge_do_uci, wedge_do_turbo
+        .export wedge_sdk_init
         .export wedge_err, wedge_target, wedge_command, wedge_arglen
         .export wedge_argbuf, wedge_reply, wedge_status
 
@@ -75,12 +77,18 @@ wedge_gone:
                                 ; statement in every program is the wrong one.
         cmp #UCI_TOK_UCI
         beq @ours
+        cmp #UCI_TOK_UTURBO
+        beq @turbo
         plp
         jmp NGONE1
 
 @ours:  plp
         jsr wedge_do_uci
         jmp NEWSTT              ; on to the next statement, ':' or end of line
+
+@turbo: plp
+        jsr wedge_do_turbo
+        jmp NEWSTT
 
 ; ---------------------------------------------------------------------------
 ; UCI t, c [, arg ...]
@@ -121,6 +129,33 @@ wedge_do_uci:
         inc wedge_shape_i
         jsr wedge_arg
         jmp @more
+
+; ---------------------------------------------------------------------------
+; UTURBO n  -  set the CPU speed index.
+;
+; The one wedge keyword that does not reach the Ultimate through uci_exec,
+; because there is no UCI command for CPU speed: turbo is memory-mapped I/O.
+; See src/uci/turbo.s for why that is an exception rather than the rule
+; eroding.
+;
+; The result lands in UERR like every other command's, which is how a program
+; discovers that the machine's owner has left turbo switched off in its
+; settings - the common case, and one a program cannot do anything about
+; except carry on at 1MHz:
+;
+;     UTURBO 3 : IF UERR THEN PRINT "no turbo here"
+;
+; The function form, which reads the current index back, is in wedge_eval.
+; ---------------------------------------------------------------------------
+
+wedge_do_turbo:
+        jsr CHRGET              ; past the token, onto the speed
+        jsr GETBYT              ; X = index. Nothing there is the ROM's own
+                                ; ?SYNTAX ERROR, which is the right one.
+        txa
+        jsr ultimate_turbo_set
+        sta wedge_err
+        rts
 
 ; ---------------------------------------------------------------------------
 ; One argument.
@@ -406,6 +441,8 @@ wedge_eval:
         beq @udats
         cmp #UCI_TOK_UBYTE
         beq @ubyte
+        cmp #UCI_TOK_UTURBO
+        beq @uturbo
         cmp #UCI_TOK_UDOS1
         bcc @rom
         cmp #UCI_TOK_UHTTP+1
@@ -433,6 +470,14 @@ wedge_eval:
 ; PRINT UDOS1 printed 1 for ever on a real machine before these existed.
 @uerr:  jsr CHRGET
         lda wedge_err
+        jmp wedge_ret_byte
+
+; UTURBO as a function: the speed index the machine is running at, or 255 when
+; turbo is switched off in its settings. 255 is not a speed - the index is four
+; bits - so the two can never be confused, and a program can test for it.
+@uturbo:
+        jsr CHRGET
+        jsr ultimate_turbo_get
         jmp wedge_ret_byte
 
 @udev:  jsr CHRGET

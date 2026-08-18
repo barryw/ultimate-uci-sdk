@@ -27,6 +27,8 @@
 #include <string.h>
 #include <ultimate.h>
 
+#include "cycles.h"
+
 static uint8_t test_no;
 static uint8_t passed;
 static uint8_t failed;
@@ -71,6 +73,45 @@ static void check(const char *name, int expected, int actual)
 
 static char scratch[64];
 static ultimate_capabilities caps;
+
+/*
+ * A fixed amount of CPU work, measured in 256ths of a raster frame.
+ *
+ * This is how "did turbo actually do anything?" gets answered. Setting $D031
+ * and reading it back proves only that a register remembers what was written
+ * to it - the machine has to be seen doing more work between two raster lines.
+ *
+ * The loop touches RAM and nothing else on purpose. The Ultimate 64 keeps I/O
+ * at the stock rate under turbo so that timing-sensitive code keeps working, so
+ * a loop that poked the VIC or a CIA would measure the part that deliberately
+ * did not speed up.
+ *
+ * Both halves come off the same counter - see cycles.h - so this is a ratio,
+ * and it does not matter whether turbo speeds the CPU up relative to the CIA or
+ * slows the CIA down relative to the CPU.
+ */
+#define WORK_ITERATIONS 2000
+#define WORK_UNITS      256
+
+static volatile uint8_t sink;
+
+static uint16_t work_per_frame(void)
+{
+    uint16_t i;
+    uint32_t work, frame;
+
+    __asm__("sei");
+    timer_start();
+    for (i = 0; i < WORK_ITERATIONS; ++i)
+        sink = (uint8_t)i;
+    work = cycles_net(timer_stop());
+    __asm__("cli");
+
+    frame = cycles_frame();
+    if (frame == 0)
+        return 0;
+    return (uint16_t)((work * WORK_UNITS) / frame);
+}
 static uint8_t saved[UCI_PALETTE_BYTES];
 static uint8_t readback[UCI_PALETTE_BYTES];
 
@@ -85,11 +126,16 @@ static uint8_t readback[UCI_PALETTE_BYTES];
  *   +0  magic "UCIT"        +6  passed        +10 targets low
  *   +4  format version      +7  failed        +11 targets high
  *   +5  tests run           +8  skipped       +12 $A5 once main() is done
- *                           +9  ident
+ *                           +9  ident         +13 1 when the turbo checks ran
+ *
+ * The done marker is written last, after every other field, so a driver that
+ * polls for it and then reads the rest can never catch a half-written block.
  */
 #define RESULT_BLOCK  ((uint8_t *)0x033C)
-#define RESULT_FORMAT 1
+#define RESULT_FORMAT 2
 #define RESULT_DONE   0xA5
+
+static uint8_t turbo_ran;
 
 static void publish(void)
 {
@@ -105,7 +151,8 @@ static void publish(void)
     RESULT_BLOCK[9]  = caps.ident;
     RESULT_BLOCK[10] = (uint8_t)caps.targets;
     RESULT_BLOCK[11] = (uint8_t)(caps.targets >> 8);
-    RESULT_BLOCK[12] = RESULT_DONE;
+    RESULT_BLOCK[13] = turbo_ran;
+    RESULT_BLOCK[12] = RESULT_DONE;     /* last, always */
 }
 
 /*
@@ -295,6 +342,58 @@ int main(void)
     /* 20: an index past the sixteenth colour never reaches the wire. */
     check("palette-rejects-bad-index", ULTIMATE_ERR_INVALID_ARGUMENT,
           ultimate_palette_set_color(16, 0, 0, 0));
+
+    /*
+     * 21-27: turbo. Not a UCI command - there is none - so this is the SDK's
+     * only hardware-register service, and the only one whose whole point is a
+     * thing a register readback cannot show.
+     *
+     * It runs only when the machine's owner has set "Turbo Control" to
+     * "U64 Turbo Registers". A program cannot set that for itself, which is the
+     * whole reason ultimate_turbo_available() exists, so skipping here is a
+     * normal outcome and not a gap. hwtest.py has a scenario that switches the
+     * setting on, runs this, and puts it back.
+     */
+    if (!ultimate_turbo_available()) {
+        skip("turbo-speed-changes", "turbo control is off in the ultimate settings");
+    } else {
+        uint8_t  entry = ultimate_turbo_get();
+        uint16_t slow, fast, nobad;
+
+        turbo_ran = 1;
+        cycles_calibrate();     /* before the first work_per_frame(), or the
+                                   timer's own cost is never subtracted */
+        check("turbo-set-1mhz", ULTIMATE_OK, ultimate_turbo_set(U64_SPEED_1MHZ));
+        check("turbo-get-1mhz", U64_SPEED_1MHZ, ultimate_turbo_get());
+        slow = work_per_frame();
+
+        check("turbo-set-4mhz", ULTIMATE_OK, ultimate_turbo_set(U64_SPEED_4MHZ));
+        check("turbo-get-4mhz", U64_SPEED_4MHZ, ultimate_turbo_get());
+        fast = work_per_frame();
+
+        printf("# work/frame: %u at 1mhz, %u at 4mhz\n", slow, fast);
+        /* four times the clock; two times the work is the honest floor. */
+        check("turbo-speed-changes", 1,
+              (fast != 0 && (slow / fast) >= 2) ? 1 : 0);
+
+        /*
+         * Badlines off is the other half of the register, and the half that is
+         * worth having at 1MHz too: the VIC steals around 43 cycles on each of
+         * 25 character rows, which is about 6% of a frame. The threshold is 3%,
+         * comfortably above the 2% this measurement moves by between runs.
+         */
+        ultimate_turbo_set(U64_SPEED_1MHZ);
+        check("badlines-off", ULTIMATE_OK, ultimate_turbo_badlines(0));
+        nobad = work_per_frame();
+        check("badlines-on", ULTIMATE_OK, ultimate_turbo_badlines(1));
+
+        printf("# work/frame: %u with badlines, %u without\n", slow, nobad);
+        check("badlines-off-is-faster", 1,
+              (nobad != 0 && nobad <= slow - (slow / 32)) ? 1 : 0);
+
+        /* Put the machine back at the speed it was found at. */
+        ultimate_turbo_set(entry);
+    }
 
     printf("1..%u\n", test_no);
     printf("# %u passed, %u failed, %u skipped\n", passed, failed, skipped);

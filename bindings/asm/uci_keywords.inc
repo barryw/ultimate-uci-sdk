@@ -21,32 +21,33 @@
 ; SPDX-License-Identifier: MIT
 
 UCI_TOK_FIRST  = $CC
-UCI_TOK_LAST   = $DA
-UCI_TOK_COUNT  = 15
+UCI_TOK_LAST   = $DB
+UCI_TOK_COUNT  = 16
 
-UCI_TOK_UCI   = $CC   ; statement
-UCI_TOK_UERR  = $CD   ; function
-UCI_TOK_UDEV  = $CE   ; function
-UCI_TOK_ULEN  = $CF   ; function
-UCI_TOK_USTS  = $D0   ; function
-UCI_TOK_UDATS = $D1   ; function
-UCI_TOK_UBYTE = $D2   ; function
-UCI_TOK_UW    = $D3   ; function
-UCI_TOK_UL    = $D4   ; function
-UCI_TOK_UDOS1 = $D5   ; constant
-UCI_TOK_UDOS2 = $D6   ; constant
-UCI_TOK_UNET  = $D7   ; constant
-UCI_TOK_UCTRL = $D8   ; constant
-UCI_TOK_UIEC  = $D9   ; constant
-UCI_TOK_UHTTP = $DA   ; constant
+UCI_TOK_UCI    = $CC   ; statement
+UCI_TOK_UERR   = $CD   ; function
+UCI_TOK_UDEV   = $CE   ; function
+UCI_TOK_ULEN   = $CF   ; function
+UCI_TOK_USTS   = $D0   ; function
+UCI_TOK_UDATS  = $D1   ; function
+UCI_TOK_UBYTE  = $D2   ; function
+UCI_TOK_UW     = $D3   ; function
+UCI_TOK_UL     = $D4   ; function
+UCI_TOK_UDOS1  = $D5   ; constant
+UCI_TOK_UDOS2  = $D6   ; constant
+UCI_TOK_UNET   = $D7   ; constant
+UCI_TOK_UCTRL  = $D8   ; constant
+UCI_TOK_UIEC   = $D9   ; constant
+UCI_TOK_UHTTP  = $DA   ; constant
+UCI_TOK_UTURBO = $DB   ; statement
 
 ; Target constants, in table order, for the constant handler.
-UCI_KWVAL_UDOS1 = $01
-UCI_KWVAL_UDOS2 = $02
-UCI_KWVAL_UNET  = $03
-UCI_KWVAL_UCTRL = $04
-UCI_KWVAL_UIEC  = $05
-UCI_KWVAL_UHTTP = $06
+UCI_KWVAL_UDOS1  = $01
+UCI_KWVAL_UDOS2  = $02
+UCI_KWVAL_UNET   = $03
+UCI_KWVAL_UCTRL  = $04
+UCI_KWVAL_UIEC   = $05
+UCI_KWVAL_UHTTP  = $06
 
 uci_keywords:
         ; $CC UCI
@@ -93,6 +94,9 @@ uci_keywords:
         .byte 0
         ; $DA UHTTP
         .byte 5, $55, $48, $54, $54, $50
+        .byte 0
+        ; $DB UTURBO
+        .byte 6, $55, $54, $55, $52, $42, $4F
         .byte 0
         .byte 0                 ; end of table
 

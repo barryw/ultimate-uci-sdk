@@ -29,5 +29,6 @@ crunched form; `LIST` prints the name.
 | `$D8` | `UCTRL` | constant | same | target $04, machine and cartridge control |
 | `$D9` | `UIEC` | constant | same | target $05, SoftwareIEC |
 | `$DA` | `UHTTP` | constant | same | target $06, HTTP client |
+| `$DB` | `UTURBO` | statement | same | CPU speed index as a statement, and the current index as a function - 255 when the machine's turbo is switched off in its settings |
 
-`$DB`-`$FE` remain free; `$FF` is pi and can never be claimed.
+`$DC`-`$FE` remain free; `$FF` is pi and can never be claimed.

@@ -42,6 +42,10 @@ against version 5.
 | `+$3A` | `ultimate_palette_set` | `A`/`X` = 48 bytes of RGB | `A` = result |
 | `+$3D` | `ultimate_palette_set_color` | `ult_color` = index, r, g, b | `A` = result |
 | `+$40` | `ultimate_palette_reset` | | `A` = result |
+| `+$43` | `ultimate_turbo_available` | | `A` = 1 when turbo answers |
+| `+$46` | `ultimate_turbo_get` | | `A` = speed index, or `$FF` |
+| `+$49` | `ultimate_turbo_set` | `A` = speed index 0-15 | `A` = result |
+| `+$4C` | `ultimate_turbo_badlines` | `A` = 0 for none, non-zero for normal | `A` = result |
 
 The signature is checked before calling anything:
 
