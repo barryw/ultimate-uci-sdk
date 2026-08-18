@@ -20,12 +20,16 @@
         .include "c64rom.inc"
         .include "uci_protocol.inc"
         .include "uci_keywords.inc"
+        .include "uci_argtable.inc"
 
         .import uci_init, uci_exec, uci_abort, uci_last_code, uci_req
 
         .export wedge_gone, wedge_eval, wedge_do_uci, wedge_sdk_init
         .export wedge_err, wedge_target, wedge_command, wedge_arglen
         .export wedge_argbuf, wedge_reply, wedge_status
+
+; The argument table is walked with 8-bit arithmetic, like the keyword one.
+        .assert uci_argtable_size < 256, error, "argument table outgrew one page"
 
 ; The reply buffer sizes UBYTE( exactly and covers what the generic form is
 ; for: directory entries, paths, identification strings. A longer reply sets
@@ -84,11 +88,19 @@ wedge_do_uci:
         jsr GETBYT              ; command
         stx wedge_command
 
-@more:  jsr CHRGOT
+        jsr wedge_find_shape    ; what the SDK knows about this command
+
+; Literals belong to the command, not to the caller, so they are emitted on
+; the way to the next argument the caller did type.
+@more:  jsr wedge_emit_literals
+        jsr CHRGOT
         cmp #','
         beq @next
         jmp wedge_exec
 @next:  jsr CHRGET              ; step over the comma
+        jsr wedge_kind_at       ; how wide is this one meant to be
+        sta wedge_kind
+        inc wedge_shape_i
         jsr wedge_arg
         jmp @more
 
@@ -112,9 +124,24 @@ wedge_arg:
         lda VALTYP
         bne @string
 
-        jsr GETADR              ; numeric: the low byte, per the default rule
+        lda wedge_kind          ; a number is as wide as the command says
+        cmp #UCI_ARG_WORD
+        beq @nword
+        cmp #UCI_ARG_DWORD
+        beq @nlong
+
+        jsr GETADR              ; and one byte when it says nothing
         lda LINNUM
         jmp wedge_putarg
+
+@nword: jsr GETADR
+        lda LINNUM
+        jsr wedge_putarg
+        lda LINNUM+1
+        jmp wedge_putarg
+
+@nlong: jsr QINT
+        jmp wedge_put32
 
 ; A string argument contributes its bytes and nothing else - no length, no
 ; terminator. The firmware splits on whatever the command's shape says.
@@ -123,7 +150,11 @@ wedge_arg:
         pha
         stx INDEX
         sty INDEX+1
-        pla
+        ldy wedge_kind          ; a length-prefixed string carries its count
+        cpy #UCI_ARG_PSTR
+        bne @nolen
+        jsr wedge_putarg
+@nolen: pla
         beq @done               ; the empty string contributes nothing
         sta wedge_scount
         ldy #$00
@@ -152,6 +183,11 @@ wedge_arg:
         jsr FRMNUM
         jsr QINT
         jsr CHKCLS
+        jmp wedge_put32
+
+; QINT leaves a 32-bit signed value in FACHO..FACHO+3, most significant first,
+; and the wire wants it the other way round.
+wedge_put32:
         lda FACHO+3
         jsr wedge_putarg
         lda FACHO+2
@@ -170,6 +206,111 @@ wedge_putarg:
         sta wedge_argbuf,x
         inc wedge_arglen
 @full:  rts
+
+
+; ---------------------------------------------------------------------------
+; The argument shapes.
+;
+; Only commands the default rule cannot marshal have an entry - a wide number,
+; a length-prefixed string, or a literal the caller never types. Everything
+; else falls through to one byte per number, which is what nearly every command
+; wants and costs the 6502 nothing.
+;
+; UW() and UL() still win over whatever the table says: the table is what the
+; SDK knows today, and the escape has to keep working for firmware newer than
+; the table.
+; ---------------------------------------------------------------------------
+
+; Find the entry for wedge_target / wedge_command.
+; Leaves wedge_shape_n = 0 when there is none, which is the default rule.
+wedge_find_shape:
+        lda #$00
+        sta wedge_shape_n
+        sta wedge_shape_i
+        sta wedge_kind
+
+        lda wedge_target
+        cmp #UCI_TARGET_DOS2    ; one command set on two targets, stored once
+        bne @have
+        lda #UCI_TARGET_DOS1
+@have:  sta wedge_shape_t
+
+        ldy #$00
+@entry: sty wedge_shape_e
+        lda uci_argtable,y
+        beq @none               ; a zero target ends the table
+        cmp wedge_shape_t
+        bne @next
+        iny
+        lda uci_argtable,y
+        cmp wedge_command
+        beq @found
+
+@next:  ldy wedge_shape_e       ; step over this entry: three header bytes and
+        iny                     ; one packed byte per two arguments
+        iny
+        lda uci_argtable,y      ; the count
+        clc
+        adc #$01
+        lsr a
+        sta wedge_tmp
+        iny
+        tya
+        clc
+        adc wedge_tmp
+        tay
+        jmp @entry
+
+@found: iny                     ; -> the count
+        lda uci_argtable,y
+        sta wedge_shape_n
+        iny                     ; -> the first packed byte
+        sty wedge_shape_off
+@none:  rts
+
+; The kind of shape entry wedge_shape_i, or UCI_ARG_END when the shape has run
+; out - which is also what a command with no entry at all reports.
+wedge_kind_at:
+        lda wedge_shape_i
+        cmp wedge_shape_n
+        bcs @none
+
+        lsr a                   ; two kinds to a byte
+        clc
+        adc wedge_shape_off
+        tay
+        lda uci_argtable,y
+        pha
+        lda wedge_shape_i
+        and #$01
+        bne @low
+
+        pla                     ; even: the high nibble
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        rts
+
+@low:   pla
+        and #$0F
+        rts
+
+@none:  lda #UCI_ARG_END
+        rts
+
+; Emit any literals sitting at the current shape position. They are part of the
+; command's shape rather than something the caller types, so the caller's
+; arguments have to step over them without knowing they exist.
+wedge_emit_literals:
+        jsr wedge_kind_at
+        cmp #UCI_ARG_LIT0
+        bne @done
+        inc wedge_shape_i
+        lda #$00
+        jsr wedge_putarg
+        jmp wedge_emit_literals
+@done:  rts
 
 ; ---------------------------------------------------------------------------
 ; Fill the request block and run it.
@@ -360,6 +501,13 @@ wedge_savptr:   .word 0         ; TXTPTR across a term the wedge did not want
 wedge_scount:   .byte 0
 wedge_scur:     .byte 0
 wedge_sptr:     .word 0         ; string source across a call that may collect
+wedge_kind:     .byte 0         ; UCI_ARG_* for the argument being parsed
+wedge_shape_t:  .byte 0         ; target the shape is looked up under
+wedge_shape_n:  .byte 0         ; arguments in the shape, 0 when there is none
+wedge_shape_i:  .byte 0         ; which one is next
+wedge_shape_off: .byte 0        ; where its packed kinds start
+wedge_shape_e:  .byte 0         ; start of the entry being examined
+wedge_tmp:      .byte 0
 
         .segment "BSS"
 

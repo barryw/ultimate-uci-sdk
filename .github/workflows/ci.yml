@@ -35,15 +35,10 @@ jobs:
           make -C examples/cc65
       - name: Build the hardware test program
         run: make hardware
-      # The generated argument and keyword tables have no consumer until the
-      # BASIC wedge lands, so nothing else would notice if they stopped
-      # assembling.
-      - name: Assemble the generated tables
-        run: |
-          printf '\t.include "bindings/asm/uci_argtable.inc"\n' > /tmp/argtable.s
-          ca65 -I . -o /tmp/argtable.o /tmp/argtable.s
-          printf '\t.include "bindings/asm/uci_keywords.inc"\n' > /tmp/keywords.s
-          ca65 -I . -o /tmp/keywords.o /tmp/keywords.s
+      - name: Build the BASIC wedge, both deliveries
+        run: make wedge
+      # The wedge is the consumer of both generated tables now, so `make wedge`
+      # above is what proves they still assemble.
       - uses: actions/upload-artifact@v4
         with:
           name: prg
@@ -51,6 +46,8 @@ jobs:
             examples/asm/identify.prg
             examples/cc65/identify.prg
             tests/hardware/ucitest.prg
+            src/basic/uci.prg
+            src/basic/uci.crt
 
   emulator:
     name: sim6502 emulator tests

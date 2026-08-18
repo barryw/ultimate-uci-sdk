@@ -23,7 +23,7 @@ lists its own keywords; what is left of it is dispatch.
 | Layer 2 — dos, file, network, http, control, reu | **not started** — Phase 3 |
 | Layer 3 — ca65 / cc65 bindings | working |
 | Layer 3 — the blob (any toolchain, no linking) | **working** — Phase 1, done |
-| Layer 3 — BASIC wedge | **working** — Phase 2; generic `UCI`, observers, `.crt` left |
+| Layer 3 — BASIC wedge | **Phase 2 complete** — `.prg` and `.crt`, 33 tests |
 | Layer 3 — Oscar64, llvm-mos, KickC | not started; the blob is now their route in |
 
 ```
@@ -32,8 +32,9 @@ make blob             GREEN     2860 bytes, 89 relocations
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make wedge            GREEN     uci.prg, 2636 bytes; wedge + SDK at $C000 is 2931
-make test             GREEN     86 host unit tests + 108 tests across 8 suites
+make wedge            GREEN     uci.prg 2940 bytes, uci.crt 8272; the resident
+                                wedge + SDK at $C000 is 3159
+make test             GREEN     97 host unit tests + 115 tests across 8 suites
 make hardware-run     GREEN     4/4 scenarios on real hardware, 13 checks each
                                 except uci-disabled, which asserts one clean
                                 failure and is meant to report failed=1
@@ -281,7 +282,7 @@ only where the generic form cannot express the operation.
 | | Phase | Notes |
 |---|---|---|
 | 1 | the blob | **done** |
-| 2 | **BASIC wedge** — in progress | done: tokens, `ICRNCH`, `IQPLOP`, installer, `.prg`, `basic.suite`. Left: `IGONE`/`IEVAL` dispatch, the generic `UCI` statement and function, observers (`UERR`, `UST$`, `UDAT$`, `UBYTE(`, `ULEN`, `UDEV`), `UW(`/`UL(`, the `.crt` build |
+| 2 | BASIC wedge | **done** — tokens, all four vectors, the generic `UCI`, observers, `UW(`/`UL(`, argument shapes, `.prg` and `.crt` |
 | 3 | DOS service, file convenience, SoftwareIEC fast path, `reu.s` | `ULOAD`/`UBLOAD`/`USAVE`/`UDIR`/`USTASH`/`UFETCH` in all three languages at once |
 
 **Phase 2's stated blocker is cleared.** The argument shapes are structured data

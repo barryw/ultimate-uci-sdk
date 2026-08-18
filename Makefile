@@ -27,7 +27,11 @@ all: lib examples emulator wedge
 # here does not change what `make test` depends on.
 test: unittest emulator
 
-unittest:
+# The wedge first: tools/test_make_crt.py compares the .prg and the cartridge
+# byte for byte, and skips itself when they have not been built - which on a
+# clean tree means the one test that guards "the cartridge is not a second
+# implementation" would quietly never run.
+unittest: wedge
 	python3 -m unittest discover -s tools -p 'test_*.py'
 
 lib:

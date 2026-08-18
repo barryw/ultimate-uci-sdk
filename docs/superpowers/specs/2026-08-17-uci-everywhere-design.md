@@ -4,9 +4,8 @@ Design for making the whole Ultimate Command Interface reachable from every
 toolchain a C64 programmer might use, in the smallest and most reusable form
 that can be built.
 
-Status: agreed in design. Phase 1 (the blob) is done. Phase 2's generated
-foundations — the argument shapes, the runtime argument table and the keyword
-table — are done; the wedge code itself is not written yet.
+Status: agreed in design. **Phases 1 and 2 are done** — the blob, and the BASIC
+wedge in both its deliveries. Phase 3, the service layer, is not started.
 
 Where this document and the code disagree, the code won and the section says so.
 Two keyword names changed in §4 for reasons that only showed up once the ROM's

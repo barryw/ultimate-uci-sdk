@@ -33,3 +33,8 @@ tests/emulator/sdk-placed.suite
 # Point C64_ROMS at a directory holding basic.bin and kernal.bin, or drop them
 # here; tests/emulator/Makefile skips the suite when they are absent.
 tests/emulator/roms/
+
+# Wedge build output
+src/basic/uci.prg
+src/basic/uci.crt
+src/basic/uci-cart.bin

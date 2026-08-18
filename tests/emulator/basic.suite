@@ -599,5 +599,204 @@ suites {
       assert($000d == $00, "a number")
     }
 
+    ; ----------------------------------------------------------------------
+    ; Argument shapes. Everything above this point was the default rule - one
+    ; number, one byte. These are the commands where that is wrong, and the
+    ; generated table is what makes the natural thing work without UW().
+    ; ----------------------------------------------------------------------
+
+
+    test("shape-widens-a-16-bit-argument", "READ_DATA takes a length, and 8192 does not fit in a byte") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $34
+      $0207 = $2c
+      $0208 = $38
+      $0209 = $31
+      $020a = $39
+      $020b = $32
+      $020c = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_arglen] == $02, "the table said 16 bits, with no UW()")
+      assert([wedge_argbuf] == $00, "8192 is $2000, LSB first")
+      assert(peekbyte([wedge_argbuf] + $01) == $20, "...high byte")
+    }
+
+    test("shape-widens-a-32-bit-argument", "FILE_SEEK takes a 32-bit position, which a byte could never carry") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $36
+      $0207 = $2c
+      $0208 = $31
+      $0209 = $30
+      $020a = $30
+      $020b = $30
+      $020c = $30
+      $020d = $30
+      $020e = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_arglen] == $04, "four bytes, with no UL()")
+      assert([wedge_argbuf] == $a0, "100000 is $000186A0, LSB first")
+      assert(peekbyte([wedge_argbuf] + $01) == $86, "...")
+      assert(peekbyte([wedge_argbuf] + $02) == $01, "...")
+      assert(peekbyte([wedge_argbuf] + $03) == $00, "...")
+    }
+
+    test("shape-inserts-a-separator-the-caller-never-types", "RENAME is <old> $00 <new>, and the caller types two names") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $31
+      $0207 = $30
+      $0208 = $2c
+      $0209 = $22
+      $020a = $4f
+      $020b = $4c
+      $020c = $44
+      $020d = $22
+      $020e = $2c
+      $020f = $22
+      $0210 = $4e
+      $0211 = $45
+      $0212 = $57
+      $0213 = $22
+      $0214 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_arglen] == $07, "three plus a separator plus three")
+      assert([wedge_argbuf] == $4f, "'O'")
+      assert(peekbyte([wedge_argbuf] + $02) == $44, "'D'")
+      assert(peekbyte([wedge_argbuf] + $03) == $00, "the separator the table knew about")
+      assert(peekbyte([wedge_argbuf] + $04) == $4e, "'N'")
+      assert(peekbyte([wedge_argbuf] + $06) == $57, "'W'")
+    }
+
+    test("shape-emits-leading-literals", "WRITE_DATA skips two bytes before the data, and the caller should not have to know") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $35
+      $0207 = $2c
+      $0208 = $22
+      $0209 = $48
+      $020a = $49
+      $020b = $22
+      $020c = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_arglen] == $04, "two ignored bytes then the data")
+      assert([wedge_argbuf] == $00, "the first byte the firmware skips")
+      assert(peekbyte([wedge_argbuf] + $01) == $00, "and the second")
+      assert(peekbyte([wedge_argbuf] + $02) == $48, "'H'")
+      assert(peekbyte([wedge_argbuf] + $03) == $49, "'I'")
+    }
+
+    test("shape-covers-the-second-dos-target", "DOS is one command set on two targets, and the table stores it once") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $32
+      $0205 = $2c
+      $0206 = $34
+      $0207 = $2c
+      $0208 = $38
+      $0209 = $31
+      $020a = $39
+      $020b = $32
+      $020c = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_target] == $02, "sent to target 2")
+      assert([wedge_arglen] == $02, "but shaped like target 1")
+      assert(peekbyte([wedge_argbuf] + $01) == $20, "...high byte of 8192")
+    }
+
+    test("uw-overrides-what-the-table-says", "the escape has to keep working for firmware newer than the table") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $34
+      $0207 = $2c
+      $0208 = $55
+      $0209 = $57
+      $020a = $28
+      $020b = $33
+      $020c = $30
+      $020d = $30
+      $020e = $29
+      $020f = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_arglen] == $02, "still two bytes")
+      assert([wedge_argbuf] == $2c, "but the value the caller forced")
+      assert(peekbyte([wedge_argbuf] + $01) == $01, "...")
+    }
+
+    test("a-command-with-no-entry-keeps-the-default-rule", "most commands have no entry at all, and must stay one byte per number") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $32
+      $0207 = $34
+      $0208 = $30
+      $0209 = $2c
+      $020a = $37
+      $020b = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_arglen] == $01, "one number, one byte")
+      assert([wedge_argbuf] == $07, "as typed")
+    }
   }
 }
