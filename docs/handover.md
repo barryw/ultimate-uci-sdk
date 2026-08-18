@@ -45,16 +45,16 @@ make wedge            GREEN     uci.prg 5983 bytes, uci.crt 8272. The wedge
                                 at $A000 under BASIC ROM: 3533 of 8K, reached
                                 through the stubs in src/basic/bank.s
 make test             GREEN     104 host unit tests + 182 tests across 8 suites
-make basic-run        GREEN     25/25 from the .prg and 25/25 from the .crt, the
+make basic-run        GREEN     32/32 from the .prg and 32/32 from the .crt, the
                                 same checks typed at a real C64. The cartridge
                                 costs BASIC 8K: 38911 bytes free becomes 30719
-make hardware-run     GREEN     5/5 scenarios on real hardware: 30 checks in
-                                the plain one, 38 with the RAM expansion
-                                switched on and 37 with turbo, and 2-3 skips
-                                in each for what that machine cannot do -
-                                see handover-phase3.md section 2.3 for the
-                                full stick. uci-disabled asserts one clean
-                                failure and reports failed=1 on purpose
+make hardware-run     GREEN     5/5 scenarios on real hardware: 38 checks in
+                                the plain one, 50 with the RAM expansion
+                                switched on and 45 with turbo. The only skips
+                                left are turbo and the REU where their setting
+                                is off, which is what those scenarios exist to
+                                turn on. uci-disabled asserts one clean failure
+                                and reports failed=1 on purpose
 make coverage         GREEN     0 wrapped-but-untested
 make time-run         n/a       not a test: it times a UCI round trip on the
                                 machine and prints the numbers. A whole-palette
@@ -345,7 +345,11 @@ curl --ftp-create-dirs -T tests/emulator/fixtures/usb0/data/hello.txt \
 ```
 
 **Test data policy:** every mutating test creates its own file, uses it, and
-deletes it. Nothing pre-existing on the device is ever touched. That collapses
+deletes it. Nothing pre-existing on the device is ever touched. **On hardware
+they write to `/Temp`**, the FAT filesystem the firmware formats in RAM at boot
+(`software/filesystem/ramdisk.cc`): it cannot fill anybody's medium, cannot wear
+flash, and does not survive a power cycle even if a test dies halfway through.
+The read-only fixture stays on the USB stick. That collapses
 the old four risk tags into two that matter — `mutating` is safe by default
 because it only touches what it made, and `destructive` shrinks to the genuinely
 irreversible (reboot, flash, palette), which stays opt-in.

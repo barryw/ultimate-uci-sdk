@@ -24,8 +24,8 @@ and what the next person should not have to rediscover.
 
 ```
 make test         GREEN   104 host unit tests + 182 across 8 suites
-make hardware-run GREEN   5/5 scenarios on the bench machine
-make basic-run    GREEN   25/25 from the .prg and 25/25 from the .crt
+make hardware-run GREEN   5/5 scenarios, 38-50 checks each, 1-2 skips
+make basic-run    GREEN   32/32 from the .prg and 32/32 from the .crt
 make coverage     GREEN   24/101 commands, and 0 wrapped-but-untested
 make blob         GREEN   5078 bytes at $8000, 287 relocations
 make wedge        GREEN   wedge 2741 of the 4K at $C000, SDK 3533 of the 8K at $A000
@@ -63,16 +63,23 @@ figures that decide whether an HTTP wrapper can be synchronous at all.
 Still the best demonstration the SDK has, and still unbuilt. handover-next.md
 §2 has the timing that shaped it.
 
-### 2.3 A writable fixture on the bench machine
+### 2.3 Nothing — but read this before writing another hardware test
 
-`make hardware-run` skips three checks — `write-data`, `reu-save-to-a-file` and
-what follows them — because **the USB stick in the bench machine is full**. Not
-nearly full: an FTP `STOR` of 64 bytes fails with `452`, and the firmware
-answers `WRITE_DATA` with `DISK IS FULL`. It is full of firmware update images,
-which is a decision for its owner and not for this SDK.
+**Mutating hardware tests write to `/Temp`, which is a FAT filesystem the
+firmware formats in RAM at boot** (`software/filesystem/ramdisk.cc`, about 3 MB
+on a U64). It cannot fill somebody's medium, it cannot wear flash, and it is
+gone on the next power cycle whatever a test does to it. `ucitest.c` creates
+`/Temp/wr.tmp`, and `basictest.py` types `USAVE "/TEMP/SV.TMP"`.
 
-The tests are written and they skip cleanly with the reason on the screen. Free
-some space on `/Usb1` and they run.
+That is how `write-data`, `seek`, `delete`, `reu-save-to-a-file` and `USAVE`
+came to run rather than skip. They were skipping because **the USB stick in the
+bench machine is full** — an FTP `STOR` of 64 bytes fails with `452` and the
+firmware answers `WRITE_DATA` with `DISK IS FULL` — which is its owner's
+business and not something a test should need fixed. The read-only fixture stays
+at `/Usb1/data/hello.txt`; only writes moved.
+
+The skip paths are still there and still say why, because a firmware without a
+RAM disk is a machine this SDK should run on.
 
 ## 3. Things this session found out, that are not obvious
 

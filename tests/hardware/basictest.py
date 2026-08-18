@@ -141,6 +141,33 @@ CHECKS = [
      "'H' came back through the expansion, which is a round trip no register "
      "readback could have faked"),
 
+    # USAVE, on /Temp: the FAT filesystem the firmware formats in RAM at boot.
+    # A mutating test needs somewhere to write, not somewhere in particular, and
+    # the RAM disk cannot fill anybody's medium, cannot wear flash, and is gone
+    # on the next power cycle whatever happens here.
+    ('USAVE "/TEMP/SV.TMP",51968,4', "READY.",
+     "four bytes of memory become a file"),
+
+    ("PRINT UERR", " 0",
+     "and the write was accepted"),
+
+    ("POKE 51968,0", "READY.",
+     "wipe the byte, so reading it back cannot pass on what was already there"),
+
+    ('UBLOAD "/TEMP/SV.TMP",51968,4', "READY.",
+     "read the file back over the top of it"),
+
+    ("PRINT PEEK(51968)", " 72",
+     "'H' - what USAVE wrote is what UBLOAD reads, which is the only proof a "
+     "status code cannot give"),
+
+    ('UCI 1,9,"/TEMP/SV.TMP"', "READY.",
+     "DOS_CMD_DELETE_FILE through the generic form: the wedge has no delete "
+     "keyword, and every mutating test cleans up after itself"),
+
+    ("PRINT UERR", " 0",
+     "and the file is gone"),
+
     # UDIR last, because it needs the current directory to be somewhere known.
     # That directory belongs to the firmware and not to the C64, so it outlives
     # a reset and whatever ran before this - the generic form puts it back.

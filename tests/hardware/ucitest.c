@@ -143,10 +143,16 @@ static const char hello_path[] = {
  * The scratch file the write tests make, use and take away again. Numeric for
  * the same reason hello_path is: what goes on the wire is bytes, and cc65 would
  * charmap a string literal into PETSCII on its way there.
+ *
+ * **It goes on /Temp, not on the USB stick.** /Temp is a FAT filesystem the
+ * firmware formats in RAM at boot - software/filesystem/ramdisk.cc - so a test
+ * writing there cannot fill somebody's medium, cannot wear flash, and cannot
+ * survive a power cycle even if this program dies halfway through. The bench
+ * machine's stick is full of firmware images, which is its owner's business;
+ * this needs somewhere to write, not somewhere in particular.
  */
 static const char scratch_path[] = {
-    0x2F, 0x55, 0x73, 0x62, 0x31, 0x2F,         /* /Usb1/ */
-    0x64, 0x61, 0x74, 0x61, 0x2F,               /* data/  */
+    0x2F, 0x54, 0x65, 0x6D, 0x70, 0x2F,         /* /Temp/ */
     0x77, 0x72, 0x2E, 0x74, 0x6D, 0x70, 0x00    /* wr.tmp */
 };
 
@@ -506,11 +512,11 @@ int main(void)
         ok("write-creates-a-file");
 
         /*
-         * A write can fail for a reason no test can fix: the bench machine's
-         * stick was full the first time this ran, and the firmware said so -
-         * "DISK IS FULL", which the SDK now reports as ULTIMATE_ERR_DEVICE.
-         * That is the medium refusing, not the SDK failing, so it skips and
-         * says which. Anything else is a real failure and is reported as one.
+         * A write can still fail for a reason no test can fix - a full medium
+         * answers "DISK IS FULL", which the SDK reports as
+         * ULTIMATE_ERR_DEVICE - so that case skips and says so rather than
+         * failing. On the RAM disk it does not happen, and anything else is a
+         * real failure reported as one.
          */
         err = ultimate_write(written, sizeof(written));
         if (err == ULTIMATE_ERR_DEVICE) {
@@ -604,21 +610,40 @@ after_write:
 
         /*
          * And out of the expansion into a file, which is the pair of the one
-         * above. It needs somewhere to write: the bench machine's stick is
-         * full, so this skips there rather than failing, exactly as the write
-         * tests do.
+         * above. It writes to the RAM disk like every other mutating test
+         * here, and reads it back to prove the bytes really left the
+         * expansion - a status of OK on its own would pass for a save that
+         * wrote nothing at all.
          */
         err = ultimate_open(scratch_path, DOS_FA_CREATE_ALWAYS | DOS_FA_WRITE);
         if (err != ULTIMATE_OK) {
-            skip("reu-save-to-a-file", "nowhere writable on this device");
+            skip("reu-save-to-a-file", "no ram disk to write to on this firmware");
         } else {
             err = ultimate_reu_save(0, 8);
             ultimate_close();
-            if (err == ULTIMATE_ERR_DEVICE)
+            if (err == ULTIMATE_ERR_DEVICE) {
                 skip("reu-save-to-a-file", "the device refused the write");
-            else
+                ultimate_delete(scratch_path);
+            } else {
                 check("reu-save-to-a-file", ULTIMATE_OK, err);
-            ultimate_delete(scratch_path);
+
+                /*
+                 * Read it back. A status of OK proves the command was accepted
+                 * and nothing else: a save that wrote no bytes at all would
+                 * pass on the status alone. The expansion holds hello.txt at
+                 * this point, put there by LOAD_REU above, so the first eight
+                 * bytes of the file are the first eight of "HELLO FROM...".
+                 */
+                memset(reu_work, 0, sizeof(reu_work));
+                check("reu-save-reads-back", ULTIMATE_OK,
+                      ultimate_bload(scratch_path, (uint16_t)reu_work, 8));
+                check("reu-save-wrote-the-bytes", 0x48, (int)reu_work[0]);
+                check("reu-save-wrote-all-of-them", 8,
+                      (int)(ultimate_last_end() - (uint16_t)reu_work));
+
+                check("reu-save-cleanup", ULTIMATE_OK,
+                      ultimate_delete(scratch_path));
+            }
         }
 
         /* Put the expansion back exactly as it was found. */
