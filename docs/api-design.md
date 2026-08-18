@@ -22,7 +22,7 @@ The assembly core costs the reach and keeps everything else:
 
 | | C core | assembly core |
 |---|---|---|
-| size | — | 1504 bytes for the transport, 488 for the service layer, and 98-634 for each service on top |
+| size | — | 1694 bytes for the transport, 498 for the service layer, and 98-731 for each service on top |
 | assembly callers | must initialise cc65's software stack | need nothing at all |
 | RAM | BSS, wherever the linker puts it | `UCI_VARS` places every byte, or BSS by default |
 | zero page | the C runtime's | four bytes, at an address you choose |
@@ -114,10 +114,16 @@ probing report a working SoftwareIEC target as absent — on hardware, with ever
 host and emulator test passing.
 
 The fix was not to special-case that command. `uci_decode_status()` classifies a
-status by its leading bytes, and the three encodings are mutually exclusive on
-sight: three leading ASCII digits is the HTTP form, two is `NN,TEXT`, a leading
-non-digit is a single binary byte. The binary codes in use are `$00`-`$09` and
-`$80`, none of which is an ASCII digit, so nothing can be read two ways.
+status by its leading bytes, and the four encodings are mutually exclusive on
+sight: `HTTP/` is the response line an exchange answers with, three leading
+ASCII digits is the firmware's own `NNN TEXT`, two is `NN,TEXT`, and any other
+leading non-digit is a single binary byte. The binary codes in use are
+`$00`-`$09` and `$80`, none of which is an ASCII digit or an `H`, so nothing can
+be read two ways.
+
+The fourth was added the same way and for the same reason: an HTTP exchange
+answers with the whole response header block rather than a code, and until the
+decoder knew that shape every successful request came back as a device error.
 
 The target hint still has a job — deciding whether a binary status is plausible
 at all, since the numeric meanings of a binary status are SoftwareIEC's and

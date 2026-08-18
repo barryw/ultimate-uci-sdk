@@ -152,6 +152,21 @@ sharing them.
 | `ultimate_reu_fetch` | the same three, the other way | `A` = result code |
 | `ultimate_reu_load` | `ult_reu`, `ult_reulen`, and an open file | `A` = result code |
 | `ultimate_reu_save` | the same, out of the expansion | `A` = result code |
+| `ultimate_reu_size` | — | `A`/`X` = size in 64K banks, 0 when there is none |
+| `ultimate_net_ifcount` | — | `A` = result, `ult_iface` = interfaces |
+| `ultimate_net_macaddr` | `ult_iface`, `ult_buf` = 6 bytes | `A` = result code |
+| `ultimate_net_ipconfig` | `ult_iface`, `ult_buf` = 12 bytes | `A` = result code |
+| `ultimate_net_connect` | `ult_port`, `ult_buf` = host | `A` = result, `ult_sock` = handle |
+| `ultimate_net_udp` | the same, for a UDP socket | `A` = result, `ult_sock` = handle |
+| `ultimate_net_close` | `ult_sock` | `A` = result code |
+| `ultimate_net_read` | `ult_sock`, `ult_buf`, `ult_socklen` = buffer size | `A` = result, `ult_socklen` = bytes stored |
+| `ultimate_net_write` | `ult_sock`, `ult_buf`, `ult_buflen` | `A` = result, `ult_socklen` = bytes accepted |
+| `ultimate_http_get` | `ult_url`, `ult_buf`, `ult_buflen` | `A` = result, `ult_httplen` = bytes stored |
+| `ultimate_http_open` | `A` = `HTTP_VERB_*`, `ult_url` | `A` = result, `ult_http` = handle |
+| `ultimate_http_header` | `ult_http`, `ult_url` = `key: value` | `A` = result code |
+| `ultimate_http_exchange` | `ult_http`, `ult_body`, `ult_buf`, `ult_buflen` | `A` = result, `ult_httplen` = bytes stored |
+| `ultimate_http_close` | `ult_http` | `A` = result code |
+| `ultimate_http_free_all` | — | `A` = result code |
 | `uci_present` | — | `A` = 1 when the signature is on the bus |
 | `uci_ident` | — | `A` = the raw identification register |
 | `uci_req_clear` | — | zeroes the request block |
@@ -161,6 +176,13 @@ sharing them.
 | `uci_set_timeout_a` | `A` = budget, 0 = forever | — |
 | `uci_get_timeout_a` | — | `A` = current budget |
 | `uci_last_code` | — | `A` = low, `X` = high of the raw device code |
+
+**Two of these wait without a limit.** `ultimate_net_connect`, its UDP twin and
+`ultimate_http_exchange` contain a name lookup and a TCP connect, and a connect
+to an address with nothing at it was measured at 30.8 seconds - which no value
+of the timeout byte can express. They run on `UCI_TIMEOUT_FOREVER` and put the
+caller's budget back afterwards. Everything else here is bounded. See
+docs/uci.md.
 
 **Stopping a directory walk early needs `uci_abort`.** `ultimate_readdir` is one
 live exchange with the firmware, which holds a reply block until it is released

@@ -7,7 +7,7 @@ New machines get extra capabilities. Nothing gets an incompatible ecosystem.
 
 | Machine | Firmware | Result |
 |---|---|---|
-| Ultimate 64 Elite | 3.15 (FPGA 123, core 1.4E) | `protocol.suite` 8/8, `ucitest.prg` 13/13 |
+| Ultimate 64 Elite | 3.15 (FPGA 123, core 1.4E) | `protocol.suite` 9/9, `ucitest.prg` 0 failed — 45 passed and 4 skipped with no peer built in, 68 passed with the socket and HTTP peers |
 
 Everything else in this document comes from the firmware and FPGA sources rather
 than from a machine on a bench. Reports from other hardware are welcome.

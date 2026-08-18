@@ -26,7 +26,7 @@ binding that reimplements the handshake is a bug, not a feature.
 
 ## Layer 1 — UCI core
 
-`src/uci/uci_core.s`. About 1300 lines of 6502, assembling to 1504 bytes.
+`src/uci/uci_core.s`. About 1470 lines of 6502, assembling to 1694 bytes.
 
 Owns: command framing, the four-state handshake, bounded waiting, queue
 draining, abort and recovery, and the translation of firmware status replies
@@ -62,7 +62,7 @@ into an API that reads naturally on a C64, and each one is built from
 ```
 src/uci/dos.s       open, close, read, write, seek, delete, directories
 src/uci/file.s      load, bload, save - two-tier, over dos or SoftwareIEC
-src/uci/reu.s       stash and fetch over DMA, and the DOS REU pair
+src/uci/reu.s       stash and fetch over DMA, the DOS REU pair, and how big it is
 src/uci/palette.s   the running palette, on the control target
 src/uci/turbo.s     CPU speed, which is not a UCI command at all
 src/uci/net.s       TCP and UDP sockets, on the network target

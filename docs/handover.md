@@ -33,28 +33,31 @@ work to be useful: the palette, and turbo. The BASIC wedge is complete.
 
 ```
 make lib              GREEN
-make blob             GREEN     5037 bytes, 305 relocations, based at $8000
+make blob             GREEN     6876 bytes, 494 relocations, based at $8000
                                 with its variables at $9F00: file.s overflowed
                                 the old 4K at $C000 by 350 bytes and the link
                                 said so
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make wedge            GREEN     uci.prg 5948 bytes, uci.crt 8272. The wedge
-                                holds 2741 of the 4K at $C000, and the SDK runs
-                                at $A000 under BASIC ROM: 3498 of 8K, reached
-                                through the stubs in src/basic/bank.s
+make wedge            GREEN     uci.prg 6391 bytes, uci.crt 8272. The wedge
+                                holds 2830 of the 4K at $C000 - code, rodata
+                                and its variables - and the SDK runs at $A000
+                                under BASIC ROM: 3876 of 8K, reached through
+                                the stubs in src/basic/bank.s
 make test             GREEN     114 host unit tests + 213 tests across 8 suites
 make basic-run        GREEN     34/34 from the .prg and 34/34 from the .crt, the
                                 same checks typed at a real C64. The cartridge
                                 costs BASIC 8K: 38911 bytes free becomes 30719
-make hardware-run     GREEN     5/5 scenarios on real hardware: 40 checks in
-                                the plain one, 52 with the RAM expansion
-                                switched on and 47 with turbo. The only skips
-                                left are turbo and the REU where their setting
-                                is off, which is what those scenarios exist to
-                                turn on. uci-disabled asserts one clean failure
-                                and reports failed=1 on purpose
+make hardware-run     GREEN     6/6 scenarios on real hardware. The sixth is
+                                reu-size-is-measured, which sets the expansion
+                                to 128 KB, 2 MB and 16 MB in turn and makes the
+                                SDK agree with each. Skips are the socket and
+                                HTTP round trips, which need a peer given to
+                                the build, and turbo or the REU where their
+                                setting is off - which is what those scenarios
+                                exist to turn on. uci-disabled asserts one
+                                clean failure and reports failed=1 on purpose
 make coverage         GREEN     37/101 commands, 0 wrapped-but-untested
 make time-run         n/a       not a test: it times a UCI round trip on the
                                 machine and prints the numbers. A whole-palette

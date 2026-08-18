@@ -114,7 +114,7 @@ make hardware-run GREEN   6/6 scenarios, including the REU size sweep
 make basic-run    GREEN   34/34 from the .prg and 34/34 from the .crt
 make coverage     GREEN   37/101 commands, and 0 wrapped-but-untested
 make blob         GREEN   6876 bytes at $8000, 494 relocations
-make wedge        GREEN   wedge 2741 of the 4K at $C000, SDK 3498 of the 8K at $A000
+make wedge        GREEN   wedge 2830 of the 4K at $C000, SDK 3876 of the 8K at $A000
 ```
 
 Bench machine, settings, and the fixture policy: handover.md §5 and §8. Nothing
