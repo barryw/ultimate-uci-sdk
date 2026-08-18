@@ -281,6 +281,11 @@ generic form only, so issuing it is always deliberate.
 
 ## 7. What to do next
 
+**Loose ends, the turbo question and the boing ball demo are in
+[handover-next.md](handover-next.md).** Read it alongside this file: that one is
+what is left over and what comes next, this one is the state of the SDK.
+
+
 The design is written and agreed: **[docs/superpowers/specs/2026-08-17-uci-everywhere-design.md](superpowers/specs/2026-08-17-uci-everywhere-design.md)**.
 Read it before starting. Phase 1's plan, for the shape a plan should take, is
 [docs/superpowers/plans/2026-08-17-phase1-blob.md](superpowers/plans/2026-08-17-phase1-blob.md).
