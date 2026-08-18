@@ -48,6 +48,12 @@ WEDGE_ARG_SIZE    = 64
 ; ---------------------------------------------------------------------------
 
 wedge_sdk_init:
+        lda #$00                ; UERR and ULEN are readable before the first
+        sta wedge_err           ; command, so they have to mean something
+        sta uci_req + UCI_REQ_DATALEN
+        sta uci_req + UCI_REQ_DATALEN + 1
+        sta uci_req + UCI_REQ_STATUSLEN
+        sta uci_req + UCI_REQ_STATUSLEN + 1
         jmp uci_init
 
 ; ---------------------------------------------------------------------------
@@ -60,11 +66,20 @@ wedge_sdk_init:
 
 wedge_gone:
         jsr CHRGET
+        php                     ; CHRGET's carry is not incidental: GONE3 does
+                                ; `sbc #endtk` with it, so the flag decides
+                                ; which statement the ROM dispatches. A plain
+                                ; CMP here clears it for every token below
+                                ; ours, which shifts the whole table down by
+                                ; one - PRINT becomes PRINT#, and every
+                                ; statement in every program is the wrong one.
         cmp #UCI_TOK_UCI
         beq @ours
+        plp
         jmp NGONE1
 
-@ours:  jsr wedge_do_uci
+@ours:  plp
+        jsr wedge_do_uci
         jmp NEWSTT              ; on to the next statement, ':' or end of line
 
 ; ---------------------------------------------------------------------------
@@ -74,11 +89,14 @@ wedge_gone:
 ; so the interface is usable again from the prompt.
 ; ---------------------------------------------------------------------------
 
+; Entered with TXTPTR on the UCI token itself, which is where IGONE's CHRGET
+; leaves it. Stepping past it here rather than in the caller is what keeps the
+; tests honest: they enter at the same point the interpreter does.
 wedge_do_uci:
         lda #$00
         sta wedge_arglen
 
-        jsr CHRGOT
+        jsr CHRGET              ; past the token, onto the first argument
         bne @args
         jmp uci_abort           ; bare UCI
 
@@ -374,6 +392,8 @@ wedge_eval:
         sta wedge_savptr+1
 
         jsr CHRGET
+        sta wedge_evtok         ; CHRGET clobbers A, and stepping past the
+                                ; token below needs another one
         cmp #UCI_TOK_UERR
         beq @uerr
         cmp #UCI_TOK_UDEV
@@ -393,6 +413,8 @@ wedge_eval:
 
 ; A target constant. Their tokens and their values both run in order, so the
 ; distance from the first is the distance from UCI_TARGET_DOS1.
+        jsr CHRGET
+        lda wedge_evtok
         sec
         sbc #UCI_TOK_UDOS1
         clc
@@ -405,24 +427,33 @@ wedge_eval:
         sta TXTPTR+1
         jmp NEVAL
 
-@uerr:  lda wedge_err
+; Every one of these steps TXTPTR past its own token before returning. CHRGET
+; left it pointing AT the token, and a caller that evaluates a term and then
+; looks at TXTPTR - which is every caller - finds the same token again.
+; PRINT UDOS1 printed 1 for ever on a real machine before these existed.
+@uerr:  jsr CHRGET
+        lda wedge_err
         jmp wedge_ret_byte
 
-@udev:  jsr uci_last_code       ; A = low, X = high
+@udev:  jsr CHRGET
+        jsr uci_last_code       ; A = low, X = high
         tay
         txa
         jmp GIVAYF
 
-@ulen:  ldy uci_req + UCI_REQ_DATALEN
+@ulen:  jsr CHRGET
+        ldy uci_req + UCI_REQ_DATALEN
         lda uci_req + UCI_REQ_DATALEN + 1
         jmp GIVAYF
 
-@usts:  lda uci_req + UCI_REQ_STATUSLEN
+@usts:  jsr CHRGET
+        lda uci_req + UCI_REQ_STATUSLEN
         ldx #<wedge_status
         ldy #>wedge_status
         jmp wedge_ret_string
 
-@udats: lda uci_req + UCI_REQ_DATALEN + 1
+@udats: jsr CHRGET
+        lda uci_req + UCI_REQ_DATALEN + 1
         beq @datlen             ; 256 or more cannot be a BASIC string
         lda #$FF
         bne @datgo              ; always
@@ -502,6 +533,7 @@ wedge_scount:   .byte 0
 wedge_scur:     .byte 0
 wedge_sptr:     .word 0         ; string source across a call that may collect
 wedge_kind:     .byte 0         ; UCI_ARG_* for the argument being parsed
+wedge_evtok:    .byte 0         ; the token IEVAL is looking at
 wedge_shape_t:  .byte 0         ; target the shape is looked up under
 wedge_shape_n:  .byte 0         ; arguments in the shape, 0 when there is none
 wedge_shape_i:  .byte 0         ; which one is next

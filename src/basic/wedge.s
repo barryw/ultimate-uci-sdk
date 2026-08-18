@@ -87,6 +87,10 @@ wedge_install:
 
 wedge_crunch:
         jsr NCRNCH              ; let the ROM tokenise first - see the header
+        sty wedge_romy          ; ...and Y is not scratch: the ROM's caller does
+                                ; `sty count` with it and stores the line by
+                                ; that length. Substitution shortens the line,
+                                ; so what goes back has to be shortened too.
 
         lda #$00
         sta wedge_src
@@ -99,6 +103,27 @@ wedge_crunch:
 
         ldx wedge_dst           ; end of line: terminate the compacted copy
         sta BUF,x               ; A is already zero
+        inx
+        sta BUF,x
+        inx
+        sta BUF,x               ; ...and the null link two bytes on.
+                                ;
+                                ; NEWSTT decides a direct line is finished by
+                                ; reading (TXTPTR)+2 as the next line's link.
+                                ; CRUNCH plants the zero it finds there, but at
+                                ; the offset the line had *before* substitution.
+                                ; Compaction moves the terminator and leaves
+                                ; that zero stranded, so BASIC reads the
+                                ; residue of what was typed, takes it for
+                                ; another line, and runs into it - PRINT UDOS1
+                                ; printed 1 and then ?SYNTAX ERROR IN 49.
+
+        lda wedge_romy          ; the ROM's length, less what was squeezed out
+        sec
+        sbc wedge_src
+        clc
+        adc wedge_dst
+        tay
         rts
 
 @live:  ldy wedge_verbatim      ; inside DATA or REM the ROM stopped tokenising,
@@ -329,3 +354,4 @@ wedge_token:    .byte 0         ; table entry being considered, then the token
 wedge_len:      .byte 0         ; bytes left to compare or print
 wedge_entry:    .byte 0         ; start of the entry being looked at
 wedge_cur:      .byte 0         ; scratch for the 8-bit table arithmetic
+wedge_romy:     .byte 0         ; the line length NCRNCH handed back

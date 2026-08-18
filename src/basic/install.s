@@ -54,13 +54,17 @@ wedge_copy:
 @copied:
         rts
 
-; Display text, not protocol text: this goes to the screen through CHROUT, so
-; the c64 charmap turning it into PETSCII is exactly what is wanted. The rule
-; it looks like it breaks - never put protocol bytes in a string literal - is
-; about bytes that go on the wire.
+; **Written lowercase on purpose. It displays uppercase.**
+;
+; ca65's c64 charmap maps source 'A'-'Z' to PETSCII $C1-$DA and source 'a'-'z'
+; to $41-$5A. CHROUT turns the first range into screen codes $41-$5A, which in
+; the default character set are graphics symbols, and the second into $01-$1A,
+; which are the letters. So "ULTIMATE" prints as a row of glyphs and "ultimate"
+; prints as ULTIMATE. This was found by looking at a real screen; a decoder
+; that maps both ranges back to letters hides it completely.
 wedge_banner:
         .byte $0D
-        .byte "ULTIMATE UCI BASIC WEDGE INSTALLED."
+        .byte "ultimate uci basic wedge installed."
         .byte $0D
-        .byte "VIVA LA COMMODORE!"
+        .byte "viva la commodore!"
         .byte $0D, $00

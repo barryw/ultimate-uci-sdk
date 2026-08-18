@@ -140,7 +140,9 @@ put_hex:
 
         .rodata
 
-msg_title:  .byte "ULTIMATE SDK - IDENTIFY", $0d, $0d, $00
-msg_absent: .byte "NO ULTIMATE FOUND, ERROR $", $00
-msg_failed: .byte "IDENTIFY FAILED, ERROR $", $00
-msg_dos:    .byte "DOS 1: ", $00
+; Lowercase in the source, uppercase on the screen: ca65's c64 charmap sends
+; source 'A'-'Z' to PETSCII $C1-$DA, which CHROUT renders as graphics symbols.
+msg_title:  .byte "ultimate sdk - identify", $0d, $0d, $00
+msg_absent: .byte "no ultimate found, error $", $00
+msg_failed: .byte "identify failed, error $", $00
+msg_dos:    .byte "dos 1: ", $00

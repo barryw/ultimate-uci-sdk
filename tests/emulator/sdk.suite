@@ -679,30 +679,37 @@ suites {
     }
 
     ; These are the SDK's only strings meant for a screen rather than for the
-    ; wire, so they are the only ones that go through ca65's c64 charmap: 'O' is
-    ; $cf here, not ASCII $4f. That is the boundary the SDK draws - display text
-    ; is written as a literal and comes out in PETSCII, anything compared against
-    ; the Ultimate is emitted numerically and never touches the charmap. Asserting
-    ; the PETSCII values is what keeps the two from being mixed up again.
+    ; wire, and they are asserted byte for byte because "it goes through the
+    ; charmap, so PETSCII is what you want" turned out to be half a rule.
+    ;
+    ; ca65's c64 charmap sends source 'A'-'Z' to PETSCII $C1-$DA. CHROUT turns
+    ; those into screen codes $41-$5A, which are graphics symbols - so the error
+    ; strings printed as glyphs on every real machine until a photograph of one
+    ; showed it. Source 'a'-'z' becomes PETSCII $41-$5A and displays as letters,
+    ; which is why the table is written in lowercase and why these assertions
+    ; are on $4x and not $Cx.
+    ;
+    ; The other half of the rule stands unchanged: anything compared against the
+    ; Ultimate is emitted numerically and never goes near the charmap.
     test("sdk-strerror", "every result code has a name, and an unknown one does too") {
       [err_code] = $00
       jsr([t_strerror], stop_on_rts = true, fail_on_brk = true)
-      assert([err_text] == $cf, "'O' of OK, in PETSCII")
-      assert(([err_text] + $01).b == $cb, "'K'")
+      assert([err_text] == $4f, "'O' of OK: PETSCII $41-$5A, which CHROUT")
+      assert(([err_text] + $01).b == $4b, "'K'. $C1-$DA would print as glyphs")
       assert(([err_text] + $02).b == $00, "terminated")
 
       [err_code] = $01
       jsr([t_strerror], stop_on_rts = true, fail_on_brk = true)
-      assert([err_text] == $ce, "'N' of NO ULTIMATE FOUND")
+      assert([err_text] == $4e, "'N' of NO ULTIMATE FOUND")
 
       [err_code] = $02
       jsr([t_strerror], stop_on_rts = true, fail_on_brk = true)
-      assert([err_text] == $d4, "'T' of TIMEOUT")
+      assert([err_text] == $54, "'T' of TIMEOUT")
 
       [err_code] = $c8
       jsr([t_strerror], stop_on_rts = true, fail_on_brk = true)
-      assert([err_text] == $d5, "'U' of UNKNOWN ERROR")
-      assert(([err_text] + $01).b == $ce, "'N'")
+      assert([err_text] == $55, "'U' of UNKNOWN ERROR")
+      assert(([err_text] + $01).b == $4e, "'N'")
     }
   }
 }

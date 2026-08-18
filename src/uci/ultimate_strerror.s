@@ -36,19 +36,26 @@ _ultimate_strerror:
 
 ULT_ERR_COUNT = 10
 
+; **The strings are lowercase in the source and print as uppercase.**
+;
+; ca65's c64 charmap maps source 'A'-'Z' to PETSCII $C1-$DA, and CHROUT turns
+; those into screen codes $41-$5A - which are graphics symbols, not letters. It
+; is source 'a'-'z' that becomes PETSCII $41-$5A and displays as ABC. Written
+; the obvious way, every one of these printed as a row of glyphs on a real
+; machine; the wedge's banner did too, and that is how it was noticed.
 ult_err_table:
         .addr ult_e_ok, ult_e_nodev, ult_e_timeout, ult_e_proto
         .addr ult_e_unsup, ult_e_arg, ult_e_io, ult_e_device
         .addr ult_e_trunc, ult_e_abort, ult_e_unknown
 
-ult_e_ok:      .byte "OK", 0
-ult_e_nodev:   .byte "NO ULTIMATE FOUND", 0
-ult_e_timeout: .byte "TIMEOUT", 0
-ult_e_proto:   .byte "PROTOCOL ERROR", 0
-ult_e_unsup:   .byte "NOT SUPPORTED", 0
-ult_e_arg:     .byte "INVALID ARGUMENT", 0
-ult_e_io:      .byte "I/O ERROR", 0
-ult_e_device:  .byte "DEVICE ERROR", 0
-ult_e_trunc:   .byte "REPLY TRUNCATED", 0
-ult_e_abort:   .byte "ABORTED", 0
-ult_e_unknown: .byte "UNKNOWN ERROR", 0
+ult_e_ok:      .byte "ok", 0
+ult_e_nodev:   .byte "no ultimate found", 0
+ult_e_timeout: .byte "timeout", 0
+ult_e_proto:   .byte "protocol error", 0
+ult_e_unsup:   .byte "not supported", 0
+ult_e_arg:     .byte "invalid argument", 0
+ult_e_io:      .byte "i/o error", 0
+ult_e_device:  .byte "device error", 0
+ult_e_trunc:   .byte "reply truncated", 0
+ult_e_abort:   .byte "aborted", 0
+ult_e_unknown: .byte "unknown error", 0

@@ -39,8 +39,7 @@ RESULT_LEN = 16
 RESULT_MAGIC = b"UCIT"
 RESULT_DONE = 0xA5
 
-SCREEN_ADDR = 0x0400
-SCREEN_LEN = 1000
+from screen import decode_screen, SCREEN_ADDR, SCREEN_LEN  # noqa: E402
 
 # Settings this script drives. Category, item.
 CMD_IF = ("C64 and Cartridge Settings", "Command Interface")
@@ -48,26 +47,6 @@ REU = ("C64 and Cartridge Settings", "RAM Expansion Unit")
 IEC_DRIVE = ("SoftIEC Drive Settings", "IEC Drive")
 
 TARGET_SOFTIEC_BIT = 1 << 5
-
-
-def decode_screen(raw):
-    """C64 screen codes to something printable. Unknown glyphs become '.'."""
-    out = []
-    for row in range(25):
-        line = []
-        for code in raw[row * 40:(row + 1) * 40]:
-            if code == 0x00:
-                line.append("@")
-            elif 0x01 <= code <= 0x1A:
-                line.append(chr(code + 64))
-            elif 0x20 <= code <= 0x3F:
-                line.append(chr(code))
-            else:
-                line.append(".")
-        text = "".join(line).rstrip()
-        if text:
-            out.append(text)
-    return out
 
 
 class Result:

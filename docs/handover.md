@@ -34,7 +34,8 @@ make -C examples/cc65 GREEN
 make hardware         GREEN
 make wedge            GREEN     uci.prg 2940 bytes, uci.crt 8272; the resident
                                 wedge + SDK at $C000 is 3159
-make test             GREEN     97 host unit tests + 115 tests across 8 suites
+make test             GREEN     97 host unit tests + 118 tests across 8 suites
+make basic-run        GREEN     8/8 - the wedge typed at a real C64
 make hardware-run     GREEN     4/4 scenarios on real hardware, 13 checks each
                                 except uci-disabled, which asserts one clean
                                 failure and is meant to report failed=1
@@ -86,6 +87,14 @@ time:
   documented: the error strings in `ultimate_strerror.s` (printed via `CHROUT`,
   where PETSCII is what you want) and the blob's `"UCI"` signature (compared
   only against itself).
+- **Display strings are written lowercase in the source.** ca65's c64 charmap
+  sends source `'A'-'Z'` to PETSCII `$C1-$DA`, and CHROUT renders those as
+  *graphics symbols*. Source `'a'-'z'` becomes PETSCII `$41-$5A` and displays as
+  letters. `ultimate_strerror.s`, `examples/asm/identify.s` and the wedge banner
+  were all written the obvious way and all printed glyphs on a real machine, for
+  as long as they had existed. The handover used to say PETSCII was "what you
+  want" here; that was half a rule, and the half about protocol bytes never
+  touching the charmap is the half that was right.
 - **Argument shapes come from `ARGS` in `tools/gen_protocol.py`, never from a
   comment.** The comments used to carry the shapes in four notations and two of
   them were wrong. Every entry in `ARGS` was read out of the firmware source;

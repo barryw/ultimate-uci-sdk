@@ -314,9 +314,11 @@ suites {
     ; through the wedge's own tokenizer, then TXTPTR is aimed just past the
     ; token and the statement handler is entered as IGONE would enter it.
     ;
-    ; TXTPTR lands on the space after the token rather than on the first
-    ; argument, because CHRGOT skips spaces itself - which is exactly what the
-    ; handler relies on when BASIC calls it for real.
+    ; TXTPTR is left ON the token, which is exactly where IGONE's own CHRGET
+    ; leaves it before it calls the handler. Setting it past the token instead
+    ; looked equivalent and was not: it hid a bug where the handler re-read the
+    ; token and tried to parse it as the target, which only a real machine
+    ; showed.
     ; ----------------------------------------------------------------------
 
     ; UCI 1,1 - IDENTIFY on Ultimate DOS. It cannot fail, so it is the
@@ -334,7 +336,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_err] == $00, "ULTIMATE_OK")
@@ -362,7 +364,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_command] == $f0, "240 is DOS_CMD_ECHO")
@@ -395,7 +397,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_arglen] == $02, "two bytes, not one")
@@ -430,7 +432,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_arglen] == $04, "four bytes")
@@ -461,7 +463,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_arglen] == $02, "two characters, two bytes")
@@ -495,7 +497,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_arglen] == $06, "one byte plus five characters")
@@ -548,7 +550,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_err] == $00, "the command worked")
@@ -575,7 +577,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       $0200 = $d1
@@ -623,7 +625,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_arglen] == $02, "the table said 16 bits, with no UW()")
@@ -650,7 +652,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_arglen] == $04, "four bytes, with no UL()")
@@ -685,7 +687,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_arglen] == $07, "three plus a separator plus three")
@@ -713,7 +715,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_arglen] == $04, "two ignored bytes then the data")
@@ -740,7 +742,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_target] == $02, "sent to target 2")
@@ -768,7 +770,7 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_arglen] == $02, "still two bytes")
@@ -792,11 +794,79 @@ suites {
       $007a = $00
       $007b = $02
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
-      $007a = $01
+      $007a = $00
       $007b = $02
       jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
       assert([wedge_arglen] == $01, "one number, one byte")
       assert([wedge_argbuf] == $07, "as typed")
     }
+
+    ; ----------------------------------------------------------------------
+    ; What the ROM's caller gets back.
+    ;
+    ; CRUNCH does not just leave a tokenised line: it returns its length in Y,
+    ; and main1 does `sty count` and stores the program line by it. A handler
+    ; that treats Y as scratch corrupts every numbered line that is typed,
+    ; while direct mode - which ignores Y - keeps working. That is what these
+    ; pin, and it is what real hardware found: every emulator test above passed
+    ; while typing a program on a real C64 did not work.
+    ; ----------------------------------------------------------------------
+
+    test("crunch-returns-the-length-for-a-line-it-did-not-touch", "an ordinary line is handed back exactly as the ROM would") {
+      $0200 = $50
+      $0201 = $52
+      $0202 = $49
+      $0203 = $4e
+      $0204 = $54
+      $0205 = $20
+      $0206 = $32
+      $0207 = $2b
+      $0208 = $33
+      $0209 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $99, "PRINT survived")
+      assert($0203 == $aa, "and the '+' token")
+      assert(y == $0a, "Y is what NCRNCH alone would have returned")
+    }
+
+    ; The same line through the ROM on its own, so the number above is the
+    ; ROM's and not one this suite invented.
+    test("the-rom-alone-returns-the-same-length", "the control for the assertion above") {
+      $0200 = $50
+      $0201 = $52
+      $0202 = $49
+      $0203 = $4e
+      $0204 = $54
+      $0205 = $20
+      $0206 = $32
+      $0207 = $2b
+      $0208 = $33
+      $0209 = $00
+      $007a = $00
+      $007b = $02
+      jsr($a57c, stop_on_rts = true, fail_on_brk = true)
+      assert(y == $0a, "NCRNCH's own answer")
+    }
+
+    ; A substituted line is shorter, and Y has to shrink by exactly as much or
+    ; the stored line runs past its end.
+    test("crunch-shortens-the-length-when-it-substitutes", "three bytes became one, so Y drops by two") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $31
+      $0207 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $cc, "UCI became one token")
+      assert(y == $0a, "and Y came down from the ROM's $0c")
+    }
+
   }
 }

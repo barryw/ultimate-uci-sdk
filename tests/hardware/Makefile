@@ -27,9 +27,16 @@ run: ucitest.prg
 	@test -n "$(U64_HOST)" || { echo "set U64_HOST=<ip of your Ultimate>"; exit 1; }
 	python3 hwtest.py --host $(U64_HOST) $(HWTEST_ARGS)
 
+# The BASIC wedge, typed at a real C64.
+#   make basic-run U64_HOST=192.168.1.62
+basic-run:
+	@test -n "$(U64_HOST)" || { echo "set U64_HOST=<ip of your Ultimate>"; exit 1; }
+	$(MAKE) -C $(ROOT)/src/basic
+	python3 basictest.py --host $(U64_HOST) $(BASICTEST_ARGS)
+
 clean:
 	rm -f ucitest.prg ucitest.o
 
 FORCE:
 
-.PHONY: all run clean FORCE
+.PHONY: all run basic-run clean FORCE

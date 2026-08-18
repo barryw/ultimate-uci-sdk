@@ -61,6 +61,14 @@ hardware: lib
 hardware-run: lib
 	$(MAKE) -C tests/hardware run U64_HOST=$(U64_HOST)
 
+# The BASIC wedge, typed at a real C64. Separate from hardware-run because it
+# tests the wedge rather than the SDK, and because the wedge's tokeniser can
+# only be reached by typing - which is why four bugs lived through a green
+# emulator suite until this existed.
+#   make basic-run U64_HOST=192.168.1.62
+basic-run: wedge
+	$(MAKE) -C tests/hardware basic-run U64_HOST=$(U64_HOST)
+
 # Regenerate include/uci_protocol.h, bindings/asm/uci_protocol.inc,
 # bindings/asm/uci_argtable.inc, bindings/asm/uci_keywords.inc,
 # bindings/kickass/uci_protocol.asm, bindings/acme/uci_protocol.a and the
