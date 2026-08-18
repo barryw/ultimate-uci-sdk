@@ -160,6 +160,7 @@ $(WEDGE_PRG): FORCE
 # The wedge's symbols, filtered from its link map exactly as the harness's are.
 WEDGE_SYMS := BUF TXTPTR ICRNCH IQPLOP DORES \
               wedge_copy wedge_install wedge_crunch wedge_qplop \
+              wedge_print_keyword wedge_find_keyword wedge_len \
               wedge_src wedge_dst wedge_verbatim
 
 basic.sym: $(WEDGE_PRG)

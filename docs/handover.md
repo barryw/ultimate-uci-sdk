@@ -33,7 +33,7 @@ make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
 make wedge            GREEN     uci.prg, 580 bytes; the wedge itself is 346
-make test             GREEN     86 host unit tests + 94 tests across 8 suites
+make test             GREEN     86 host unit tests + 97 tests across 8 suites
 make hardware-run     GREEN     4/4 scenarios on real hardware, 13 checks each
                                 except uci-disabled, which asserts one clean
                                 failure and is meant to report failed=1
@@ -162,7 +162,7 @@ a message naming the fix unless `tests/emulator/roms` holds `basic.bin` and
 | `absent.suite` | `sim` — nothing at `$DF1B` | failing fast with no Ultimate |
 | `blob.suite` | `u64sim` | the blob through its jump table, no symbols |
 | `blob-relocated.suite` | `u64sim` | the blob moved at run time |
-| `basic.suite` | `sim` **+ real BASIC ROM** | the wedge's tokeniser and LIST |
+| `basic.suite` | `sim` **+ real BASIC ROM** | the wedge's tokeniser and its LIST lookup |
 
 **Most tests need no new assembly.** `harness.s` exports a request block and the
 buffers it points at, so a suite fills the block from the DSL and calls

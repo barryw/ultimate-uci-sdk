@@ -58,6 +58,36 @@ suites {
       assert($0203 == $00, "three letters, not one token")
     }
 
+    ; LIST, the other half of owning a token. BASIC's LIST ends in the
+    ; direct-mode loop rather than returning, and printing needs a screen editor
+    ; this backend does not bring up, so these drive the lookup - the part with
+    ; logic in it - and not the six instructions that hand bytes to OUTDO.
+    test("list-finds-a-keyword-that-lists-as-it-matches", "the common case, one copy of the text") {
+      a = $cc
+      jsr([wedge_find_keyword], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_len] == $03, "UCI is three bytes")
+      assert(a == $55, "starting with 'U'")
+    }
+
+    ; ULEN matches as 'U' $C3 and lists as four letters, so it is the one entry
+    ; carrying a second copy of its text. Returning the match pattern instead
+    ; would put a LEN token on the screen.
+    test("list-finds-a-keyword-whose-forms-differ", "ULEN is not what the wedge matched") {
+      a = $cf
+      jsr([wedge_find_keyword], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_len] == $04, "four letters, not the two bytes it matched")
+      assert(a == $55, "'U'")
+    }
+
+    ; The last entry, so the walk has to step over every other one - including
+    ; the one in the middle that carries an extra field.
+    test("list-finds-the-last-keyword", "the table walk reaches the end") {
+      a = $da
+      jsr([wedge_find_keyword], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_len] == $05, "UHTTP is five bytes")
+      assert(a == $55, "'U'")
+    }
+
     ; The generic statement. Everything else in phase 2 hangs off this token.
     test("tokenize-uci", "UCI becomes one token and the rest of the line survives") {
       $0200 = $55

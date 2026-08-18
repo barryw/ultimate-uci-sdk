@@ -30,6 +30,7 @@
 
         .export wedge_install
         .export wedge_crunch, wedge_qplop, wedge_match
+        .export wedge_print_keyword, wedge_find_keyword, wedge_len
         .export wedge_src, wedge_dst, wedge_verbatim
 
 ; Exported for the test suite, whose memory references take a symbol and not an
@@ -232,6 +233,47 @@ wedge_qplop:
         bmi @rom                        ; prints the byte raw, and so do we
 
         sty LSTPNT                      ; the ROM's own slot for this
+        jsr wedge_print_keyword
+        ldy LSTPNT
+        jmp PLOOP1
+
+@rom:   jmp NQPLOP
+
+; ---------------------------------------------------------------------------
+; wedge_print_keyword - print the name of the token in A, through OUTDO.
+;
+; Its own entry point because BASIC's LIST ends in the direct-mode loop rather
+; than returning, so a test cannot drive LIST to completion and look at the
+; screen afterwards. This is the part with logic in it - finding the entry, and
+; choosing the display text over the match pattern for a keyword like ULEN
+; whose two forms differ.
+; ---------------------------------------------------------------------------
+
+wedge_print_keyword:
+        jsr wedge_find_keyword
+@print: lda uci_keywords,y
+        sty wedge_cur
+        jsr OUTDO
+        ldy wedge_cur
+        iny
+        dec wedge_len
+        bne @print
+        rts
+
+; ---------------------------------------------------------------------------
+; wedge_find_keyword - where is token A's display text?
+;
+; In:  A = the token
+; Out: Y = offset into uci_keywords of its first display byte
+;      wedge_len = how many bytes, A = the first of them
+;
+; Split from the printing because this is the part with logic in it - walking
+; entries of two variable-length pieces, and choosing the display text over the
+; match pattern for the one keyword whose forms differ - and because printing
+; needs a screen editor that the test backend does not bring up.
+; ---------------------------------------------------------------------------
+
+wedge_find_keyword:
         sec
         sbc #UCI_TOK_FIRST
         sta wedge_token
@@ -255,25 +297,15 @@ wedge_qplop:
         beq @aspattern                  ; zero: the pattern is the display text
         sta wedge_len
         iny                             ; -> first display byte
-        bne @print                      ; always
+        bne @ready                      ; always
 
 @aspattern:
         ldy wedge_entry
         iny                             ; -> first pattern byte, wedge_len is
                                         ; already the pattern length
 
-@print: lda uci_keywords,y
-        sty wedge_cur
-        jsr OUTDO
-        ldy wedge_cur
-        iny
-        dec wedge_len
-        bne @print
-
-        ldy LSTPNT
-        jmp PLOOP1
-
-@rom:   jmp NQPLOP
+@ready: lda uci_keywords,y
+        rts
 
 ; ---------------------------------------------------------------------------
 ; State, in RAM beside the code, so the wedge needs no zero page at all.
