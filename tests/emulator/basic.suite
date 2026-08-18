@@ -972,6 +972,40 @@ suites {
       assert($000d == $00, "a number, not a string")
     }
 
+    ; --- UREU ---
+
+    test("tokenize-ureu", "UREU becomes one token") {
+      $0200 = $55                       ; "UREU"
+      $0201 = $52
+      $0202 = $45
+      $0203 = $55
+      $0204 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $e2, "UREU tokenized")
+      assert($0201 == $00, "and the line ends right after it")
+    }
+
+    ; **Zero is the answer here, and it is the right one.** u64sim has plain RAM
+    ; where the REU registers live, so the presence probe passes - two patterns
+    ; written and read back - but no transfer ever reports done, so the size
+    ; probe cannot get a byte in or out and says there is no expansion. That is
+    ; exactly the contract: UREU is 0 when there is nothing usable.
+    ;
+    ; The eight real sizes are proved in tests/hardware, against a machine whose
+    ; expansion is configured from outside and has to agree. A simulator with
+    ; RAM at $DF02 can no more size an REU than detect one; see reu.s.
+    test("ureu-is-zero-without-a-working-expansion", "0 means none, and it is a number") {
+      $0200 = $e2
+      $0201 = $00
+      $007a = $ff
+      $007b = $01
+      jsr([wedge_eval], stop_on_rts = true, fail_on_brk = true)
+      assert($0061 == $00, "FAC1 exponent zero: the value is 0")
+      assert($000d == $00, "a number, not a string")
+    }
+
     ; --- the file keywords ---
     ;
     ; ULOAD, UBLOAD and USAVE do not arrive as the text that was typed. CRUNCH

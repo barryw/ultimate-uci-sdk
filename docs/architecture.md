@@ -108,7 +108,7 @@ whatever thin thing makes the one implementation reachable from that toolchain.
 | cc65 | `bindings/cc65` — compiles the core into `ultimate.lib` | working |
 | KickAssembler, ACME, 64tass | `bindings/blob` — a standalone binary with a jump table, plus generated constant files | working |
 | Oscar64, llvm-mos, KickC | `bindings/blob` — the same, since none of them can link a ca65 object | working |
-| BASIC | `src/basic` — a wedge that owns four RAM vectors and adds 22 keywords | working, `.prg` and `.crt` |
+| BASIC | `src/basic` — a wedge that owns four RAM vectors and adds 23 keywords | working, `.prg` and `.crt` |
 
 None of these contain protocol knowledge. `bindings/asm/ultimate_asm.s` is 30
 lines of `jmp`, and the blob is the library's own object files linked at a base

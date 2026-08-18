@@ -28,7 +28,7 @@ work to be useful: the palette, and turbo. The BASIC wedge is complete.
 | Layer 2 — network, http | **not started** — Phase 4 |
 | Layer 3 — ca65 / cc65 bindings | working |
 | Layer 3 — the blob (any toolchain, no linking) | **working** — Phase 1, done |
-| Layer 3 — BASIC wedge | **Phase 3 complete** — `.prg` and `.crt`, 49 tests, 22 keywords |
+| Layer 3 — BASIC wedge | **Phase 3 complete** — `.prg` and `.crt`, 51 tests, 23 keywords |
 | Layer 3 — Oscar64, llvm-mos, KickC | not started; the blob is now their route in |
 
 ```
@@ -44,8 +44,8 @@ make wedge            GREEN     uci.prg 5948 bytes, uci.crt 8272. The wedge
                                 holds 2741 of the 4K at $C000, and the SDK runs
                                 at $A000 under BASIC ROM: 3498 of 8K, reached
                                 through the stubs in src/basic/bank.s
-make test             GREEN     114 host unit tests + 211 tests across 8 suites
-make basic-run        GREEN     32/32 from the .prg and 32/32 from the .crt, the
+make test             GREEN     114 host unit tests + 213 tests across 8 suites
+make basic-run        GREEN     34/34 from the .prg and 34/34 from the .crt, the
                                 same checks typed at a real C64. The cartridge
                                 costs BASIC 8K: 38911 bytes free becomes 30719
 make hardware-run     GREEN     5/5 scenarios on real hardware: 40 checks in

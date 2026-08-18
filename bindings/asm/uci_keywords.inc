@@ -21,8 +21,8 @@
 ; SPDX-License-Identifier: MIT
 
 UCI_TOK_FIRST  = $CC
-UCI_TOK_LAST   = $E1
-UCI_TOK_COUNT  = 22
+UCI_TOK_LAST   = $E2
+UCI_TOK_COUNT  = 23
 
 UCI_TOK_UCI    = $CC   ; statement
 UCI_TOK_UERR   = $CD   ; function
@@ -46,6 +46,7 @@ UCI_TOK_USAVE  = $DE   ; statement
 UCI_TOK_UDIR   = $DF   ; statement
 UCI_TOK_USTASH = $E0   ; statement
 UCI_TOK_UFETCH = $E1   ; statement
+UCI_TOK_UREU   = $E2   ; function
 
 ; Target constants, in table order, for the constant handler.
 UCI_KWVAL_UDOS1  = $01
@@ -121,6 +122,9 @@ uci_keywords:
         .byte 0
         ; $E1 UFETCH
         .byte 6, $55, $46, $45, $54, $43, $48
+        .byte 0
+        ; $E2 UREU
+        .byte 4, $55, $52, $45, $55
         .byte 0
         .byte 0                 ; end of table
 

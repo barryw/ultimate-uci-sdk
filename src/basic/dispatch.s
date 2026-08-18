@@ -30,7 +30,7 @@
         .import bank_uci_last_code, bank_turbo_set, bank_turbo_get
         .import bank_load, bank_bload, bank_save
         .import bank_opendir, bank_readdir
-        .import bank_reu_stash, bank_reu_fetch
+        .import bank_reu_stash, bank_reu_fetch, bank_reu_size
 
 ; The services take their wider arguments in the SDK's shared variable block.
 ; It is BSS at $C000 - RAM whatever $01 says - so the wedge writes it directly
@@ -726,6 +726,10 @@ wedge_eval:
         beq @ubyte
         cmp #UCI_TOK_UTURBO
         beq @uturbo
+        cmp #UCI_TOK_UREU
+        bne @not_ureu
+        jmp @ureu               ; trampoline: the handler is out of branch range
+@not_ureu:
         cmp #UCI_TOK_UDOS1
         bcc @rom
         cmp #UCI_TOK_UHTTP+1
@@ -810,6 +814,22 @@ wedge_eval:
         jmp wedge_ret_byte
 @past:  lda #$00
         jmp wedge_ret_byte
+
+; UREU - the expansion's size in 64K banks, and zero when there is none. One
+; question answers both "is there one" and "how much":
+;
+;     IF UREU = 0 THEN PRINT "NO EXPANSION": END
+;     PRINT "REU IS"; UREU * 64; "K"
+;
+; Banks rather than bytes because 16 MB is 16777216, and BASIC's floats would
+; carry that but a program doing arithmetic on it would not thank us. 256 is
+; easier to reason about, and multiplying by 64 gives kilobytes.
+@ureu:  jsr CHRGET
+        jsr bank_reu_size            ; A = low, X = high
+        tay
+        txa
+        jmp GIVAYF
+
 
 ; ---------------------------------------------------------------------------
 ; Returning values to BASIC.

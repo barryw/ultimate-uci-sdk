@@ -25,6 +25,7 @@ class TestTokenAssignment(unittest.TestCase):
         "UTURBO": 0xDB,
         "ULOAD": 0xDC, "UBLOAD": 0xDD, "USAVE": 0xDE, "UDIR": 0xDF,
         "USTASH": 0xE0, "UFETCH": 0xE1,
+        "UREU": 0xE2,
     }
 
     def test_tokens_have_not_moved(self):

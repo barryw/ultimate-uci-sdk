@@ -7,7 +7,7 @@ recent work and the order of what is next. This one is what was left over from
 Phase 2 and what the next interesting thing looks like.
 
 Phases 1, 2 and 3 are done and proven on hardware. `make basic-run` types at a
-real C64 and passes 32/32 from the `.prg` and 32/32 from the `.crt`.
+real C64 and passes 34/34 from the `.prg` and 34/34 from the `.crt`.
 
 ---
 

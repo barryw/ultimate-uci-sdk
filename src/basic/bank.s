@@ -39,14 +39,14 @@
         .import ultimate_turbo_set, ultimate_turbo_get
         .import ultimate_load, ultimate_bload, ultimate_save
         .import ultimate_opendir, ultimate_readdir
-        .import ultimate_reu_stash, ultimate_reu_fetch
+        .import ultimate_reu_stash, ultimate_reu_fetch, ultimate_reu_size
 
         .export bank_uci_init, bank_uci_exec, bank_uci_abort
         .export bank_uci_last_code
         .export bank_turbo_set, bank_turbo_get
         .export bank_load, bank_bload, bank_save
         .export bank_opendir, bank_readdir
-        .export bank_reu_stash, bank_reu_fetch
+        .export bank_reu_stash, bank_reu_fetch, bank_reu_size
 
 ; $37 is the machine as BASIC left it: BASIC ROM, KERNAL and I/O all mapped.
 ; $36 is the same with BASIC ROM swapped for the RAM underneath it.
@@ -107,3 +107,8 @@ bank_reu_stash:
 
 bank_reu_fetch:
         banked ultimate_reu_fetch
+
+; The only banked call that answers with sixteen bits. It works because the
+; macro restores the ROM through Y, so A and X both survive the trip back.
+bank_reu_size:
+        banked ultimate_reu_size

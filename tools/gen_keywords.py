@@ -76,6 +76,9 @@ KEYWORDS = [
                           "into the RAM expansion"),
     ("UFETCH", STATEMENT, "UFETCH address, reu address, length - and back "
                           "out of it"),
+    ("UREU",   FUNCTION,  "size of the RAM expansion in 64K banks, 0 when "
+                          "there is none - so it answers 'is there one' and "
+                          "'how much' in a single question"),
 ]
 
 # Constants resolve to a protocol value rather than to a handler.

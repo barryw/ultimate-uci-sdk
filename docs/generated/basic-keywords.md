@@ -36,5 +36,6 @@ crunched form; `LIST` prints the name.
 | `$DF` | `UDIR` | statement | same | UDIR - the current directory, printed |
 | `$E0` | `USTASH` | statement | same | USTASH address, reu address, length - C64 memory into the RAM expansion |
 | `$E1` | `UFETCH` | statement | same | UFETCH address, reu address, length - and back out of it |
+| `$E2` | `UREU` | function | same | size of the RAM expansion in 64K banks, 0 when there is none - so it answers 'is there one' and 'how much' in a single question |
 
-`$E2`-`$FE` remain free; `$FF` is pi and can never be claimed.
+`$E3`-`$FE` remain free; `$FF` is pi and can never be claimed.

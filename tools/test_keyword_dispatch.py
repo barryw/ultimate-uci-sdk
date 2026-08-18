@@ -113,7 +113,11 @@ def comparisons(lines, tokens):
             continue
 
         branch = branch_after(lines, index)
-        if branch == "beq":
+        if branch in ("beq", "bne"):
+            # `beq handler` is the obvious form. `bne skip` is the same claim
+            # made backwards, and it is what a handler out of branch range
+            # forces: cmp, bne past a jmp, jmp to the handler. Both mean the
+            # token is compared and acted on, which is the whole question here.
             exact.add(value)
         elif branch in ("bcc", "bcs"):
             low = value

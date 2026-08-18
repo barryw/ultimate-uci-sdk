@@ -158,7 +158,7 @@ Full example: [examples/cc65/identify.c](examples/cc65/identify.c).
 
 ## From BASIC
 
-`LOAD "UCI",8` then `RUN` installs a wedge that adds 22 keywords to BASIC V2 and
+`LOAD "UCI",8` then `RUN` installs a wedge that adds 23 keywords to BASIC V2 and
 gives the whole 38K back. There is a cartridge build too, which survives a
 reset and costs BASIC 8K while it is in.
 
@@ -265,7 +265,7 @@ make test         # sim6502 in Docker: the assembled SDK, against a simulated Ul
 make -C tests/hardware && copy ucitest.prg to your Ultimate    # the real thing, TAP output
 ```
 
-Current results: **114 host unit tests, 211 emulator tests and 5/5 hardware
+Current results: **114 host unit tests, 213 emulator tests and 6/6 hardware
 scenarios, all passing** — the last of those on an Ultimate 64 Elite running
 firmware 3.15, where the BASIC wedge is also typed at the machine line by line
 and checked on the screen.

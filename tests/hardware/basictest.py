@@ -53,6 +53,11 @@ TURBO = ("U64 Specific Settings", "Turbo Control")
 # this script's own from the moment it appears, and the setting goes back
 # afterwards with the others.
 REU = ("C64 and Cartridge Settings", "RAM Expansion Unit")
+# UREU measures the expansion rather than being told its size, so the size is
+# pinned here and the machine has to agree. 2 MB is 32 banks of 64K.
+REU_SIZE = ("C64 and Cartridge Settings", "REU Size")
+REU_SIZE_WANT = "2 MB"
+REU_BANKS_WANT = 32
 
 BASIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "..", "..", "src", "basic")
@@ -125,6 +130,17 @@ CHECKS = [
     # The RAM expansion, typed. The C side of this is proved in ucitest.c; this
     # is the same DMA through the wedge, which is the promise the SDK is built
     # on - one operation, one call, from all three languages.
+    # UREU is the only REU keyword that asks a question rather than moving
+    # bytes, and it is how a BASIC program discovers there is an expansion at
+    # all: zero means none, so one test covers both.
+    ("PRINT UREU", " 32",
+     "the expansion measures 32 banks, which is the 2 MB the harness set - and "
+     "the C64 worked that out for itself, because no command reports it"),
+
+    ("PRINT UREU*64", " 2048",
+     "banks times 64 is kilobytes, which is why the unit is banks: 16 MB would "
+     "be 256 here and 65536 as pages, and only one of those fits a word"),
+
     ("USTASH 51968,0,16", "READY.",
      "sixteen bytes of C64 memory into the expansion"),
 
@@ -204,7 +220,8 @@ def run(host, port, verbose, as_crt):
 
     changed = require_settings(u, {CMD_IF: "Enabled",
                                    TURBO: "U64 Turbo Registers",
-                                   REU: "Enabled"})
+                                   REU: "Enabled",
+                                   REU_SIZE: REU_SIZE_WANT})
     if changed:
         print("# saved settings: %s"
               % ", ".join("%s=%s" % (k[1], v) for k, v in changed.items()))
