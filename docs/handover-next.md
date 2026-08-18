@@ -80,40 +80,74 @@ throughout, because the SDK is never called by BASIC ROM. The wedge keeps
 
 ---
 
-## 2. Turbo: what is actually there
+## 2. Turbo: the registers, and what is half-built
 
-**There is no UCI command for CPU speed.** The control target's full command set
-is in `docs/generated/protocol-constants.md` and nothing in it touches speed.
-Confirmed against the firmware, not inferred.
+**There is no UCI command for CPU speed** - the control target's full command
+set is in `docs/generated/protocol-constants.md` and nothing in it touches
+speed. Confirmed against the firmware, not inferred.
 
-What exists instead:
+Turbo is plain memory-mapped I/O instead, documented at
+<https://1541u-documentation.readthedocs.io/en/latest/config/turbo_mode.html>:
 
-- The U64 has turbo hardware. `software/u64/u64_config.cc` offers speeds up to
-  **48× on the U64 and 64× on the U64-II**.
-- It is gated by a setting, `Turbo Settings → Turbo Control`, whose options are
-  `Off`, `Manual`, `U64 Turbo Registers`, `TurboEnable Bit`. Only some of those
-  let a running C64 program change its own speed.
-- The firmware side is `C64_TURBOREGS_EN` and `C64_SPEED_PREFER`.
+| Register | | |
+|---|---|---|
+| `$D031` | R/W | bits 0-3 speed index, bit 7 badlines off (0 = badlines on) |
+| `$D030` | R/W | bit 0, in `Turbo Enable Bit` mode only. Write 1 to use the menu settings; read tells you whether turbo is on |
+| `$D07A` / `$D07B` | W | SuperCPU-style normal / turbo speed select |
+| `$D0BC` | R | SuperCPU detect, needs its own enable |
 
-**Unknown, and deliberately not guessed:** the address a C64 program writes to
-set the speed when `U64 Turbo Registers` is selected. The config plumbing was
-found; the C64-visible register was not. Look in the FPGA sources or the U64
-manual before writing a line of demo code that depends on it.
+Three facts that shape the API:
 
-Three ways forward, in increasing order of effort:
+- **Both registers read `$FF` when turbo is unavailable**, which makes
+  availability testable rather than assumed. Availability means the Ultimate's
+  `Turbo Control` setting is `U64 Turbo Registers` or `Turbo Enable Bit` - a
+  program cannot set that itself, so a demo shipping to other people must cope
+  with turbo simply not being there.
+- **The speed index is not portable above 4 MHz.** The U64's table is
+  1,2,3,4,5,6,8..48 and the U64-II's is 1,2,3,4,6,8..64, so index 4 is 5 MHz on
+  one machine and 6 MHz on the other. Only indices 0-3 mean the same thing on
+  both.
+- **Bit 7 disables badlines**, which is a real speed win for a demo and is worth
+  exposing rather than hiding.
 
-1. **Require the setting.** The demo documents that `Turbo Control` must be set,
-   and pokes the register directly. No SDK change; the SDK's rule that services
-   never touch hardware would make this demo code, not SDK code — the same
-   exception `reu.s` gets in Phase 3.
-2. **Add a UCI control command upstream.** Exactly the shape of the palette PR:
-   a new command on target `$04` that sets speed, so a program can ask for turbo
-   without the user having pre-configured anything. This is the clean answer and
-   it is a firmware PR, not an SDK one.
-3. **Do not use turbo.** A boing ball is comfortably achievable at 1MHz with
-   sprite multiplexing. Turbo buys resolution, not feasibility.
+### Done already
 
----
+The constants are generated for C, ca65, KickAssembler and ACME, in a group
+that says plainly it is not UCI: `U64_REG_TURBO`, `U64_REG_TURBO_ENABLE`,
+`U64_TURBO_SPEED_MASK`, `U64_TURBO_NO_BADLINES`, `U64_TURBO_UNAVAILABLE`, and
+`U64_SPEED_1MHZ`..`U64_SPEED_4MHZ` plus `U64_SPEED_MAX`. Nothing yet writes to
+any of them.
+
+### Still to build
+
+`src/uci/turbo.s`, the documented sibling of Phase 3's `reu.s`: the only other
+module allowed to touch hardware directly, for the same reason - there is no UCI
+command for it. It belongs in the design's exception list with that
+justification, and the rule it looks like it breaks stays intact, because the
+rule is about services not reimplementing the *transport*.
+
+Proposed shape, roughly 40 bytes:
+
+| | |
+|---|---|
+| `ultimate_turbo_available` | A = 1 or 0, from `$D031` reading `$FF` |
+| `ultimate_turbo_set` | A = speed index 0-15, masked to bits 0-3, bit 7 preserved |
+| `ultimate_turbo_get` | A = current index; carry set when unavailable |
+| `ultimate_turbo_badlines` | A = 0 to stop the VIC stealing cycles, non-zero to restore |
+
+Then the three exposures, in the order they are worth doing:
+
+1. **C**, through the existing cc65 binding, so it links only if referenced.
+2. **BASIC**, one appended keyword: `UTURBO 8` as a statement and `UTURBO` as a
+   function returning the current index, sharing one token exactly as `UCI`
+   does. Remember `gen_keywords.py` is append-only - a token is a file format.
+3. **The blob**, appended to the jump table, never reordered.
+
+**The test that matters is on hardware.** Setting a register proves nothing;
+time a loop against the raster before and after and assert it actually got
+faster. `tests/hardware/basictest.py` is the place - it already types at the
+machine and reads memory back, and `tools/u64_settings.py` can set
+`Turbo Control` for the duration and put it back.
 
 ## 3. The boing ball
 
@@ -196,7 +230,8 @@ buys — do it last.
 2. Measure a UCI round trip in frames. One number, and it decides the demo's
    whole shape.
 3. Wrap the palette commands and add `make coverage` entries.
-4. Find the turbo register, or decide the demo does not need it.
+4. Build `turbo.s` and its three exposures. The registers are known now; what
+   is left is the module, and proving on hardware that the speed really changes.
 5. Phase 3 proper: `dos.s`, `file.s`, the SoftwareIEC fast path, `reu.s`, and
    `ULOAD`/`USAVE`/`UDIR` in all three languages at once.
 

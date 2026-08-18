@@ -285,6 +285,31 @@
 .label HTTP_TYPE_OBJECT           = $04  // <count> [<key> <value>]*
 .label HTTP_TYPE_ARRAY            = $05  // <count> [<value>]*
 
+// ---- Ultimate 64 turbo control (NOT UCI) ----
+// The one part of the machine the SDK reaches without the command
+// interface, because there is no UCI command for CPU speed. Plain memory-
+// mapped registers, documented at 1541u-documentation.readthedocs.io. They
+// answer $FF unless the Ultimate's 'Turbo Control' setting is 'U64 Turbo
+// Registers' or 'Turbo Enable Bit', which is what makes availability
+// testable rather than assumed.
+.label U64_REG_TURBO              = $D031  // R/W  bits 0-3 speed index, bit 7 badlines off
+.label U64_REG_TURBO_ENABLE       = $D030  // R/W  bit 0, in 'Turbo Enable Bit' mode only
+.label U64_TURBO_SPEED_MASK       = $0F  // speed index field of U64_REG_TURBO
+.label U64_TURBO_NO_BADLINES      = $80  // set to stop the VIC stealing cycles
+.label U64_TURBO_UNAVAILABLE      = $FF  // what both registers read when turbo is off in config
+
+// ---- Ultimate 64 speed indices ----
+// Index into the machine's speed table. **Only these four mean the same
+// thing on both machines.** The U64 runs 1,2,3,4,5,6,8..48 MHz and the
+// U64-II runs 1,2,3,4,6,8..64, so index 4 is 5 MHz on one and 6 MHz on the
+// other. Above 4 MHz, ask for an index and you get whatever that machine's
+// table says.
+.label U64_SPEED_1MHZ             = $00  // stock C64 speed, and what turbo_off restores
+.label U64_SPEED_2MHZ             = $01
+.label U64_SPEED_3MHZ             = $02
+.label U64_SPEED_4MHZ             = $03  // the fastest index that means the same on both
+.label U64_SPEED_MAX              = $0F  // whatever the machine's top speed is: 48 or 64 MHz
+
 // ---- SDK status / error codes ----
 // Stable across firmware versions. The raw device status is preserved
 // separately, see uci_last_device_code().
