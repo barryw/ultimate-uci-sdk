@@ -1,8 +1,9 @@
 # Handover: loose ends, and the boing ball
 
-Written to be picked up cold, alongside [handover.md](handover.md). That file is
-the state of the SDK; this one is what is left over from Phase 2 and what the
-next interesting thing looks like.
+Written to be picked up cold, alongside [handover.md](handover.md), which is the
+state of the SDK, and [handover-phase3.md](handover-phase3.md), which is where
+Phase 3 stands and what to do next. This one is what was left over from Phase 2
+and what the next interesting thing looks like.
 
 Phases 1 and 2 are done and proven on hardware. `make basic-run` types at a real
 C64 and passes 13/13 from the `.prg` and 13/13 from the `.crt`.

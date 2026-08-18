@@ -353,9 +353,11 @@ generic form only, so issuing it is always deliberate.
 
 ## 7. What to do next
 
-**Loose ends, the turbo question and the boing ball demo are in
-[handover-next.md](handover-next.md).** Read it alongside this file: that one is
-what is left over and what comes next, this one is the state of the SDK.
+**Three files, and they do different jobs.** This one is the state of the SDK
+and the traps that have already cost debugging time.
+[handover-phase3.md](handover-phase3.md) is where Phase 3 stands and what to do
+next — start there. [handover-next.md](handover-next.md) is the loose ends, the
+turbo measurements and the boing ball.
 
 
 The design is written and agreed: **[docs/superpowers/specs/2026-08-17-uci-everywhere-design.md](superpowers/specs/2026-08-17-uci-everywhere-design.md)**.
