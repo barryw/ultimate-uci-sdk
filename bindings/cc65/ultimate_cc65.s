@@ -15,7 +15,10 @@
         .include "uci_zp.inc"
 
         .import uci_decode, uci_dec_target, uci_dec_ptr, uci_dec_len
-        .importzp c_sp
+; cc65 renamed its software stack pointer to `c_sp` after 2.18 and kept `sp`
+; working in both. Ubuntu ships 2.18, which is what CI builds with, so `sp` is
+; the spelling that links on either - deliberate rather than dated.
+        .importzp sp
         .import incsp3
 
         .export _uci_decode_status
@@ -29,13 +32,13 @@ _uci_decode_status:
         sta uci_dec_len         ; a status longer than 255 bytes cannot exist:
                                 ; the queue is 256 and only the prefix matters
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta uci_dec_ptr
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta uci_dec_ptr + 1
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta uci_dec_target
 
         jsr incsp3
@@ -91,15 +94,15 @@ _ultimate_identify:
         sta ult_outlen
         stx ult_outlen + 1
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen + 1
         iny
         jsr cc_ptr_at_y
         iny
-        lda (c_sp),y
+        lda (sp),y
         pha                     ; target
         jsr incsp5
         pla
@@ -114,10 +117,10 @@ _ultimate_get_model:
         sta ult_outlen
         stx ult_outlen + 1
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen + 1
         iny
         jsr cc_ptr_at_y
@@ -136,13 +139,13 @@ _ultimate_get_model:
 _ultimate_palette_set_color:
         sta ult_color + 3       ; b
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_color + 2       ; g
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_color + 1       ; r
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_color           ; index
         jsr incsp3
         jsr ultimate_palette_set_color
@@ -162,10 +165,10 @@ cc_buf_len_out:
         sta ult_outlen
         stx ult_outlen + 1
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen + 1
         iny
         jsr cc_ptr_at_y
@@ -285,10 +288,10 @@ cc_name_addr_max:
         sta ult_max
         stx ult_max + 1
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_addr
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_addr + 1
         iny
         jsr cc_ptr_at_y
@@ -299,14 +302,14 @@ cc_name_only:
         jsr cc_ptr_at_y
         jmp incsp2
 
-; The two bytes at (c_sp),y into ult_buf. Seven of the unpackers here do exactly
+; The two bytes at (sp),y into ult_buf. Seven of the unpackers here do exactly
 ; this, at four different stack offsets, so the offset stays the caller's
 ; business in Y and the copy is written once.
 cc_ptr_at_y:
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buf
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buf + 1
         rts
 
@@ -335,22 +338,22 @@ cc_reu_dma:
         sta ult_reulen + 2
         sta ult_reulen + 3
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_reu
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_reu + 1
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_reu + 2
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_reu + 3
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_addr
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_addr + 1
         jmp incsp6
 
@@ -375,16 +378,16 @@ cc_reu_file:
         lda sreg + 1
         sta ult_reulen + 3
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_reu
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_reu + 1
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_reu + 2
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_reu + 3
         jmp incsp4
 
@@ -430,7 +433,7 @@ cc_iface_buf:
         sta ult_buf
         stx ult_buf + 1
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_iface
         jmp incsp1
 
@@ -453,10 +456,10 @@ _ultimate_net_udp:
 cc_host_port:
         jsr cc_hold_out
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_port
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_port + 1
         iny
         jsr cc_ptr_at_y
@@ -474,10 +477,10 @@ cc_host_port:
 _ultimate_net_read:
         jsr cc_hold_out
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_socklen
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_socklen + 1
         iny
         jsr cc_sock_buf
@@ -487,10 +490,10 @@ _ultimate_net_read:
 _ultimate_net_write:
         jsr cc_hold_out
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen + 1
         iny
         jsr cc_sock_buf
@@ -501,7 +504,7 @@ _ultimate_net_write:
 cc_sock_buf:
         jsr cc_ptr_at_y
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_sock
         jmp incsp5
 
@@ -562,10 +565,10 @@ cc_out_ptr:
 _ultimate_http_get:
         jsr cc_hold_out
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen + 1
         iny
         jsr cc_ptr_at_y                 ; buf -> ult_buf
@@ -583,18 +586,18 @@ _ultimate_http_get:
 _ultimate_http_exchange:
         jsr cc_hold_out
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_buflen + 1
         iny
         jsr cc_ptr_at_y                 ; buf -> ult_buf
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_body
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_http
         jsr incsp6
         jsr ultimate_http_exchange
@@ -608,7 +611,7 @@ _ultimate_http_open:
         ldy #$00
         jsr cc_url_at_y
         iny
-        lda (c_sp),y
+        lda (sp),y
         pha                             ; the verb, past the stack adjustment
         jsr incsp3
         pla
@@ -623,20 +626,20 @@ _ultimate_http_header:
         sta ult_url
         stx ult_url + 1
         ldy #$00
-        lda (c_sp),y
+        lda (sp),y
         sta ult_http
         jsr incsp1
         jsr ultimate_http_header
         ldx #$00
         rts
 
-; The two bytes at (c_sp),y into ult_url, which is cc_ptr_at_y for the other
+; The two bytes at (sp),y into ult_url, which is cc_ptr_at_y for the other
 ; pointer this layer passes.
 cc_url_at_y:
-        lda (c_sp),y
+        lda (sp),y
         sta ult_url
         iny
-        lda (c_sp),y
+        lda (sp),y
         sta ult_url + 1
         rts
 

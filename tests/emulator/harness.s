@@ -26,7 +26,7 @@
         .import _ultimate_detect
         .import _ultimate_identify
         .import pusha, pushax
-        .importzp c_sp
+        .importzp sp
 
         ; --- assembly ABI, called directly ---
         .import uci_exec
@@ -205,9 +205,9 @@ req_statuslen   = req + UCI_REQ_STATUSLEN
 ; valid C stack pointer. Call it once, from each test.
 boot:
         lda #<STACK_TOP
-        sta c_sp
+        sta sp
         lda #>STACK_TOP
-        sta c_sp + 1
+        sta sp + 1
         rts
 
 ; The opposite of boot: leave the cc65 software stack pointer null, so that
@@ -217,8 +217,8 @@ boot:
 ; asserted.
 t_break_cstack:
         lda #$00
-        sta c_sp
-        sta c_sp + 1
+        sta sp
+        sta sp + 1
         rts
 
 ; Nothing to do when run as a program; the suite calls the entry points below.
