@@ -88,5 +88,64 @@ suites {
       assert($8151 == $01, "target byte")
       assert($8152 == $f0, "command byte")
     }
+
+    ; The parameter-block entries. A blob caller cannot pass a filename in A/X,
+    ; so these read the page at $8100 and write their answer back into it -
+    ; which is also the only calling convention a BASIC program with POKE and
+    ; SYS can express. The offsets are literals here for the same reason the
+    ; jump table's are: they are the contract.
+    test("blob-load-through-the-parameter-block", "a file, named in the block and loaded by it") {
+      jsr($8004, stop_on_rts = true, fail_on_brk = true)
+      assert(a == $00, "init")
+
+      ; bp_name at +$29: "big.bin", NUL terminated.
+      $8129 = $62
+      $812a = $69
+      $812b = $67
+      $812c = $2e
+      $812d = $62
+      $812e = $69
+      $812f = $6e
+      $8130 = $00
+
+      $8103 = $00               ; bp_addr = $4000, well clear of the blob
+      $8104 = $40
+      $8105 = $00               ; bp_len: no limit, since load takes the
+      $8106 = $00               ; length from the file
+      $8100 = $ff               ; bp_result, so a call that never ran shows
+
+      $4000 = $ff
+      jsr($806d, stop_on_rts = true, fail_on_brk = true)
+      assert($8100 == $00, "bp_result is ULTIMATE_OK")
+      assert($8107.w == $4256, "bp_end: 598 bytes, 600 less the PRG header")
+      assert($4000 == $02, "and the header was consumed, not stored")
+    }
+
+    test("blob-reu-through-the-parameter-block", "the expansion's two numbers, out of the block") {
+      $df00 = $40               ; REU_STAT_DONE: the sim has RAM here, not a REU
+
+      $8103 = $00               ; bp_addr = $4000
+      $8104 = $40
+      ; bp_reu is at +$156 of the block and the block is at $8100, so $8256 -
+      ; the reply buffer above it is a page long and the offsets carry.
+      $8256 = $45               ; bp_reu = $012345
+      $8257 = $23
+      $8258 = $01
+      $8259 = $00
+      $825a = $00               ; bp_reulen = 256
+      $825b = $01
+      $825c = $00
+      $825d = $00
+      $8100 = $ff
+
+      jsr($8079, stop_on_rts = true, fail_on_brk = true)
+      assert($8100 == $00, "bp_result is ULTIMATE_OK")
+      assert($df02 == $00, "C64 address low")
+      assert($df03 == $40, "...and high")
+      assert($df04 == $45, "REU address low")
+      assert($df06 == $01, "...and its third byte")
+      assert($df08 == $01, "length high: 256")
+      assert($df01 == $90, "EXECUTE and NOW, mode 00: C64 to REU")
+    }
   }
 }
