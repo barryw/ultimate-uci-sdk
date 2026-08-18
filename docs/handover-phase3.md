@@ -1,208 +1,179 @@
-# Handover: Phase 3, in progress
+# Handover: Phase 3, complete
 
 Written to be picked up cold, alongside [handover.md](handover.md) and
 [handover-next.md](handover-next.md). That first one is the state of the SDK and
 the traps that have already cost debugging time; the second is the loose ends
-and the boing ball. This one is Phase 3: what is built, what is not, and the
-things this session found out the hard way.
+and the boing ball. This one is Phase 3: what it delivered, what it found out,
+and what the next person should not have to rediscover.
 
-**Verify with `git log` rather than trusting the counts here.** As of writing,
-HEAD is `96a20ea` and the last eight commits are the whole of this session.
+**Verify with `git log` rather than trusting the counts here.**
 
 ---
 
-## 1. Where Phase 3 stands
+## 1. Where Phase 3 stands: done
 
 | | |
 |---|---|
-| `dos.s` — chdir, getpath, opendir, readdir, open, close, read, write, seek | **done**, `7c415db` |
-| `file.s` — load, bload, save, last_end, with the SoftwareIEC fast path | **done**, `96a20ea` |
-| the `$A000` move — SDK under BASIC ROM, wedge keeps `$C000` | **done**, `33ebb01` |
-| `reu.s` — RAM to REU over `$DF00-$DF0A` | **not started** |
-| BASIC keywords — `ULOAD` `UBLOAD` `USAVE` `UDIR` `USTASH` `UFETCH` | **not started** |
+| `dos.s` — chdir, getpath, opendir, readdir, open, close, read, write, seek, delete | **done** |
+| `file.s` — load, bload, save, last_end, with the SoftwareIEC fast path | **done** |
+| the `$A000` move — SDK under BASIC ROM, wedge keeps `$C000` | **done** |
+| `reu.s` — RAM to REU over `$DF00-$DF0A`, and the DOS REU pair | **done** |
+| BASIC keywords — `ULOAD` `UBLOAD` `USAVE` `UDIR` `USTASH` `UFETCH` | **done** |
+| the blob's jump table — the same services, from a parameter block | **done** |
 | network, http services | not started, and not needed: the generic form reaches them |
 
 ```
-make test         GREEN   100 host unit tests + 155 across 8 suites
-make hardware-run GREEN   5/5 scenarios, 27 checks in the enabled ones
-make basic-run    GREEN   13/13 from the .prg and 13/13 from the .crt
-make coverage     GREEN   but see §2.1 - it is green for the wrong reason now
-make blob         GREEN   4560 bytes at $8000, variables at $9F00
-make wedge        GREEN   wedge 2090 of the 4K at $C000, SDK 1595 of the 8K at $A000
+make test         GREEN   104 host unit tests + 182 across 8 suites
+make hardware-run GREEN   5/5 scenarios on the bench machine
+make basic-run    GREEN   25/25 from the .prg and 25/25 from the .crt
+make coverage     GREEN   24/101 commands, and 0 wrapped-but-untested
+make blob         GREEN   5078 bytes at $8000, 287 relocations
+make wedge        GREEN   wedge 2741 of the 4K at $C000, SDK 3533 of the 8K at $A000
 ```
 
-## 2. What to do next, in order
+**The promise the SDK was built to prove now holds end to end.** The same
+operation reaches the Ultimate from assembly, from C and from BASIC, over the
+same code:
 
-### 2.1 `make coverage` has gone quietly wrong — do this first
-
-It reports **13/101 and passes**, which was true before `dos.s` and is not true
-now. `WRAPPED` in `tools/gen_coverage.py` never gained the DOS and file
-commands, so `OPEN_FILE`, `READ_DATA`, `READ_DIR`, `CHANGE_DIR` and the rest
-still read as *"no API yet"* when they have had an API for two commits.
-
-This is exactly the failure that file exists to catch, inverted: a wrapper with
-no test is what it gates on, and a wrapper it has never been told about is
-invisible. Add them, with the entry points that send them — the mechanism is
-already there from the palette work:
-
-```python
-"DOS_CMD_OPEN_FILE":  ("ultimate_open",),
-"DOS_CMD_READ_DIR":   ("ultimate_readdir",),
-...
+```basic
+ULOAD "/USB1/DATA/HELLO.TXT",51968 : IF UERR THEN PRINT "no file"
+UDIR
+USTASH 51968,0,16 : POKE 51968,0 : UFETCH 51968,0,16
 ```
 
-**Expect `--check` to go red, and that is the point.** `write`, `seek` and
-`save` have no test behind them, because `u64sim` implements only the read-only
-half of Ultimate DOS. So they need hardware tests, and those need a writable
-fixture: create a file, use it, delete it, exactly as the test data policy in
-handover.md §6 requires. That is the real work item hiding behind this one.
+Every line of that has been typed at a real Ultimate 64 by `make basic-run`,
+from the `.prg` and from the cartridge alike.
 
-### 2.2 The BASIC keywords
+## 2. What to do next
 
-Six of them, and they are the last thing standing between Phase 3 and the
-promise the whole SDK is built on — the same operation, the same call, from all
-three languages.
+Phase 3 has no work left in it. The order below is what the next session should
+weigh, not a plan already agreed.
 
-`gen_keywords.py` is **append-only: a token is a file format.** `UTURBO` is
-`$DB`, so these start at `$DC`. The machinery is all in place and `UTURBO` is
-the worked example: one entry in `KEYWORDS`, a branch in `wedge_gone` for the
-statement form, a branch in `wedge_eval` for a function form, and a handler.
+### 2.1 The network and HTTP services
 
-Two things to remember, both already paid for once:
+The last two families with no wrapper. The generic form reaches them today, and
+`tools/gen_coverage.py` will insist on a test for each wrapper the moment one
+lands — which for these means hardware, since `u64sim` implements neither.
 
-- **`ULOAD`, `UBLOAD` and `USAVE` do not arrive as the text the user typed.**
-  CRUNCH matches a reserved word anywhere, so they contain `LOAD` and `SAVE` and
-  reach the wedge as token sequences. The generated table carries both forms and
-  the wedge matches the crunched one; `LIST` prints the name. This is handled
-  for free — `gen_keywords.py` computes it — but a name that crunches to
-  something containing `DATA` or `REM` is refused outright, so check the
-  generator's output rather than assuming.
-- **Every call into the SDK goes through `src/basic/bank.s`.** The SDK is at
-  `$A000` under BASIC ROM now. Add a stub per entry point the new keywords need;
-  do not `jsr ultimate_load` from `dispatch.s`.
+Read [handover-next.md](handover-next.md) first: it has the measured round-trip
+figures that decide whether an HTTP wrapper can be synchronous at all.
 
-`UDIR` is the interesting one. It prints to the screen through `CHROUT`, so it
-converts each entry from ASCII as it goes, and it is the first consumer of
-`ultimate_readdir` outside a test. Remember the walk is one live exchange: no
-other command between calls.
+### 2.2 The boing ball
 
-### 2.3 `reu.s`
+Still the best demonstration the SDK has, and still unbuilt. handover-next.md
+§2 has the timing that shaped it.
 
-The second and last member of the closed list of services that do not go
-through `uci_exec` — there is no UCI command that moves bytes between C64 RAM
-and the REU, so it drives `$DF00-$DF0A` directly. `turbo.s` is the worked
-example of that exemption and the design doc's §"The services that do not go
-through `uci_exec`" states the test that admits one.
+### 2.3 A writable fixture on the bench machine
 
-**Wrap the DOS REU pair (`$21`/`$22`); never wrap the control pair.**
-`CTRL_CMD_LOAD_REU` never returns on firmware 3.14d and wedges the interface
-until a power cycle ([#740](https://github.com/GideonZ/1541ultimate/issues/740)),
-and the bench machine cannot be power cycled remotely.
+`make hardware-run` skips three checks — `write-data`, `reu-save-to-a-file` and
+what follows them — because **the USB stick in the bench machine is full**. Not
+nearly full: an FTP `STOR` of 64 bytes fails with `452`, and the firmware
+answers `WRITE_DATA` with `DISK IS FULL`. It is full of firmware update images,
+which is a decision for its owner and not for this SDK.
 
-### 2.4 The blob's jump table, once the services settle
-
-`dos.s` and `file.s` are in the blob binary and reachable by symbol from a ca65
-link, but they are **not on the jump table**. That is deliberate: a blob caller
-cannot pass a filename in `A`/`X` alone, and the parameter block does not carry
-their arguments yet. Giving them entries before it does would fix the wrong
-contract for ever, and the table is append-only.
-
-The parameter block already has `bp_name` (40 bytes at `+$29`), `bp_addr` and
-`bp_len`, which is most of what `ULOAD` needs. That is the shape to finish.
-
----
+The tests are written and they skip cleanly with the reason on the screen. Free
+some space on `/Usb1` and they run.
 
 ## 3. Things this session found out, that are not obvious
 
-### `READ_DIR` is why `uci_exec_first` / `uci_exec_next` exist
+### A filesystem error arrives in words, not in a code
 
-`DOS_CMD_READ_DIR` does not answer with a list. It answers with **one reply
-block per entry**, each `<attrib> <name>` with no terminator and no length, and
-the block boundary is the only thing separating one name from the next.
-`uci_exec` stitches the chain into one buffer — right for every other command,
-and for this one it destroys the answer, because an attribute byte of `$20` is a
-space and a filename containing one is indistinguishable from the next entry.
+**This is the one to remember.** Ultimate DOS answers every failure that came
+out of the *filesystem* rather than out of DOS itself with the bare FatFS text
+and nothing in front of it — `DISK IS FULL`, `FILE DOESN'T EXIST`,
+`WRITE PROTECTED`, `ACCESS DENIED`. Only its own canned statuses carry a `NN,`
+code. In `software/filemanager/dos.cc` the commands that can answer this way are
+`OPEN_FILE`, `WRITE_DATA`, `FILE_SEEK`, `DELETE_FILE`, `RENAME_FILE`,
+`COPY_FILE` and `CREATE_DIR` — which is most of what a program does with files.
 
-Confirmed against `software/filemanager/dos.cc` *and* against the wire before
-any code was written: `READ_DIR` on the fixture tree returns 13 bytes,
-`$10 "data" $20 "big.bin"`, concatenated.
+The SDK's decoder read that shape as a transport violation and returned
+`ULTIMATE_ERR_PROTOCOL`, so **a program opening a file that was not there was
+told the SDK was broken**. It is `ULTIMATE_ERR_DEVICE` now, with no device code,
+and the words are in the caller's status buffer where they always were.
 
-`uci_exec` is now `uci_exec_send` plus a loop over `uci_collect_one`, and the
-stepwise pair is the same two pieces stopped at each boundary. Behaviour is
-unchanged and both the emulator suites and a hardware run say so.
+Found on the wire before it was found in the source: the new write tests failed
+against the bench machine with a protocol error, and a raw probe showed
+`DISK IS FULL`. `tests/emulator/protocol.suite` pins it now, and it reproduces
+under `u64sim` as well as on hardware.
 
-### The status decoder reads lookup tables out of RODATA
+### `u64sim` implements the write half of Ultimate DOS
 
-`uci_tens` and `uci_hundreds_*` in `uci_core.s` convert the ASCII status digits
-into a number. If they are wrong, a command that ran perfectly comes back
-`ULTIMATE_ERR_DEVICE` — data intact, status garbage. That is what a
-mis-ordered linker segment produced during the `$A000` move, and it is a very
-convincing-looking failure. If you ever see a correct reply with a device error,
-look at RODATA before looking at the command.
+handover.md said it was read-only. It is not: `WRITE_DATA`, `FILE_SEEK`,
+`DELETE_FILE`, `CREATE_DIR`, `RENAME_FILE` and `COPY_FILE` all work against the
+real directory tree in `tests/emulator/fixtures/usb0`. So create/write/seek/read
+back/delete runs in CI, and the hardware tests are a second opinion rather than
+the only one.
 
-### Three stale-build bugs, all the same shape
+It does **not** implement the DOS REU pair; `sdk.suite` pins the
+`ULTIMATE_ERR_NOT_SUPPORTED` that comes back, and the hardware test is where
+`LOAD_REU` actually moves bytes.
 
-Each one relinked without reassembling, and each produced a binary that looked
-fine:
+### Three traps in the test harness, all of which read as product bugs
 
-- `src/basic/Makefile` had no dependency from its objects to the generated
-  includes, so a regenerated `uci_keywords.inc` left the wedge half-knowing a
-  keyword — dispatch handled the token, the tokeniser had never heard of it.
-- `bindings/blob`'s `.cfg` files bake in `BASE` and `VARS` and did not depend on
-  the Makefile.
-- `bindings/blob`'s **objects** bake in `-D UCI_VARS` and did not depend on it
-  either, so changing `VARS` gave a blob addressing its variables where they used
-  to be: init and the timeout accessors passed, every command returned
-  `INVALID_ARGUMENT`.
+- **A `.sym` file is filtered by a list in `tests/emulator/Makefile` and did not
+  depend on it.** Adding a symbol left the `.sym` untouched, so the suite called
+  address zero and the failure looked like a wedge bug. Every `.sym` rule
+  depends on the Makefile now. This is the same shape as the three stale-build
+  bugs from the previous session: anything a list or a flag is baked into needs
+  that file as a prerequisite.
+- **BASIC's own loop unwinds the stack between statements, and a suite calling
+  handlers directly has no loop.** The third string argument in a test failed on
+  stack rather than on anything the wedge did. `jsr($a67a)` — the ROM's own
+  stack reset — goes before each statement, which is what the suite's setup
+  already did once for the same reason.
+- **`$FF81` does not return under this backend.** Bringing the screen editor up
+  to read `UDIR`'s output off the screen hangs the simulator, so the test points
+  `IBSOUT` (`$0326`) at a six-instruction stub in the cassette buffer and reads
+  what the wedge emitted, in PETSCII, before anything draws it. **The stub has
+  to `clc`**: BASIC's `OUTDO` goes through `$E10C`, which treats carry as an I/O
+  error.
 
-All three are fixed. The lesson is worth keeping: anything a build flag is baked
-into needs that flag's file as a prerequisite.
+### The REU is testable in the simulator, but not the way you would hope
 
-### The sim6502 DSL writes one byte, not two
-
-`$addr = $0000` stores the low byte and leaves the high one holding whatever was
-in RAM. handover.md §4 has always said to write word fields as two byte stores;
-`blob.suite` was not doing it and got away with it only while the variables
-happened to sit inside the loaded image. Write every byte.
-
-Assertions and assignments also differ: `assert(([x] + $01).b == ...)` needs the
-`.b`, and `[x] + $01 = ...` must not have it.
-
-### A filename is protocol, not display text
-
-`tests/hardware/ucitest.c` builds `"/Usb1/data/hello.txt"` as numeric bytes.
-cc65 would charmap a literal and send `'d'` as `$44`, ASCII `'D'` — which works
-only because FAT lookup is case-insensitive. `tools/test_charmap.py` does not
-catch this: it flags uppercase in literals, and a lowercase literal is still
-charmapped. Anything that goes on the wire is bytes.
-
----
+`$DF00-$DF0A` is ordinary read/write memory under `sim6502`, which is enough to
+assert that every register got the right byte and that stash and fetch differ by
+exactly the mode bit — and not enough to move anything. It also means the
+availability probe, which writes two patterns and reads them back, reports a REU
+that is not there. That is inherent to probing by readback and it is the right
+trade for real hardware, where a missing expansion does not remember what it was
+told. It is stated in `reu.s` where someone will read it.
 
 ## 4. Decisions taken, so they are not reopened by accident
 
-**The SDK runs at `$A000` under BASIC ROM; the wedge keeps `$C000`.** Phase 3
-took the two together past 4K. `src/basic/bank.s` is twelve bytes per entry
-point — not one shared trampoline, because the argument and the result both live
-in `A` and sharing one would need the target address somewhere else. Only code
-moved: RODATA and BSS stay at `$C000`, which is RAM whatever `$01` says. The
-copy banks nothing, because a 6510 write always goes to RAM and only a read sees
-ROM. Interrupts stay on: `$36` leaves the KERNAL and I/O mapped, and there is no
-`sei` on purpose, because `uci_exec` can poll for a long time.
+**A status in words is a device error.** Two bytes or more, beginning with a
+non-digit, on a target whose status is meant to be decimal: the target reported
+a failure in words. One byte stays `ULTIMATE_ERR_PROTOCOL`, because one byte is
+the binary shape and a decimal target has no binary vocabulary to read it with.
 
-**The blob is based at `$8000`, and that is a different trade from the wedge's.**
-Its caller picks the base and cannot be asked to bank, so `$8000-$9FFF` — RAM
-with nothing mapped over it — is right for it and `$A000` is not. `blob.cfg.in`
-sizes the code area from `VARS`, so a build that does not fit fails to link.
+**The SDK touches `$DF1B-$DF1F`, and `$DF00-$DF0A` in `reu.s` alone.**
+`tools/test_registers.py` makes the promise in docs/compatibility.md executable:
+no `$DFxx` literal exists anywhere in the SDK, and the REU register names appear
+in `reu.s` and in no other file. The list of modules allowed to drive hardware
+directly is closed at two — `turbo.s` and `reu.s` — and the test that admits one
+is whether the operation exists on the UCI at all.
 
-**`ULTIMATE_END` is a result, not an error.** `readdir` needs "no more entries"
-to be distinguishable from a failure. Adding it cleared the `ULT_ERR_COUNT`
-debt: the count is generated now and `strerror` asserts its table against it.
+**Never wrap the control target's REU pair.** `CTRL_CMD_LOAD_REU` never returns
+on firmware 3.14d and wedges the interface until a power cycle
+([#740](https://github.com/GideonZ/1541ultimate/issues/740)). The DOS pair
+(`$21`/`$22`) does the same job and is wrapped; the control pair stays reachable
+through the generic form, so issuing it is always deliberate.
 
-**Two services touch hardware and the list is closed**: `turbo.s`, built, and
-`reu.s`, to come. The test that admits one is whether the operation exists on
-the UCI at all.
+**The blob's new entries take a parameter block, not registers.** Eighteen of
+them at `+$4F` through `+$82`. A caller cannot pass a filename in `A`/`X`, and
+the block is the only calling convention a BASIC program driving the blob with
+`POKE` and `SYS` can express at all. Four fields were appended —
+`bp_attrib`, `bp_pos`, `bp_reu`, `bp_reulen` — inside a block that has always
+been a fixed 512 bytes, so nothing moved. **The table is still append-only.**
 
----
+**`UDIR` folds ASCII lowercase up on its way to `CHROUT`.** `$41-$5A` draws as
+letters and `$61-$7A` draws as graphics symbols, so every name reads as
+lowercase on a stock screen. That is the same rule `tools/test_charmap.py`
+enforces on the SDK's own strings.
+
+**A BASIC keyword's arguments are evaluated with the ROM's own routines.**
+`FRMNUM`/`GETADR` for 16 bits, `FRMNUM`/`QINT` for the REU's 24-bit address —
+which is why `USTASH 51968,74565,256` works and why a `GETADR`-only
+implementation would silently address the wrong megabyte.
 
 ## 5. Running things
 
@@ -213,13 +184,11 @@ make basic-run    U64_HOST=192.168.1.62   the wedge, typed at it, both deliverie
 make time-run     U64_HOST=192.168.1.62   how long a round trip takes
 ```
 
-The bench machine is an **Ultimate 64 Elite at `192.168.1.62`, firmware 3.15**
-(a post-tag build: `firmware_version` cannot tell one from 3.15 itself, which is
-why the palette commands work on it). **It cannot be power cycled remotely.**
-Its settings are never in a consistent state — `Command Interface` and
-`Turbo Control` are both normally off — so everything goes through
-`tools/u64_settings.py`, which reads first, writes only what is wrong, and
-restores only what it changed.
+The bench machine is an **Ultimate 64 Elite at `192.168.1.62`, firmware 3.15**.
+**It cannot be power cycled remotely.** Its settings are never in a consistent
+state, so everything goes through `tools/u64_settings.py`, which reads first,
+writes only what is wrong, and restores only what it changed — including the
+`RAM Expansion Unit` setting the REU tests need.
 
 The hardware fixture lives at `/Usb1/data/hello.txt` and is pushed over FTP:
 
@@ -228,7 +197,16 @@ curl --ftp-create-dirs -T tests/emulator/fixtures/usb0/data/hello.txt \
      ftp://192.168.1.62/USB1/data/hello.txt
 ```
 
-`make time-run` is not a test. It measures, and the numbers it prints decided
-the boing ball's shape — a whole-palette rotation is 0.24 frames, so colour
-cycling is not the constraint. See handover-next.md §2 for the full table and
-for the turbo figures.
+A one-off question about what the firmware really does is answered fastest by a
+scratch suite and the `u64` backend, which is how `DISK IS FULL` and the DOS REU
+pair's argument layout were both settled:
+
+```
+python3 tools/u64_settings.py --host 192.168.1.62 \
+  --require "C64 and Cartridge Settings:Command Interface=Enabled" \
+  -- docker run --rm -v $PWD:/code ghcr.io/barryw/sim6502:latest \
+     -s /code/tests/emulator/probe.suite --backend u64 --u64-host 192.168.1.62
+```
+
+Delete the scratch suite afterwards. Nothing in `tests/emulator` is meant to be
+temporary.

@@ -24,32 +24,37 @@ work to be useful: the palette, and turbo. The BASIC wedge is complete.
 | Layer 2 — turbo, on `$D031` | complete, assembly — `src/uci/turbo.s`, in all three languages |
 | Layer 2 — dos: files and directories | complete, assembly — `src/uci/dos.s` |
 | Layer 2 — file: load, bload, save | complete, assembly — `src/uci/file.s`, two-tier |
-| Layer 2 — network, http, reu | **not started** — the rest of Phase 3 |
+| Layer 2 — reu: stash, fetch, and the DOS REU pair | complete, assembly — `src/uci/reu.s` |
+| Layer 2 — network, http | **not started** — Phase 4 |
 | Layer 3 — ca65 / cc65 bindings | working |
 | Layer 3 — the blob (any toolchain, no linking) | **working** — Phase 1, done |
-| Layer 3 — BASIC wedge | **Phase 2 complete** — `.prg` and `.crt`, 41 tests |
+| Layer 3 — BASIC wedge | **Phase 3 complete** — `.prg` and `.crt`, 49 tests, 22 keywords |
 | Layer 3 — Oscar64, llvm-mos, KickC | not started; the blob is now their route in |
 
 ```
 make lib              GREEN
-make blob             GREEN     4560 bytes, 190 relocations, now based at
-                                $8000 with its variables at $9F00: file.s
-                                overflowed the old 4K at $C000 by 350 bytes
-                                and the link said so
+make blob             GREEN     5078 bytes, 287 relocations, based at $8000
+                                with its variables at $9F00: file.s overflowed
+                                the old 4K at $C000 by 350 bytes and the link
+                                said so
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make wedge            GREEN     uci.prg 3402 bytes, uci.crt 8272. The wedge
-                                holds 2078 of the 4K at $C000, and the SDK runs
-                                at $A000 under BASIC ROM: 1595 of 8K, reached
+make wedge            GREEN     uci.prg 5983 bytes, uci.crt 8272. The wedge
+                                holds 2741 of the 4K at $C000, and the SDK runs
+                                at $A000 under BASIC ROM: 3533 of 8K, reached
                                 through the stubs in src/basic/bank.s
-make test             GREEN     100 host unit tests + 155 tests across 8 suites
-make basic-run        GREEN     13/13 from the .prg and 13/13 from the .crt, the
+make test             GREEN     104 host unit tests + 182 tests across 8 suites
+make basic-run        GREEN     25/25 from the .prg and 25/25 from the .crt, the
                                 same checks typed at a real C64. The cartridge
                                 costs BASIC 8K: 38911 bytes free becomes 30719
-make hardware-run     GREEN     5/5 scenarios on real hardware, 22 checks each
-                                (29 in the turbo one) except uci-disabled, which
-                                asserts one clean failure and reports failed=1
+make hardware-run     GREEN     5/5 scenarios on real hardware: 30 checks in
+                                the plain one, 38 with the RAM expansion
+                                switched on and 37 with turbo, and 2-3 skips
+                                in each for what that machine cannot do -
+                                see handover-phase3.md section 2.3 for the
+                                full stick. uci-disabled asserts one clean
+                                failure and reports failed=1 on purpose
 make coverage         GREEN     0 wrapped-but-untested
 make time-run         n/a       not a test: it times a UCI round trip on the
                                 machine and prints the numbers. A whole-palette
@@ -320,8 +325,10 @@ them bite:
 
 ## 6. The simulator ceiling — decided
 
-`u64sim` implements Ultimate DOS (`$01`/`$02`) and part of the control target
-(`$04`). Network, HTTP, SoftwareIEC and the REU are **hardware only**.
+`u64sim` implements Ultimate DOS (`$01`/`$02`) — **both halves of it: writes,
+seeks and deletes work against the fixture tree, not only reads** — and part of
+the control target (`$04`). Network, HTTP, SoftwareIEC, the REU's own registers
+and the DOS REU pair are **hardware only**.
 
 **The decision, taken: accept hardware-only coverage for what the simulator
 cannot reach, and treat `make hardware-run` as required before a release rather
@@ -355,8 +362,8 @@ generic form only, so issuing it is always deliberate.
 
 **Three files, and they do different jobs.** This one is the state of the SDK
 and the traps that have already cost debugging time.
-[handover-phase3.md](handover-phase3.md) is where Phase 3 stands and what to do
-next — start there. [handover-next.md](handover-next.md) is the loose ends, the
+[handover-phase3.md](handover-phase3.md) is what Phase 3 delivered and what it
+found out — start there. [handover-next.md](handover-next.md) is the loose ends, the
 turbo measurements and the boing ball.
 
 
@@ -373,7 +380,8 @@ only where the generic form cannot express the operation.
 |---|---|---|
 | 1 | the blob | **done** |
 | 2 | BASIC wedge | **done** — tokens, all four vectors, the generic `UCI`, observers, `UW(`/`UL(`, argument shapes, `.prg` and `.crt` |
-| 3 | DOS service, file convenience, SoftwareIEC fast path, `reu.s` | `ULOAD`/`UBLOAD`/`USAVE`/`UDIR`/`USTASH`/`UFETCH` in all three languages at once |
+| 3 | DOS service, file convenience, SoftwareIEC fast path, `reu.s` | **done** — `ULOAD`/`UBLOAD`/`USAVE`/`UDIR`/`USTASH`/`UFETCH` in all three languages at once, and the same services on the blob's jump table |
+| 4 | network and HTTP services | not started; the generic form reaches both today |
 
 **Phase 2's stated blocker is cleared.** The argument shapes are structured data
 now: `ARGS` in `tools/gen_protocol.py`, 67 commands, `(kind, spec)` pairs over
