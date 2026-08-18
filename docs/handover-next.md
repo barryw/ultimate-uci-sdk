@@ -13,27 +13,44 @@ C64 and passes 8/8 from the `.prg` and 8/8 from the `.crt`.
 
 Ordered by how much they cost if ignored.
 
-### The cc65 side may print graphics glyphs
+### ~~The cc65 side may print graphics glyphs~~ — confirmed, fixed
 
-**Almost certainly a live bug, not yet confirmed.** ca65's c64 charmap sends
-source `'A'-'Z'` to PETSCII `$C1-$DA`, and CHROUT renders those as *graphics
-symbols*, not letters. Source `'a'-'z'` becomes `$41-$5A` and displays as
+**It was a live bug. It is fixed and proven on hardware.** cc65 applies the c64
+charmap to C string literals exactly as ca65 does: source `'A'-'Z'` becomes
+PETSCII `$C1-$DA`, which CHROUT renders as *graphics symbols*, and source
+`'a'-'z'` becomes `$41-$5A`, which renders as letters.
+
+Confirmed in the built binary before touching anything — `"SOFTIEC"` assembled
+to `d3 cf c6 d4 c9 c5 c3`, squarely in the glyph range — and then on the real
+screen after the fix, which now reads `SOFTIEC : SOFTWARE IEC TARGET V1.0` in
 letters.
 
-This was fixed in `src/uci/ultimate_strerror.s` and `examples/asm/identify.s`
-after a photograph of a real screen showed the wedge's banner as a row of
-glyphs. **cc65 applies the same charmap to C string literals**, so
-`examples/cc65/` and `tests/hardware/ucitest.c` are very likely printing the
-same garbage.
+Two files were affected, and only two: `examples/cc65/identify.c`'s six target
+labels, and `ucitest.c`'s TAP `# SKIP` directive (now `# skip`; the directive is
+case-insensitive and nothing parses it anyway — `hwtest.py` reads the result
+block at `$033C` by DMA).
 
-- It costs nothing functionally: `ucitest.c` publishes its results to `$033C`
-  and `hwtest.py` reads them by DMA, so the hardware suite passes either way.
-- It costs a first impression: the examples are what someone reads first.
+**`tools/test_charmap.py` now fails the build on any uppercase letter in a C
+string literal**, across `examples/`, `tests/hardware/` and `include/`. It skips
+comments — the files explain this rule in prose and the prose quotes the strings
+it warns about — and allows `extern "C"`, which never reaches a character set.
+Run against the pre-fix tree it names exactly the six labels and nothing else.
 
-To check: build, run on hardware, look at the screen. Do not trust a decoder —
-`tests/hardware/screen.py` deliberately renders `$41-$5A` as `.` for exactly
-this reason, and any decoder that maps them back to letters agrees with the bug
-instead of finding it.
+Two things that look like the same bug and are not:
+
+- **`printf("%x")` is fine.** cc65's `_hextab` is the literal `"0123456789ABCDEF"`
+  compiled for the target, so `A-F` really are `$C1-$C6` in the library — but
+  `_printf.s` runs `_strlower` over the result for lowercase `%x`, and the CBM
+  `ctype` table classifies `$C1-$DA` as upper case, so they come out `$41-$46`
+  and display as letters. Do not "fix" this.
+- **Wire strings are unaffected.** The Ultimate speaks ASCII; identification
+  strings arrive as `$41-$5A` and display as letters already. `ascii_upper()`
+  exists for the mixed-case model name and is still right.
+
+Do not trust a decoder to check this. `tests/hardware/screen.py` deliberately
+renders screen codes `$41-$5A` as `.`, which is what PETSCII `$C1-$DA` lands on,
+so it is the one decoder that disagrees with the bug rather than agreeing with
+it. That is what makes `hwtest.py --verbose` usable as the confirmation.
 
 ### `sdk.suite`'s comment about the charmap was half right
 
@@ -225,8 +242,8 @@ buys — do it last.
 
 ## 4. Suggested order
 
-1. Confirm and fix the cc65 charmap bug. Small, and it is the first thing a
-   newcomer sees.
+1. ~~Confirm and fix the cc65 charmap bug.~~ **Done**, and `make test` now
+   fails if it comes back.
 2. Measure a UCI round trip in frames. One number, and it decides the demo's
    whole shape.
 3. Wrap the palette commands and add `make coverage` entries.

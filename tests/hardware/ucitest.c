@@ -13,7 +13,7 @@
  *     # model=ULTIMATE 64 ident=$c9 targets=$001e
  *     ok 1 - signature-present
  *     not ok 3 - identify-dos1 (expected 0, got 2)
- *     ok 9 - get-model # SKIP no control target on this firmware
+ *     ok 9 - get-model # skip no control target on this firmware
  *     1..10
  *     # 9 passed, 1 failed, 1 skipped
  *
@@ -50,7 +50,13 @@ static void skip(const char *name, const char *why)
 {
     ++test_no;
     ++skipped;
-    printf("ok %u - %s # SKIP %s\n", test_no, name, why);
+    /*
+     * "skip", not "SKIP". The TAP directive is case-insensitive, and cc65
+     * charmaps uppercase source letters to PETSCII $C1-$DA, which CHROUT draws
+     * as graphics symbols. Nothing parses this text anyway - hwtest.py reads
+     * the result block at $033C by DMA - but a human reads it off the screen.
+     */
+    printf("ok %u - %s # skip %s\n", test_no, name, why);
 }
 
 static void check(const char *name, int expected, int actual)

@@ -14,16 +14,23 @@
 #include <stdio.h>
 #include <ultimate.h>
 
+/*
+ * Written lowercase on purpose. cc65 applies the c64 charmap to string
+ * literals exactly as ca65 does: source 'A'-'Z' becomes PETSCII $C1-$DA, which
+ * CHROUT renders as *graphics symbols*, and source 'a'-'z' becomes $41-$5A,
+ * which renders as letters. Every display string in this repo is lowercase for
+ * that reason, and tools/test_charmap.py fails the build if one is not.
+ */
 static const struct {
     uint8_t     id;
     const char *name;
 } targets[] = {
-    { UCI_TARGET_DOS1,    "DOS 1"   },
-    { UCI_TARGET_DOS2,    "DOS 2"   },
-    { UCI_TARGET_NETWORK, "NETWORK" },
-    { UCI_TARGET_CONTROL, "CONTROL" },
-    { UCI_TARGET_SOFTIEC, "SOFTIEC" },
-    { UCI_TARGET_HTTP,    "HTTP"    },
+    { UCI_TARGET_DOS1,    "dos 1"   },
+    { UCI_TARGET_DOS2,    "dos 2"   },
+    { UCI_TARGET_NETWORK, "network" },
+    { UCI_TARGET_CONTROL, "control" },
+    { UCI_TARGET_SOFTIEC, "softiec" },
+    { UCI_TARGET_HTTP,    "http"    },
 };
 
 
