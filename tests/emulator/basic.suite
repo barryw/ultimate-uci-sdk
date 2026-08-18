@@ -1,0 +1,256 @@
+; basic.suite - the BASIC wedge against the real BASIC ROM.
+;
+; The wedge's tokeniser only exists because of what the ROM's own CRUNCH does
+; first, so testing it against anything other than the ROM would be testing a
+; story about the ROM. Every test here puts text in the input buffer, runs the
+; wedge's ICRNCH handler - which calls the ROM's tokeniser on the way - and
+; looks at the bytes that came out.
+;
+;   make basic C64_ROMS=/path/to/roms
+;
+; **ROM-gated.** Commodore's ROM images cannot be committed, so the Makefile
+; skips this suite with a message when it cannot find them. CI runs the rest.
+;
+; SPDX-License-Identifier: MIT
+
+suites {
+  suite("ultimate uci basic wedge") {
+    system(c64)
+    rom("basic", "/code/tests/emulator/roms/basic.bin")
+    rom("kernal", "/code/tests/emulator/roms/kernal.bin")
+    symbols("/code/tests/emulator/basic.sym")
+    load("/code/src/basic/uci.prg", strip_header = true)
+
+    ; The .prg loads at $0801; the wedge runs at $C000. Every test needs it
+    ; moved there first, which is why copying is an entry point of its own.
+    setup {
+      jsr([wedge_copy], stop_on_rts = true, fail_on_brk = true)
+      jsr([wedge_install], stop_on_rts = true, fail_on_brk = true)
+    }
+
+    test("wedge-install-takes-the-vectors", "installation is what makes the rest of this reachable") {
+      [ICRNCH] = $00
+      $0305 = $00
+      [IQPLOP] = $00
+      $0307 = $00
+      jsr([wedge_install], stop_on_rts = true, fail_on_brk = true)
+      assert([ICRNCH] == $15, "ICRNCH low byte points into the wedge")
+      assert($0305 == $c0, "ICRNCH high byte")
+      assert([IQPLOP] == $f7, "IQPLOP low byte")
+      assert($0307 == $c0, "IQPLOP high byte")
+    }
+
+    ; The control for every substitution test below. $A57C is the ROM's own
+    ; tokeniser, called directly instead of through the wedge: it has to leave
+    ; UCI as three letters. Without this, a wedge that did nothing at all would
+    ; still pass a test asserting the ROM's output.
+    test("rom-alone-leaves-uci-as-letters", "the ROM does not know these keywords") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $00
+      $007a = $00
+      $007b = $02
+      jsr($a57c, stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $55, "'U'")
+      assert($0201 == $43, "'C'")
+      assert($0202 == $49, "'I'")
+      assert($0203 == $00, "three letters, not one token")
+    }
+
+    ; The generic statement. Everything else in phase 2 hangs off this token.
+    test("tokenize-uci", "UCI becomes one token and the rest of the line survives") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $34
+      $0207 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $cc, "UCI tokenized")
+      assert($0201 == $20, "the space after it")
+      assert($0202 == $31, "'1'")
+      assert($0203 == $2c, "','")
+      assert($0204 == $34, "'4'")
+      assert($0205 == $00, "line terminated, three bytes shorter")
+    }
+
+    ; docs/generated/basic-keywords.md: ULEN reaches the wedge as 'U' $C3,
+    ; because CRUNCH found LEN inside it. This is the test that fails if the
+    ; match patterns ever go back to being the text a user types.
+    test("tokenize-ulen-through-the-len-collision", "a keyword the ROM already half-tokenized") {
+      $0200 = $55
+      $0201 = $4c
+      $0202 = $45
+      $0203 = $4e
+      $0204 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $cf, "ULEN tokenized despite the embedded LEN")
+      assert($0201 == $00, "one byte, from four characters")
+    }
+
+    test("tokenize-a-constant", "target constants are tokens like any other keyword") {
+      $0200 = $55
+      $0201 = $44
+      $0202 = $4f
+      $0203 = $53
+      $0204 = $31
+      $0205 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $d5, "UDOS1 tokenized")
+      assert($0201 == $00, "line terminated")
+    }
+
+    ; The paren is part of the keyword, exactly as it is for the ROM's TAB( and
+    ; SPC(, so that UW stays usable as an ordinary variable name.
+    test("tokenize-uw-takes-its-paren", "UW( is the keyword, not UW") {
+      $0200 = $55
+      $0201 = $57
+      $0202 = $28
+      $0203 = $33
+      $0204 = $29
+      $0205 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $d3, "UW( tokenized, paren included")
+      assert($0201 == $33, "'3'")
+      assert($0202 == $29, "')'")
+      assert($0203 == $00, "line terminated")
+    }
+
+    test("basic-keywords-are-left-to-the-rom", "the wedge substitutes nothing it does not own") {
+      $0200 = $50
+      $0201 = $52
+      $0202 = $49
+      $0203 = $4e
+      $0204 = $54
+      $0205 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $99, "PRINT is still PRINT")
+      assert($0201 == $00, "line terminated")
+    }
+
+    ; A keyword inside a string constant is text the user typed, and has to come
+    ; back out of LIST exactly as it went in.
+    test("keywords-inside-strings-are-not-substituted", "PRINT \"UCI\" keeps its three letters") {
+      $0200 = $50
+      $0201 = $52
+      $0202 = $49
+      $0203 = $4e
+      $0204 = $54
+      $0205 = $22
+      $0206 = $55
+      $0207 = $43
+      $0208 = $49
+      $0209 = $22
+      $020a = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $99, "PRINT")
+      assert($0201 == $22, "opening quote")
+      assert($0202 == $55, "'U' survived")
+      assert($0203 == $43, "'C' survived")
+      assert($0204 == $49, "'I' survived")
+      assert($0205 == $22, "closing quote")
+      assert($0206 == $00, "line terminated")
+    }
+
+    ; The ROM stops tokenising after DATA, so the wedge has to stop too or a
+    ; program's data would change meaning on the way in.
+    test("data-contents-are-not-substituted", "DATA UCI is three letters of data") {
+      $0200 = $44
+      $0201 = $41
+      $0202 = $54
+      $0203 = $41
+      $0204 = $20
+      $0205 = $55
+      $0206 = $43
+      $0207 = $49
+      $0208 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $83, "DATA")
+      assert($0201 == $20, "space")
+      assert($0202 == $55, "'U' is data, not a token")
+      assert($0203 == $43, "'C'")
+      assert($0204 == $49, "'I'")
+      assert($0205 == $00, "line terminated")
+    }
+
+    ; ...and a colon ends the DATA statement, so substitution resumes. Getting
+    ; this wrong would silently stop the wedge working for the rest of any line
+    ; that contains a DATA statement.
+    test("a-colon-ends-data-and-substitution-resumes", "DATA UCI:UCI is data then a token") {
+      $0200 = $44
+      $0201 = $41
+      $0202 = $54
+      $0203 = $41
+      $0204 = $20
+      $0205 = $55
+      $0206 = $43
+      $0207 = $49
+      $0208 = $3a
+      $0209 = $55
+      $020a = $43
+      $020b = $49
+      $020c = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $83, "DATA")
+      assert($0202 == $55, "the first UCI stayed as letters")
+      assert($0205 == $3a, "the colon")
+      assert($0206 == $cc, "the second UCI tokenized")
+      assert($0207 == $00, "line terminated")
+    }
+
+    ; Two keywords in one line, to prove the compaction keeps up: the write
+    ; index falls further behind the read index with every substitution.
+    test("two-keywords-compact-correctly", "substitution shrinks the line in place") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $55
+      $0205 = $44
+      $0206 = $4f
+      $0207 = $53
+      $0208 = $31
+      $0209 = $2c
+      $020a = $34
+      $020b = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $cc, "UCI")
+      assert($0201 == $20, "space")
+      assert($0202 == $d5, "UDOS1")
+      assert($0203 == $2c, "','")
+      assert($0204 == $34, "'4'")
+      assert($0205 == $00, "line terminated, six bytes shorter")
+    }
+
+    ; An empty line has to survive, because RETURN on a blank line is the most
+    ; common thing anyone types.
+    test("an-empty-line-survives", "the wedge terminates a line it did nothing to") {
+      $0200 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      assert($0200 == $00, "still an empty line")
+    }
+  }
+}

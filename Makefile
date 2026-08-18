@@ -18,7 +18,7 @@
 # Point this at your oscar64 binary to include the Oscar64 example.
 OSCAR64 ?= oscar64
 
-all: lib examples emulator
+all: lib examples emulator wedge
 
 # The SDK itself is 6502 assembly, so the only place that logic can be tested
 # is on a 6502 - that is what `emulator` is for. `unittest` covers the one
@@ -67,11 +67,16 @@ protocol:
 	python3 tools/gen_keywords.py
 	python3 tools/gen_coverage.py
 
+# The BASIC wedge .prg. LOAD "UCI",8 then RUN installs it.
+wedge:
+	$(MAKE) -C src/basic
+
 # Fail when an SDK entry point has no test behind it.
 coverage:
 	python3 tools/gen_coverage.py --check
 
 clean:
+	$(MAKE) -C src/basic clean
 	$(MAKE) -C tests/emulator clean
 	$(MAKE) -C tests/hardware clean
 	$(MAKE) -C examples/asm clean

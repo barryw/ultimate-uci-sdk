@@ -128,6 +128,46 @@ run: all
 	  --backend u64sim --u64sim-fs-root $(FS_ROOT)
 	$(SIM6502) -s /code/tests/emulator/blob-relocated.suite \
 	  --backend u64sim --u64sim-fs-root $(FS_ROOT)
+	$(MAKE) basic
+
+# The BASIC wedge, against the real BASIC ROM.
+#
+# The wedge's tokeniser only exists because of what the ROM's CRUNCH does
+# first, so there is nothing worth testing without it. Commodore's ROM images
+# cannot be committed, so this skips with a message that names the fix rather
+# than failing - the same shape as hardware-run needing U64_HOST.
+#
+#   make basic                          uses tests/emulator/roms
+#   make basic C64_ROMS=/path/to/roms   uses somewhere else
+C64_ROMS ?= roms
+
+basic: $(WEDGE_PRG) basic.sym
+	@if [ -r "$(C64_ROMS)/basic.bin" ] && [ -r "$(C64_ROMS)/kernal.bin" ]; then \
+	  mkdir -p roms; \
+	  [ "$(C64_ROMS)" = "roms" ] || cp "$(C64_ROMS)/basic.bin" "$(C64_ROMS)/kernal.bin" roms/; \
+	  $(SIM6502) -s /code/tests/emulator/basic.suite --backend sim; \
+	else \
+	  echo "skipping basic.suite: no C64 ROM images."; \
+	  echo "  put basic.bin and kernal.bin in tests/emulator/roms,"; \
+	  echo "  or run: make basic C64_ROMS=/path/to/them"; \
+	fi
+
+WEDGE_PRG := $(ROOT)/src/basic/uci.prg
+
+$(WEDGE_PRG): FORCE
+	$(MAKE) -C $(ROOT)/src/basic
+
+# The wedge's symbols, filtered from its link map exactly as the harness's are.
+WEDGE_SYMS := BUF TXTPTR ICRNCH IQPLOP DORES \
+              wedge_copy wedge_install wedge_crunch wedge_qplop \
+              wedge_src wedge_dst wedge_verbatim
+
+basic.sym: $(WEDGE_PRG)
+	awk -v want="$(WEDGE_SYMS)" ' \
+	  BEGIN { n = split(want, a, " "); for (i = 1; i <= n; i++) keep[a[i]] = 1 } \
+	  /^al / { name = $$3; sub(/^\./, "", name); \
+	           if (name in keep) printf ".label %s=$$%s\n", name, tolower(substr($$2, 3)) } \
+	' $(ROOT)/src/basic/uci.lbl | sort -u > $@
 
 # The same protocol expectations, against a real Ultimate on the network.
 #   make hardware U64_HOST=192.168.1.62
@@ -150,6 +190,7 @@ hardware:
 	  --backend u64 --u64-host $(U64_HOST)
 
 clean:
+	rm -f basic.sym
 	rm -f harness.prg harness.lbl harness.sym harness.o
 	rm -f harness-placed.prg harness-placed.lbl harness-placed.sym sdk-placed.suite
 	rm -f relocharness.prg relocharness.lbl relocharness.sym relocharness.o

@@ -6,7 +6,8 @@ why, the traps that have already cost debugging time, and what to do next.
 **Short version:** the transport is done and heavily tested, and it now ships in
 a second form — a standalone relocatable binary with a jump table — so every
 toolchain that cannot link a ca65 object can reach it. The service layer is
-still just bring-up, detection and identity. The BASIC wedge is next.
+still just bring-up, detection and identity. The BASIC wedge now tokenises and
+lists its own keywords; what is left of it is dispatch.
 
 **Verify with `git log` rather than trusting this file's counts.** As of writing:
 15 commits, `main`, clean tree, HEAD `3e2bd71`.
@@ -22,7 +23,7 @@ still just bring-up, detection and identity. The BASIC wedge is next.
 | Layer 2 — dos, file, network, http, control, reu | **not started** — Phase 3 |
 | Layer 3 — ca65 / cc65 bindings | working |
 | Layer 3 — the blob (any toolchain, no linking) | **working** — Phase 1, done |
-| Layer 3 — BASIC wedge | **not started** — Phase 2, next |
+| Layer 3 — BASIC wedge | **tokeniser and LIST done** — Phase 2, dispatch next |
 | Layer 3 — Oscar64, llvm-mos, KickC | not started; the blob is now their route in |
 
 ```
@@ -31,7 +32,8 @@ make blob             GREEN     2860 bytes, 89 relocations
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make test             GREEN     48 host unit tests + 82 tests across 7 suites
+make wedge            GREEN     uci.prg, 580 bytes; the wedge itself is 346
+make test             GREEN     86 host unit tests + 94 tests across 8 suites
 make hardware-run     GREEN     4/4 scenarios on real hardware, 13 checks each
                                 except uci-disabled, which asserts one clean
                                 failure and is meant to report failed=1
@@ -146,7 +148,10 @@ eroding — see the design doc.
 
 ## 4. Adding a test
 
-Seven suites, all run by `make test` through the sim6502 container.
+Eight suites, all run by `make test` through the sim6502 container. The last one
+is ROM-gated: Commodore's images cannot be committed, so `make basic` skips with
+a message naming the fix unless `tests/emulator/roms` holds `basic.bin` and
+`kernal.bin`, or `C64_ROMS` points somewhere that does. CI runs the other seven.
 
 | Suite | Backend | Covers |
 |---|---|---|
@@ -157,6 +162,7 @@ Seven suites, all run by `make test` through the sim6502 container.
 | `absent.suite` | `sim` — nothing at `$DF1B` | failing fast with no Ultimate |
 | `blob.suite` | `u64sim` | the blob through its jump table, no symbols |
 | `blob-relocated.suite` | `u64sim` | the blob moved at run time |
+| `basic.suite` | `sim` **+ real BASIC ROM** | the wedge's tokeniser and LIST |
 
 **Most tests need no new assembly.** `harness.s` exports a request block and the
 buffers it points at, so a suite fills the block from the DSL and calls
@@ -275,7 +281,7 @@ only where the generic form cannot express the operation.
 | | Phase | Notes |
 |---|---|---|
 | 1 | the blob | **done** |
-| 2 | **BASIC wedge** — next | generic `UCI` statement and function, observers (`UERR`, `UST$`, `UDATA$`, `UBYTE`, `ULEN`, `UDEV`), target constants, `W()`/`L()`, installer with banner, `.prg` and `.crt` builds, `basic.suite` |
+| 2 | **BASIC wedge** — in progress | done: tokens, `ICRNCH`, `IQPLOP`, installer, `.prg`, `basic.suite`. Left: `IGONE`/`IEVAL` dispatch, the generic `UCI` statement and function, observers (`UERR`, `UST$`, `UDAT$`, `UBYTE(`, `ULEN`, `UDEV`), `UW(`/`UL(`, the `.crt` build |
 | 3 | DOS service, file convenience, SoftwareIEC fast path, `reu.s` | `ULOAD`/`UBLOAD`/`USAVE`/`UDIR`/`USTASH`/`UFETCH` in all three languages at once |
 
 **Phase 2's stated blocker is cleared.** The argument shapes are structured data
@@ -290,9 +296,28 @@ The in-memory table the wedge dispatches on is generated from it, into
 default rule cannot marshal. It has no consumer until the wedge exists, so CI
 assembles it on its own to stop it rotting quietly.
 
-**Phase 2 is now unblocked with nothing left to decide first.** The wedge is
-next: tokenizer, `ICRNCH`/`IQPLOP`/`IGONE`/`IEVAL` hooks, installer, the
-`basic.suite`.
+**The wedge tokenises and lists.** `src/basic/` builds `uci.prg`: 580 bytes, of
+which the resident wedge at `$C000` is 346. `LOAD "UCI",8` then `RUN` installs
+it. `ICRNCH` and `IQPLOP` are owned; `IGONE` and `IEVAL` are not, so the tokens
+exist but nothing runs yet — typing `UCI 1,4` tokenises and then reaches BASIC's
+own dispatcher, which does not know the token.
+
+**Two traps the wedge had to be built around, both from modelling the ROM's
+CRUNCH in `tools/c64_crunch.py` rather than reasoning about it:**
+
+- **CRUNCH drops input bytes `>= $80`**, pi excepted. So the wedge cannot write
+  its tokens into the input buffer and let the ROM crunch afterwards. It calls
+  the ROM first and substitutes into the result, compacting in place.
+- **A reserved word is matched anywhere, not only at a word boundary.** `ULEN`
+  reaches the wedge as `'U' $C3` because CRUNCH found `LEN` inside it. The match
+  patterns are the crunched forms, which is why they are generated. This also
+  killed `UDATA$` (its embedded `DATA` token stops the rest of the statement
+  being tokenised) and bare `W`/`L` (they would tokenise the `W` in
+  `FOR W=1 TO 10`). See `docs/generated/basic-keywords.md`.
+
+**The wedge claims no zero page.** It runs from RAM, so its state sits beside
+its code. The SDK already has `UCI_ZP`, defaulting to `$FB`, and two things
+quietly sharing the free bytes is a bug nobody finds for months.
 
 Every shape was read out of the firmware source rather than transcribed, which
 is worth keeping up as the table grows: it caught two errors the prose had been
