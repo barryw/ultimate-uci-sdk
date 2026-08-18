@@ -109,7 +109,7 @@ consumes is a file nothing validates.
 ## 6. Where the SDK stands
 
 ```
-make test         GREEN   110 host unit tests + 187 across 8 suites
+make test         GREEN   114 host unit tests + 187 across 8 suites
 make hardware-run GREEN   5/5 scenarios, 40-52 checks each
 make basic-run    GREEN   32/32 from the .prg and 32/32 from the .crt
 make coverage     GREEN   24/101 commands, and 0 wrapped-but-untested
@@ -123,17 +123,37 @@ about them changed here, except that mutating hardware tests now write to
 
 ## 7. What is left, in the order agreed
 
-### 7.1 The wedge's keywords are not gated by `make coverage`
+### ~~7.1 The wedge's keywords are not gated by `make coverage`~~ — done
 
-`tools/gen_coverage.py` fails the build when an SDK entry point has no test.
-The wedge's keywords are outside it, so a keyword could be added to
-`gen_keywords.py`, tokenise, list, dispatch to nothing, and ship. `basic.suite`
-covers today's 22 by hand, which is not the same as being unable to forget.
+`tools/test_keyword_dispatch.py`, beside `tools/test_blob_table.py` and run by
+the same `make unittest`. It walks `KEYWORDS` and fails the build on a token no
+comparison in `dispatch.s` can ever match.
 
-Smallest honest shape: a test that walks `KEYWORDS`, finds each token in
-`dispatch.s`'s statement dispatch or `wedge_eval`, and fails on one that is
-handled nowhere. That is a table-versus-code check like
-`tools/test_blob_table.py`, and it belongs beside it.
+The part worth knowing before touching it: **dispatch is not one comparison per
+token, so the check cannot pretend it is.** Twelve of the 22 keywords are
+decided by range — the six file statements in `wedge_gone`, the six target
+constants in `wedge_eval` — because a range test and a vector table are smaller
+than twelve comparisons. So it reads bounds the way the 6502 does: a `cmp` with
+a `beq` behind it matches one token, a `cmp` with a `bcc`/`bcs` opens a range,
+and the `cmp #UCI_TOK_X + 1` that follows closes it at X. The `+ 1` is what
+makes the bound inclusive on a 6502, and it is what makes it findable here.
+
+A range brings a hole a token-by-token check would not have: widen the upper
+bound for a seventh file keyword, forget the seventh `.addr`, and the dispatch
+reads two bytes past `wedge_file_vec` and jumps through them. So the vector
+table is counted against the range that indexes it too.
+
+Kind is checked, not only presence: a `STATEMENT` has to be reachable from
+`wedge_gone`, because one known only to `wedge_eval` is a statement that does
+not run. `UW(` and `UL(` are the exception the code already is — functions in
+name, legal only inside a `UCI` argument list, and dispatched entirely in
+`wedge_arg`.
+
+Eight mutations were run against it before it was trusted, and each was caught:
+a statement, a function and a constant appended to `KEYWORDS` and dispatched
+nowhere; the range widened without a vector; a vector dropped; `UTURBO`'s
+statement comparison deleted; `UBYTE(`'s eval comparison deleted; and the
+constant range narrowed from `UHTTP` to `UIEC`.
 
 ### 7.2 The network service
 

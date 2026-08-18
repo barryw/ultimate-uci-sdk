@@ -62,12 +62,13 @@ right and still stands. The other half — *"display text goes through the charm
 and PETSCII is what you want"* — was wrong, and the suite asserted the wrong
 bytes and called them correct, which is how it survived.
 
-### The wedge is not covered by `make coverage`
+### ~~The wedge is not covered by `make coverage`~~ — gated now
 
-`tools/gen_coverage.py` gates on SDK entry points with no test behind them. The
-wedge's keywords are not in it, so a keyword could be added to
-`gen_keywords.py`, tokenise, and dispatch to nothing without anything failing.
-`basic.suite` covers the ones that exist today by hand.
+`tools/gen_coverage.py` still gates only SDK entry points. The keywords got
+their own gate instead of being forced into that one, because they fail
+differently: `tools/test_keyword_dispatch.py` walks `KEYWORDS` and fails on a
+token that no comparison in `dispatch.s` can ever match. `basic.suite` still
+covers today's keywords by hand, and now cannot be the only thing that does.
 
 ### Carry preservation in `IGONE` has no emulator test
 

@@ -27,6 +27,7 @@ code does and what the document says are the same thing.
 import os
 import re
 import unittest
+from pathlib import Path
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BLOB = os.path.join(REPO, "bindings/blob/blob.s")
@@ -47,14 +48,14 @@ FIELD = re.compile(r"^(bp_\w+):\s+\.res\s+(\S+)\s*;\s*\+\$([0-9A-F]+)", re.M)
 def code_entries():
     """(offset, name) for every entry in the jump table, in order."""
     out = []
-    for name, off in JUMP.findall(open(BLOB).read()):
+    for name, off in JUMP.findall(Path(BLOB).read_text()):
         out.append((int(off, 16), name))
     return out
 
 
 def doc_sections():
     """The README either side of the parameter block heading."""
-    text = open(DOC).read()
+    text = Path(DOC).read_text()
     head, _, tail = text.partition(PARAM_HEADING)
     return head, tail
 
@@ -114,7 +115,7 @@ class JumpTable(unittest.TestCase):
     def test_the_parameter_block_fields_are_documented(self):
         documented = doc_fields()
         missing = ["%s at +$%s" % (name, off)
-                   for name, _size, off in FIELD.findall(open(BLOB).read())
+                   for name, _size, off in FIELD.findall(Path(BLOB).read_text())
                    if int(off, 16) not in documented]
         self.assertEqual([], missing,
                          "reserved in blob.s and not in its README: "

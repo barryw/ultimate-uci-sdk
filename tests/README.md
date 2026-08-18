@@ -10,7 +10,8 @@ Two layers. Each catches a class of bug the other structurally cannot.
 A third set lives outside this directory: `tools/test_*.py`, run by
 `make unittest`. Those test the *generators* — the protocol tables, the keyword
 table, the CRUNCH model, the charmap rule, the register boundary, the blob's
-published offsets — on a host, because that is where they run.
+published offsets, and that every keyword in the table reaches code in
+`dispatch.s` — on a host, because that is where they run.
 
 There is no host layer for the SDK itself. There was one, written against the C
 core the assembly rewrite replaced; its 182 assertions live in `emulator/` now, where they run

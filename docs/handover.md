@@ -44,7 +44,7 @@ make wedge            GREEN     uci.prg 5948 bytes, uci.crt 8272. The wedge
                                 holds 2741 of the 4K at $C000, and the SDK runs
                                 at $A000 under BASIC ROM: 3498 of 8K, reached
                                 through the stubs in src/basic/bank.s
-make test             GREEN     110 host unit tests + 187 tests across 8 suites
+make test             GREEN     114 host unit tests + 187 tests across 8 suites
 make basic-run        GREEN     32/32 from the .prg and 32/32 from the .crt, the
                                 same checks typed at a real C64. The cartridge
                                 costs BASIC 8K: 38911 bytes free becomes 30719
@@ -320,9 +320,11 @@ them bite:
 - `docs/architecture.md`'s size figure is measured again, from the link map.
 
 **Whenever the relevant file is next touched:**
-- `tools/gen_coverage.py` gates SDK entry points, not the wedge's keywords. A
-  keyword could be added to `gen_keywords.py`, tokenise, and dispatch to nothing
-  without anything failing; `basic.suite` covers today's by hand.
+- ~~`tools/gen_coverage.py` gates SDK entry points, not the wedge's keywords.~~
+  **Closed** — `tools/test_keyword_dispatch.py` walks `KEYWORDS` and fails the
+  build on a token no comparison in `dispatch.s` can match. It reads the two
+  range tests the way the 6502 does, and counts `wedge_file_vec` against the
+  range that indexes it.
 
 ---
 
