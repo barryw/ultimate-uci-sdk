@@ -25,24 +25,24 @@ suites {
     system(c64)
     symbols("/code/tests/emulator/relocharness.sym")
     load("/code/tests/emulator/relocharness.prg", strip_header = true)
-    load("/code/bindings/blob/build/ultimate-c000.bin", address = $c000)
+    load("/code/bindings/blob/build/ultimate-8000.bin", address = $8000)
     ; Ground truth for reloc-is-complete: the same SDK, linked directly for
     ; $8000 instead of relocated there at runtime. Loaded at $4000 - a scratch
     ; address clear of the harness ($0801), $8000, and $C000 - so it just sits
     ; there as a reference to memcmp against, not as anything that gets called.
-    load("/code/bindings/blob/build/ultimate-8000.bin", address = $4000)
+    load("/code/bindings/blob/build/ultimate-6000.bin", address = $4000)
 
     test("reloc-init", "the relocated blob still brings the interface up") {
       jsr([t_reloc], stop_on_rts = true, fail_on_brk = true)
-      assert($8000 == $d5, "the signature moved with it")
-      assert($8004 == $4c, "and so did the jump table")
+      assert($6000 == $d5, "the signature moved with it")
+      assert($6004 == $4c, "and so did the jump table")
 
       jsr([t_call_init], stop_on_rts = true, fail_on_brk = true)
-      assert([result] == $00, "ULTIMATE_OK from $8000")
+      assert([result] == $00, "ULTIMATE_OK from $6000")
     }
 
-    ; The completeness gate: relocate $C000 down to $8000 at runtime, then
-    ; compare it byte-for-byte against a blob the linker built for $8000
+    ; The completeness gate: relocate $8000 down to $6000 at runtime, then
+    ; compare it byte-for-byte against a blob the linker built for $6000
     ; directly. A missing table entry leaves a stale byte pointing back into
     ; $C0xx; a wrongly-included entry shifts a byte that should have held
     ; still (e.g. the SDK's $DF1B-$DF1F hardware register addresses). Either
@@ -50,7 +50,7 @@ suites {
     ; not just the ones a call graph happens to reach.
     test("reloc-is-complete", "the relocated blob matches a from-scratch $8000 build byte-for-byte") {
       jsr([t_reloc], stop_on_rts = true, fail_on_brk = true)
-      assert(memcmp($8000, $4000, @BLOBSIZE@), "runtime relocation output differs from the $8000 linker build")
+      assert(memcmp($6000, $4000, @BLOBSIZE@), "runtime relocation output differs from the $6000 linker build")
     }
   }
 }

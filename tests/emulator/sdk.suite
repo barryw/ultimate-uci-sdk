@@ -1061,5 +1061,89 @@ suites {
       jsr([t_close], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $00, "CLOSE_FILE succeeded")
     }
+
+    ; --- load ---
+    ;
+    ; There is no SoftwareIEC target under the simulator, so ultimate_load's
+    ; fast path fails here every time and the DOS fallback runs. That is the
+    ; half worth testing in CI: it is what every machine without an IEC drive
+    ; falls back to, and it is the half a hardware test stops reaching the
+    ; moment the fast path works. LOAD_SU/LOAD_EX are proved in
+    ; tests/hardware/ucitest.c instead.
+    ;
+    ; big.bin is 600 bytes, and buf_data is 1024, so both fit with room to spare.
+
+    test("sdk-bload-honours-its-limit", "raw bytes, and no more than asked for") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $2f            ; chdir "/Usb0", so the name below resolves
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $00
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "at the root")
+
+      [reply0] = $62            ; "big.bin"
+      [reply1] = $69
+      [reply2] = $67
+      [reply3] = $2e
+      [reply0] + $04 = $62
+      [reply0] + $05 = $69
+      [reply0] + $06 = $6e
+      [reply0] + $07 = $00
+      [load_addr] = [buf_data].l
+      [load_addr] + $01 = [buf_data].h
+      [load_max] = $40
+      [load_max] + $01 = $00
+      [result] = $ff
+      jsr([t_bload], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+
+      ; 64 bytes asked for, 64 written, and the end address says so - which is
+      ; the assertion that fails if the limit is ignored on a 600-byte file.
+      assert([load_end].w == [buf_data] + $0040, "stopped exactly at the limit")
+
+      ; big.bin counts up from zero, so the first bytes say whether anything was
+      ; skipped. bload strips nothing, which is the whole difference from load.
+      assert([buf_data] == $00, "byte 0 of the file, not of its body")
+      assert(([buf_data] + $01).b == $01, "then 1")
+      assert(([buf_data] + $02).b == $02, "then 2")
+    }
+
+    ; A PRG load with an address given: the two header bytes are consumed and
+    ; never stored, so 600 bytes of file put 598 in memory.
+    test("sdk-load-strips-the-header", "load is not bload with extra steps") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $62            ; "big.bin"
+      [reply1] = $69
+      [reply2] = $67
+      [reply3] = $2e
+      [reply0] + $04 = $62
+      [reply0] + $05 = $69
+      [reply0] + $06 = $6e
+      [reply0] + $07 = $00
+      [load_addr] = [buf_data].l
+      [load_addr] + $01 = [buf_data].h
+      [load_max] = $00
+      [load_max] + $01 = $00
+      [result] = $ff
+      jsr([t_load], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK, after the fast path was tried and failed")
+      assert([load_end].w == [buf_data] + $0256, "598 bytes: 600 less the header")
+
+      ; The same counting file, two bytes further in: $00 $01 were the header
+      ; and were consumed, so the first byte stored is $02.
+      assert([buf_data] == $02, "the header is gone, not merely skipped over")
+      assert(([buf_data] + $01).b == $03, "then 3")
+    }
   }
 }

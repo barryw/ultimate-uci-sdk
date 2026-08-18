@@ -45,7 +45,7 @@ custom linker script, or an assembler with no segment support at all.
 | Knob | Default | What it places |
 |---|---|---|
 | `UCI_ZP` | `$FB` | `UCI_ZP_SIZE` (4) bytes of zero page |
-| `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (99) bytes of variables |
+| `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (111) bytes of variables |
 | the request block | — | not a knob: `uci_exec` takes it by pointer |
 
 ```
@@ -142,6 +142,10 @@ sharing them.
 | `ultimate_seek` | `ult_num` = 32-bit position | `A` = result code |
 | `uci_exec_first` | `A`/`X` = request block | `A` = result, one block |
 | `uci_exec_next` | — | `A` = result, the next block |
+| `ultimate_load` | `ult_buf` = name, `ult_addr` = address (0 = the file's own) | `A` = result, `ult_end` = end |
+| `ultimate_bload` | `ult_buf`, `ult_addr`, `ult_max` | `A` = result, `ult_end` = end |
+| `ultimate_save` | `ult_buf`, `ult_addr` = start, `ult_max` = length | `A` = result |
+| `ultimate_last_end` | — | `A`/`X` = the address after the last load |
 | `uci_present` | — | `A` = 1 when the signature is on the bus |
 | `uci_ident` | — | `A` = the raw identification register |
 | `uci_req_clear` | — | zeroes the request block |

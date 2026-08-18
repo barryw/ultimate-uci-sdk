@@ -112,11 +112,13 @@ It cost twelve bytes per entry point and bought a lot of room: the wedge holds
 It costs BASIC nothing - 38911 bytes free from the `.prg`, unchanged - because
 both regions are outside BASIC's RAM.
 
-**The blob is a separate question and is still on 33 bytes.** It is a different
-delivery: its caller picks the base and cannot be asked to bank, so `$A000` is
-the wrong answer for it. `make -C bindings/blob BASE=8000 VARS=53144` gives the
-code 19K today and changes no jump-table offset, since those are all relative to
-the base. `file.s` will force that choice; the link fails loudly when it does.
+**The blob moved too, and to a different place, because it is a different
+delivery.** Its caller picks the base and cannot be asked to bank, so `$A000`
+was the wrong answer for it. `file.s` overflowed the old 4K by 350 bytes and the
+link said so, exactly as intended; the default is now `BASE=8000 VARS=40704`,
+which puts the whole thing in the 8K at `$8000-$9FFF` - RAM with nothing mapped
+over it, so every byte is reachable with the machine as the caller found it. No
+jump-table offset changed, because they are all relative to the base.
 
 ### Two hardware facts worth keeping
 

@@ -341,7 +341,7 @@ UCI_REQ_SIZE       = $16  ; total size of the block
 ; How much RAM the core needs, and where. All of it is placeable: see
 ; UCI_ZP and UCI_VARS in docs/asm-abi.md.
 UCI_ZP_SIZE   = $04  ; zero page bytes the core needs
-UCI_VARS_SIZE = $63  ; non-zero-page bytes the whole SDK needs
+UCI_VARS_SIZE = $6F  ; non-zero-page bytes the whole SDK needs
 
 ; ---- ASCII literals ----
 ; Bytes that come off the wire are always written numerically. An

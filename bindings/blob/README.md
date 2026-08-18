@@ -4,21 +4,25 @@ Toolchains cannot link each other's objects. This is the same SDK, linked
 standalone with a jump table at its base, so anything that can `jsr` an address
 can use it — with no linking at all.
 
-    make -C bindings/blob                 # build/ultimate-c000.bin at $C000
-    make -C bindings/blob BASE=a000       # at $A000
-    make -C bindings/blob BASE=8000 VARS=49152 ZP=163
+    make -C bindings/blob                 # build/ultimate-8000.bin at $8000
+    make -C bindings/blob BASE=c000       # at $C000 - no longer big enough
+    make -C bindings/blob BASE=6000 VARS=32512 ZP=163
 
-The default build is 3,959 bytes: the 256-byte jump table page and the
+The default build is 4,560 bytes: the 256-byte jump table page and the
 512-byte parameter block, fixed at those sizes so every offset below holds
 regardless of how little of them is used, plus the code itself.
 
-**The 4K at `$C000` is nearly full.** The default `VARS=53144` puts the SDK's
-variables at `$CF98`, at the very top of that region, which leaves about thirty
-bytes between the end of the code and the start of them. The link fails rather
-than overlapping - `blob.cfg.in` sizes the code area from `VARS` - so the next
-module to land will say so instead of quietly producing a blob whose first
-command overwrites its own request block. Build somewhere with more room if you
-have it: `make -C bindings/blob BASE=8000 VARS=53144` gives the code 19K.
+**The default is the 8K at `$8000`, not the 4K at `$C000`.** It was `$C000`
+until `file.s` landed and the code overflowed the block by 350 bytes.
+`$8000-$9FFF` is RAM with nothing mapped over it, so a caller reaches every byte
+with the machine exactly as it found it - which is the difference between the
+blob and the BASIC wedge, whose SDK sits at `$A000` under BASIC ROM and pays a
+stub per call for it. A wedge can bank because it is the only thing calling; a
+blob's caller cannot be asked to.
+
+`blob.cfg.in` sizes the code area from `VARS`, so a build that does not fit
+**fails to link** rather than producing a binary whose first command overwrites
+its own request block.
 
 ## The jump table
 
@@ -55,6 +59,11 @@ against version 5.
 | `+$49` | `ultimate_turbo_set` | `A` = speed index 0-15 | `A` = result |
 | `+$4C` | `ultimate_turbo_badlines` | `A` = 0 for none, non-zero for normal | `A` = result |
 
+The DOS and file services are in the binary and reachable by symbol from a ca65
+link, but are **not on the jump table yet** — a blob caller cannot pass a
+filename in `A`/`X` alone, and giving them table entries before the parameter
+block carries their arguments would fix the wrong contract for ever.
+
 The signature is checked before calling anything:
 
 ```asm
@@ -86,18 +95,18 @@ in `uci_req`. Both live in the block laid out from `UCI_VARS` (see
 `src/uci/uci_core.s`'s `.ifdef UCI_VARS` branch), not in the jump table or the
 page-aligned parameter block above.
 
-For the default build (`VARS=53144`, i.e. `UCI_VARS = $CF98`):
+For the default build (`VARS=40704`, i.e. `UCI_VARS = $9F00`):
 
 | Address | Name | Size |
 |---|---|---|
-| `$CFA6` | `uci_dec_target` | 1 |
-| `$CFA7` | `uci_dec_ptr` | 2 |
-| `$CFA9` | `uci_dec_len` | 1 |
-| `$CFDA` | `uci_req` | `UCI_REQ_SIZE` (22) |
-| `$CFF0` | `ult_color` | 4 — index, r, g, b for `+$3D` |
+| `$9F0E` | `uci_dec_target` | 1 |
+| `$9F0F` | `uci_dec_ptr` | 2 |
+| `$9F11` | `uci_dec_len` | 1 |
+| `$9F42` | `uci_req` | `UCI_REQ_SIZE` (22) |
+| `$9F58` | `ult_color` | 4 — index, r, g, b for `+$3D` |
 
 A build with `VARS=` set to something else shifts all five by the same
-amount: each is `UCI_VARS` plus the fixed offset above minus `$CF98`.
+amount: each is `UCI_VARS` plus the fixed offset above minus `$9F00`.
 
 New variables are appended to the end of the block, never inserted, so the
 addresses above do not move when the SDK grows.
@@ -118,8 +127,8 @@ assemble `reloc.s` into your loader:
 The table is a little-endian count followed by that many 16-bit offsets, each
 naming a byte that holds the high half of an absolute address. It is produced by
 diffing two builds one page apart, so it cannot fall behind the assembler the
-way a hand-written instruction table would. The default build has 160 such
-offsets, a 322-byte table.
+way a hand-written instruction table would. The default build has 190 such
+offsets, a 382-byte table.
 
 `tests/emulator/blob-relocated.suite` moves the blob and then erases the
 original before calling it, which is what turns a missing relocation entry into

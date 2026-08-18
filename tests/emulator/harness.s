@@ -44,7 +44,8 @@
         .import ultimate_chdir, ultimate_getpath
         .import ultimate_opendir, ultimate_readdir
         .import ultimate_open, ultimate_close, ultimate_read
-        .import ult_attrib
+        .import ult_attrib, ult_addr, ult_max, ult_end
+        .import ultimate_load, ultimate_bload
         .import ult_buf, ult_buflen, ult_outlen, ult_color
 
         ; --- entry points ---
@@ -66,6 +67,7 @@
         .export t_turbo_set, t_turbo_badlines
         .export t_chdir, t_getpath, t_opendir, t_readdir
         .export t_open, t_close, t_read
+        .export t_load, t_bload, load_addr, load_max, load_end
         .export dir_attrib
         .export t_req_reset
         .export t_exec
@@ -137,6 +139,9 @@ timeout_val:  .res 1
 pal_index:    .res 1
 turbo_arg:    .res 1
 dir_attrib:   .res 1
+load_addr:    .res 2
+load_max:     .res 2
+load_end:     .res 2
 
 req:         .res UCI_REQ_SIZE
 buf_args:    .res ARGS_MAX
@@ -412,6 +417,50 @@ t_read:
         jsr set_ult_buf
         jsr ultimate_read
         sta result
+        rts
+
+; --- load and save ---
+;
+; The simulator has no SoftwareIEC target, so ultimate_load's fast path always
+; fails here and the DOS fallback always runs. That is not a gap: falling back
+; correctly is the half that every machine without an IEC drive depends on, and
+; it is the half a hardware test cannot reach at all once the fast path works.
+
+t_load: jsr set_load_args
+        jsr ultimate_load
+        sta result
+        jsr save_load_end
+        rts
+
+t_bload:
+        jsr set_load_args
+        jsr ultimate_bload
+        sta result
+        jsr save_load_end
+        rts
+
+; The name is in `reply`, put there by the suite; the address and the limit come
+; from labelled bytes so a test can name them.
+set_load_args:
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda load_addr
+        sta ult_addr
+        lda load_addr + 1
+        sta ult_addr + 1
+        lda load_max
+        sta ult_max
+        lda load_max + 1
+        sta ult_max + 1
+        rts
+
+save_load_end:
+        lda ult_end
+        sta load_end
+        lda ult_end + 1
+        sta load_end + 1
         rts
 
 set_ult_buf:

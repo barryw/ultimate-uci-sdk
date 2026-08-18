@@ -41,6 +41,8 @@
         .export ult_up, ult_buf, ult_buflen, ult_outlen, ult_caps
         .export ult_scratch, ult_req, ult_probe, ult_color
         .export ult_attrib, ult_dir, ult_num
+        .export ult_fargs, ult_addr, ult_max, ult_end, ult_got
+        .export uci_stat
 
 ; ---------------------------------------------------------------------------
 ; Variables
@@ -105,7 +107,17 @@ ult_attrib      = UCI_VARS + 49 + 2 * UCI_REQ_SIZE  ; open's mask in, readdir's 
 ult_dir         = UCI_VARS + 50 + 2 * UCI_REQ_SIZE  ; where a directory walk is up to
 ult_num         = UCI_VARS + 51 + 2 * UCI_REQ_SIZE  ; seek's dword, read's word
 
-.assert (55 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+; --- file service (src/uci/file.s) ---
+; ult_fargs is the SoftwareIEC argument block, laid out per command, and
+; ult_addr is the address field inside it rather than a copy of it - so a caller
+; that sets the address has already filled the argument.
+ult_fargs       = UCI_VARS + 55 + 2 * UCI_REQ_SIZE  ; sec, verify, addr16, unused16
+ult_addr        = UCI_VARS + 57 + 2 * UCI_REQ_SIZE  ; = ult_fargs + 2
+ult_max         = UCI_VARS + 61 + 2 * UCI_REQ_SIZE  ; bload's limit, save's length
+ult_end         = UCI_VARS + 63 + 2 * UCI_REQ_SIZE  ; after the last byte loaded
+ult_got         = UCI_VARS + 65 + 2 * UCI_REQ_SIZE  ; bytes the last chunk moved
+
+.assert (67 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
         .export uci_req
 
@@ -151,6 +163,16 @@ uci_more:       .res 1
 ult_attrib:     .res 1          ; open's DOS_FA_* mask in, readdir's attributes out
 ult_dir:        .res 1          ; where a directory walk is up to
 ult_num:        .res 4          ; seek's 32-bit position, read's 16-bit length
+
+; --- file service (src/uci/file.s) ---
+; ult_addr is the address field inside ult_fargs rather than a copy of it, so a
+; caller that sets the address has already filled the SoftwareIEC argument.
+ult_fargs:      .res 2          ; sec, verify
+ult_addr:       .res 2          ; ...the address field, which callers write
+                .res 2          ; ...and the unused pair LOAD_SU still needs
+ult_max:        .res 2
+ult_end:        .res 2
+ult_got:        .res 2
 
 .endif
 

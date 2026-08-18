@@ -13,15 +13,23 @@ LD65   ?= ld65
 
 # Where the code goes, as four hex digits, and where its RAM goes, in decimal.
 #
-# **The 4K at $C000 is now nearly full.** The default puts the variables at the
-# very top of it ($CF98) because the code below them is 3191 bytes and the
-# header and parameter pages take another 768, which leaves about thirty bytes
-# spare. The link fails rather than overlaps - see blob.cfg.in - so the next
-# module to land will say so loudly instead of corrupting its own request
-# block, but the honest reading is that the SDK has outgrown one 4K region and
-# the base or the layout has to move. docs/handover-next.md has the decision.
-BASE ?= c000
-VARS ?= 53144
+# **The default is the 8K at $8000, because the SDK no longer fits in 4K.**
+# It was $C000 until file.s landed and the code overflowed the block by 350
+# bytes; the link failed rather than overlapping the variables, which is what
+# blob.cfg.in is for.
+#
+# $8000-$9FFF is the right home for a blob: it is RAM with nothing mapped over
+# it, so a caller reaches every byte with the machine exactly as it found it.
+# That is the difference between the blob and the BASIC wedge, which put its
+# SDK at $A000 under BASIC ROM and pays a stub per call for it - the wedge can
+# bank, because the wedge is the only thing calling. A blob's caller cannot be
+# asked to.
+#
+# Everything here is still a link-time choice. Build it anywhere:
+#   make BASE=c000 VARS=53144      the old layout, which no longer fits
+#   make BASE=6000 VARS=32512      wherever suits the program using it
+BASE ?= 8000
+VARS ?= 40704
 ZP   ?= 251
 
 AFLAGS := -t $(TARGET) -I $(ROOT)/bindings/asm -I $(ROOT)/src/uci \
@@ -45,18 +53,21 @@ PROBE_BASE := $(shell printf '%04x' $$(( 0x$(BASE) + 0x100 )))
 
 RELOC := $(BUILD)/ultimate-$(BASE).reloc
 
-all: $(BIN) $(RELOC) $(BUILD)/ultimate-8000.bin
+all: $(BIN) $(RELOC) $(BUILD)/ultimate-6000.bin
 
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/%.o: $(ROOT)/src/uci/%.s | $(BUILD)
+# Makefile, because -D UCI_VARS is baked into every object: changing VARS has to
+# rebuild them, or the code keeps addressing the variables where they used to be
+# and every command comes back INVALID_ARGUMENT.
+$(BUILD)/%.o: $(ROOT)/src/uci/%.s Makefile | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
-$(BUILD)/ultimate_asm.o: $(ROOT)/bindings/asm/ultimate_asm.s | $(BUILD)
+$(BUILD)/ultimate_asm.o: $(ROOT)/bindings/asm/ultimate_asm.s Makefile | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
-$(BUILD)/blob.o: blob.s | $(BUILD)
+$(BUILD)/blob.o: blob.s Makefile | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
 # Where the code may run to: the start of the SDK's variables, less the header
@@ -80,16 +91,16 @@ $(RELOC): $(BIN) $(BUILD)/ultimate-$(PROBE_BASE).bin
 	python3 $(ROOT)/tools/gen_reloc.py $(BIN) \
 	  $(BUILD)/ultimate-$(PROBE_BASE).bin $@
 
-# A second full blob, linked at $8000 rather than $(BASE). This is the ground
+# A second full blob, linked at $6000 rather than $(BASE). This is the ground
 # truth tests/emulator/blob-relocated.suite compares a runtime-relocated copy
 # against: the relocator's output must be byte-identical to what the linker
 # itself produces for that address. Same objects, different config - same
 # pattern as the probe build above.
-$(BUILD)/blob-8000.cfg: blob.cfg.in Makefile | $(BUILD)
-	sed -e 's/@BASE@/$$8000/' -e 's/@MAINSIZE@/$(MAINSIZE)/' $< > $@
+$(BUILD)/blob-6000.cfg: blob.cfg.in Makefile | $(BUILD)
+	sed -e 's/@BASE@/$$6000/' -e 's/@MAINSIZE@/$(MAINSIZE)/' $< > $@
 
-$(BUILD)/ultimate-8000.bin: $(OBJ) $(BUILD)/blob-8000.cfg
-	$(LD65) -C $(BUILD)/blob-8000.cfg -o $@ $(OBJ)
+$(BUILD)/ultimate-6000.bin: $(OBJ) $(BUILD)/blob-6000.cfg
+	$(LD65) -C $(BUILD)/blob-6000.cfg -o $@ $(OBJ)
 
 clean:
 	rm -rf $(BUILD)

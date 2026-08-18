@@ -10,66 +10,83 @@
 suites {
   suite("the sdk as a standalone blob") {
     system(c64)
-    load("/code/bindings/blob/build/ultimate-c000.bin", address = $c000)
+    load("/code/bindings/blob/build/ultimate-8000.bin", address = $8000)
 
     test("blob-signature", "the blob identifies itself at its base address") {
-      assert($c000 == $d5, "'U' in PETSCII")
-      assert($c001 == $c3, "'C'")
-      assert($c002 == $c9, "'I'")
-      assert($c003 == $01, "version 1")
-      assert($c004 == $4c, "a jmp at the first entry")
+      assert($8000 == $d5, "'U' in PETSCII")
+      assert($8001 == $c3, "'C'")
+      assert($8002 == $c9, "'I'")
+      assert($8003 == $01, "version 1")
+      assert($8004 == $4c, "a jmp at the first entry")
       ; sim6502 requires a test to execute something; jsr into the entry we
       ; just verified rather than adding an unrelated instruction.
-      jsr($c004, stop_on_rts = true, fail_on_brk = true)
+      jsr($8004, stop_on_rts = true, fail_on_brk = true)
     }
 
     test("blob-init", "uci_init through the jump table") {
       a = $ff
-      jsr($c004, stop_on_rts = true, fail_on_brk = true)
+      jsr($8004, stop_on_rts = true, fail_on_brk = true)
       assert(a == $00, "ULTIMATE_OK")
     }
 
     test("blob-present", "uci_present through the jump table") {
-      jsr($c00d, stop_on_rts = true, fail_on_brk = true)
+      jsr($800d, stop_on_rts = true, fail_on_brk = true)
       assert(a == $01, "the interface is there")
     }
 
     test("blob-timeout-roundtrip", "set and get the timeout through the table") {
-      jsr($c004, stop_on_rts = true, fail_on_brk = true)
+      jsr($8004, stop_on_rts = true, fail_on_brk = true)
       a = $37
-      jsr($c013, stop_on_rts = true, fail_on_brk = true)
+      jsr($8013, stop_on_rts = true, fail_on_brk = true)
       a = $00
-      jsr($c016, stop_on_rts = true, fail_on_brk = true)
+      jsr($8016, stop_on_rts = true, fail_on_brk = true)
       assert(a == $37, "the budget we set")
     }
 
     ; The real proof: a whole exchange, driven only through the table and the
     ; caller-facing request block, with no symbols at all.
     test("blob-exec", "a command runs through the table") {
-      jsr($c004, stop_on_rts = true, fail_on_brk = true)
+      jsr($8004, stop_on_rts = true, fail_on_brk = true)
       assert(a == $00, "init")
 
       ; uci_req sits 66 bytes into the SDK's variable block, after the service
-      ; layer's own storage. The default VARS is $CF98 - the top of the 4K, see
-      ; bindings/blob/README.md - so the block is at $CFDA.
-      $cfda = $01           ; UCI_REQ_TARGET  = DOS1
-      $cfdb = $f0           ; UCI_REQ_COMMAND = ECHO
-      $cfdc = $0000         ; UCI_REQ_ARGS
-      $cfde = $0000         ; UCI_REQ_ARGLEN
-      $cfe0 = $0000         ; UCI_REQ_PAYLOAD
-      $cfe2 = $0000         ; UCI_REQ_PAYLOADLEN
-      $cfe4 = $c151         ; UCI_REQ_DATA -> the blob's reply buffer
-      $cfe6 = $0100         ; UCI_REQ_DATAMAX
-      $cfe8 = $0000         ; UCI_REQ_DATALEN
-      $cfea = $0000         ; UCI_REQ_STATUS
-      $cfec = $0000         ; UCI_REQ_STATUSMAX
-      $cfee = $0000         ; UCI_REQ_STATUSLEN
+      ; layer's own storage. The default VARS is $9F00 - see
+      ; bindings/blob/README.md - so the block is at $9F42.
+      ;
+      ; **Every byte is written, one byte at a time.** `$9f44 = $0000` stores
+      ; the low byte and leaves the high one holding whatever was in RAM,
+      ; which is the trap docs/handover.md section 4 names - and with the
+      ; variables now outside the loaded image, what was in RAM stopped being
+      ; reliably zero and this test started failing differently run to run.
 
-      jsr($c007, stop_on_rts = true, fail_on_brk = true)
+      $9f42 = $01         ; UCI_REQ_TARGET = DOS1
+      $9f43 = $f0         ; UCI_REQ_COMMAND = ECHO
+      $9f44 = $00         ; UCI_REQ_ARGS
+      $9f45 = $00
+      $9f46 = $00         ; UCI_REQ_ARGLEN
+      $9f47 = $00
+      $9f48 = $00         ; UCI_REQ_PAYLOAD
+      $9f49 = $00
+      $9f4a = $00         ; UCI_REQ_PAYLOADLEN
+      $9f4b = $00
+      $9f4c = $51         ; UCI_REQ_DATA -> the reply buffer at $8151
+      $9f4d = $81
+      $9f4e = $00         ; UCI_REQ_DATAMAX = 256
+      $9f4f = $01
+      $9f50 = $00         ; UCI_REQ_DATALEN
+      $9f51 = $00
+      $9f52 = $00         ; UCI_REQ_STATUS
+      $9f53 = $00
+      $9f54 = $00         ; UCI_REQ_STATUSMAX
+      $9f55 = $00
+      $9f56 = $00         ; UCI_REQ_STATUSLEN
+      $9f57 = $00
+
+      jsr($8007, stop_on_rts = true, fail_on_brk = true)
       assert(a == $00, "ULTIMATE_OK")
-      assert($cfe8.w == $0002, "two bytes echoed")
-      assert($c151 == $01, "target byte")
-      assert($c152 == $f0, "command byte")
+      assert($9f50.w == $0002, "two bytes echoed")
+      assert($8151 == $01, "target byte")
+      assert($8152 == $f0, "command byte")
     }
   }
 }

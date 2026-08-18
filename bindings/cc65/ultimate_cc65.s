@@ -53,6 +53,8 @@ _uci_decode_status:
         .import ultimate_palette_set_color
         .import ultimate_getpath, ultimate_readdir, ultimate_open
         .import ultimate_read, ultimate_write, ultimate_seek
+        .import ultimate_load, ultimate_bload, ultimate_save
+        .import ult_addr, ult_max
         .import ult_buf, ult_buflen, ult_outlen, ult_color
         .import ult_attrib, ult_num
         .import incsp2, incsp4, incsp5
@@ -63,6 +65,7 @@ _uci_decode_status:
         .export _ultimate_palette_set_color
         .export _ultimate_getpath, _ultimate_readdir, _ultimate_open
         .export _ultimate_read, _ultimate_write, _ultimate_seek
+        .export _ultimate_load, _ultimate_bload, _ultimate_save
 
 ; uint8_t ultimate_identify(uint8_t target, char *buf, uint16_t buflen,
 ;                           uint16_t *outlen);
@@ -248,3 +251,62 @@ _ultimate_seek:
         jsr ultimate_seek
         ldx #$00
         rts
+
+; ---------------------------------------------------------------------------
+; file.s. The address and the limit are two more of the shared block's fields,
+; so these are the same unpacking as everything above.
+; ---------------------------------------------------------------------------
+
+; uint8_t ultimate_load(const char *name, uint16_t addr);
+;
+; A/X holds addr; the C stack holds the name pointer at 0..1.
+_ultimate_load:
+        sta ult_addr
+        stx ult_addr + 1
+        jsr cc_name_only
+        jsr ultimate_load
+        ldx #$00
+        rts
+
+; uint8_t ultimate_bload(const char *name, uint16_t addr, uint16_t max);
+; uint8_t ultimate_save (const char *name, uint16_t start, uint16_t len);
+;
+; The same three arguments in the same places: A/X holds the last one, the C
+; stack holds the address at 0..1 and the name at 2..3.
+_ultimate_bload:
+        jsr cc_name_addr_max
+        jsr ultimate_bload
+        ldx #$00
+        rts
+
+_ultimate_save:
+        jsr cc_name_addr_max
+        jsr ultimate_save
+        ldx #$00
+        rts
+
+cc_name_addr_max:
+        sta ult_max
+        stx ult_max + 1
+        ldy #$00
+        lda (c_sp),y
+        sta ult_addr
+        iny
+        lda (c_sp),y
+        sta ult_addr + 1
+        iny
+        lda (c_sp),y
+        sta ult_buf
+        iny
+        lda (c_sp),y
+        sta ult_buf + 1
+        jmp incsp4
+
+cc_name_only:
+        ldy #$00
+        lda (c_sp),y
+        sta ult_buf
+        iny
+        lda (c_sp),y
+        sta ult_buf + 1
+        jmp incsp2

@@ -23,7 +23,8 @@ work to be useful: the palette, and turbo. The BASIC wedge is complete.
 | Layer 2 — the palette, on the control target | complete, assembly — `src/uci/palette.s` |
 | Layer 2 — turbo, on `$D031` | complete, assembly — `src/uci/turbo.s`, in all three languages |
 | Layer 2 — dos: files and directories | complete, assembly — `src/uci/dos.s` |
-| Layer 2 — file, network, http, reu | **not started** — the rest of Phase 3 |
+| Layer 2 — file: load, bload, save | complete, assembly — `src/uci/file.s`, two-tier |
+| Layer 2 — network, http, reu | **not started** — the rest of Phase 3 |
 | Layer 3 — ca65 / cc65 bindings | working |
 | Layer 3 — the blob (any toolchain, no linking) | **working** — Phase 1, done |
 | Layer 3 — BASIC wedge | **Phase 2 complete** — `.prg` and `.crt`, 41 tests |
@@ -31,9 +32,10 @@ work to be useful: the palette, and turbo. The BASIC wedge is complete.
 
 ```
 make lib              GREEN
-make blob             GREEN     3959 bytes, 160 relocations. The 4K at $C000
-                                has about 30 bytes left; the link now fails
-                                rather than overlapping the variables
+make blob             GREEN     4560 bytes, 190 relocations, now based at
+                                $8000 with its variables at $9F00: file.s
+                                overflowed the old 4K at $C000 by 350 bytes
+                                and the link said so
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
@@ -41,7 +43,7 @@ make wedge            GREEN     uci.prg 3402 bytes, uci.crt 8272. The wedge
                                 holds 2078 of the 4K at $C000, and the SDK runs
                                 at $A000 under BASIC ROM: 1595 of 8K, reached
                                 through the stubs in src/basic/bank.s
-make test             GREEN     100 host unit tests + 151 tests across 8 suites
+make test             GREEN     100 host unit tests + 155 tests across 8 suites
 make basic-run        GREEN     13/13 from the .prg and 13/13 from the .crt, the
                                 same checks typed at a real C64. The cartridge
                                 costs BASIC 8K: 38911 bytes free becomes 30719

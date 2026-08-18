@@ -20,7 +20,7 @@ LIB := $(ROOT)/bindings/cc65/build/ultimate.lib
 
 # The standalone blob (Task 6): the same core, linked with a jump table at a
 # fixed base address, and no symbol file - what blob.suite drives.
-BLOB := $(ROOT)/bindings/blob/build/ultimate-c000.bin
+BLOB := $(ROOT)/bindings/blob/build/ultimate-8000.bin
 
 $(BLOB): FORCE
 	$(MAKE) -C $(ROOT)/bindings/blob
@@ -58,6 +58,7 @@ HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_available \
                 turbo_arg \
                 t_chdir t_getpath t_opendir t_readdir \
                 t_open t_close t_read dir_attrib \
+                t_load t_bload load_addr load_max load_end \
                 t_decode t_status_fmt t_strerror t_set_timeout t_get_timeout \
                 result devcode reply reply_len reply0 reply1 reply2 reply3 \
                 caps caps_present caps_ident caps_targets_lo caps_targets_hi \

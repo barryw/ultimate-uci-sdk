@@ -248,6 +248,45 @@ uint8_t ultimate_write(const uint8_t *buf, uint16_t len);
 /* Seek to an absolute byte position in the open file. */
 uint8_t ultimate_seek(uint32_t pos);
 
+/*
+ * Loading and saving, which is what most programs actually want from a
+ * filesystem.
+ *
+ * ultimate_load() has two tiers and picks between them by trying the fast one:
+ *
+ *   SoftwareIEC usable?  -> LOAD_SU + LOAD_EX, and the firmware writes straight
+ *                           into C64 RAM
+ *   otherwise            -> DOS open/read/close, every byte through the
+ *                           response queue
+ *
+ * Trying rather than asking is deliberate. Target $05 reports present even when
+ * the IEC drive is switched off, and detection could not tell you a particular
+ * *file* is loadable in any case, so the only honest test is the command
+ * itself. Nothing about this is visible to the caller except the speed.
+ */
+
+/*
+ * Load a PRG. addr == 0 takes the address from the file's own first two bytes,
+ * exactly as LOAD"X",8,1 does; any other value loads there instead. The two
+ * header bytes are consumed either way and never stored.
+ *
+ * ultimate_last_end() then gives the address after the last byte written.
+ */
+uint8_t ultimate_load(const char *name, uint16_t addr);
+
+/*
+ * Load raw bytes: no header consumed, no address taken from the file. max is a
+ * hard limit and must be given, because the destination is RAM the caller
+ * named and nothing else is going to stop the write.
+ */
+uint8_t ultimate_bload(const char *name, uint16_t addr, uint16_t max);
+
+/* Write len bytes of memory from start to a file, replacing any existing one. */
+uint8_t ultimate_save(const char *name, uint16_t start, uint16_t len);
+
+/* The address after the last byte the previous load wrote. */
+uint16_t ultimate_last_end(void);
+
 /* A short, stable, English description of an ULTIMATE_* code. Never NULL. */
 const char *ultimate_strerror(uint8_t err);
 

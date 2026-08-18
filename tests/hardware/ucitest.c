@@ -112,6 +112,33 @@ static uint16_t work_per_frame(void)
         return 0;
     return (uint16_t)((work * WORK_UNITS) / frame);
 }
+/*
+ * Somewhere to load into that is neither the program nor its data. $C000 is the
+ * 4K block a cc65 .prg never touches, and this test never runs the bytes it
+ * puts there - it only looks at them.
+ */
+#define LOAD_TEST_ADDR 0xC000
+
+/*
+ * "/Usb1/data/hello.txt", as bytes.
+ *
+ * A filename goes on the wire, so it is protocol and not display text: cc65
+ * would charmap a literal, and 'd' would leave here as $44 - ASCII 'D'. FAT
+ * lookup is case-insensitive, so a charmapped name happens to work, which is
+ * exactly the sort of accident that stops being true on the first filesystem
+ * that cares. See docs/handover.md section 2.
+ */
+static const char hello_path[] = {
+    0x2F, 0x55, 0x73, 0x62, 0x31, 0x2F,         /* /Usb1/ - absolute, because
+                                                   the DOS target's current
+                                                   directory is whatever the
+                                                   last thing to touch it left
+                                                   behind */
+    0x64, 0x61, 0x74, 0x61, 0x2F,               /* data/  */
+    0x68, 0x65, 0x6C, 0x6C, 0x6F,               /* hello  */
+    0x2E, 0x74, 0x78, 0x74, 0x00                /* .txt   */
+};
+
 static uint8_t saved[UCI_PALETTE_BYTES];
 static uint8_t readback[UCI_PALETTE_BYTES];
 
@@ -393,6 +420,50 @@ int main(void)
 
         /* Put the machine back at the speed it was found at. */
         ultimate_turbo_set(entry);
+    }
+
+    /*
+     * 28-31: the fast load path, which only exists on real hardware. u64sim has
+     * no SoftwareIEC target at all, so the emulator suite always exercises the
+     * DOS fallback - the two halves of ultimate_load() are tested in different
+     * places by necessity, and each is the only place its half runs.
+     *
+     * The fixture is pushed over FTP by the test data policy in
+     * docs/handover.md section 6; if it is not there the load fails cleanly and
+     * says so, which is itself the behaviour a program shipping to other people
+     * depends on.
+     */
+    if (!ultimate_has_softiec(&caps)) {
+        skip("load-fast-path", "no softwareiec target on this firmware");
+    } else {
+        uint8_t *at = (uint8_t *)LOAD_TEST_ADDR;
+
+        at[0] = 0x00;
+        err = ultimate_load(hello_path, LOAD_TEST_ADDR);
+        if (err != ULTIMATE_OK) {
+            skip("load-fast-path", "the fixture is not on the device");
+        } else {
+            check("load-fast-path", ULTIMATE_OK, err);
+            /*
+             * hello.txt is 28 bytes of "HELLO FROM THE U...". Two of them are
+             * eaten as the PRG header whichever tier ran, so 26 land, and the
+             * first stored byte is the third character.
+             */
+            check("load-end-address", LOAD_TEST_ADDR + 26,
+                  (int)ultimate_last_end());
+            check("load-wrote-the-file", 0x4C, (int)at[0]);  /* 'L' of HELLO */
+        }
+
+        /* Raw, with a limit: no header eaten, and not a byte past the cap. */
+        at[0] = 0x00;
+        err = ultimate_bload(hello_path, LOAD_TEST_ADDR, 8);
+        if (err == ULTIMATE_OK) {
+            check("bload-honours-its-limit", LOAD_TEST_ADDR + 8,
+                  (int)ultimate_last_end());
+            check("bload-strips-nothing", 0x48, (int)at[0]);  /* 'H' */
+        } else {
+            skip("bload-honours-its-limit", "the fixture is not on the device");
+        }
     }
 
     printf("1..%u\n", test_no);
