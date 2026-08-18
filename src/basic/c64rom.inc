@@ -68,3 +68,13 @@ READY           = $E386         ; print READY. and enter the direct-mode loop
 ; ---- tokens the wedge has to recognise in a crunched line ----
 TOK_DATA        = $83           ; both arm CRUNCH's verbatim mode, so the wedge
 TOK_REM         = $8F           ; must stop matching until the next ':'
+
+; ---- added for dispatch ----
+LINNUM          = $0014         ; GETADR's 16-bit result
+INDEX           = $0022         ; BASIC's own pointer scratch, free inside a
+                                ; statement handler
+FACMO           = $0063         ; FAC1 mantissa, middle bytes
+NGONE1          = $A7E7         ; the ROM's statement path, after its own CHRGET
+QINT            = $BC9B         ; FAC1 -> 32-bit signed in FACHO..FACHO+3, MSB first
+PUTNEW          = $B4CA         ; make the descriptor in DSCTMP the current
+                                ; temporary string, and set VALTYP

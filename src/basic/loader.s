@@ -14,7 +14,8 @@
         .include "c64rom.inc"
 
         .import wedge_install
-        .import __WEDGE_LOAD__, __WEDGE_RUN__, __WEDGE_SIZE__
+        .import __CODE_LOAD__, __CODE_RUN__, __CODE_SIZE__
+        .import __RODATA_SIZE__
 
         .export boot, wedge_copy
 
@@ -41,7 +42,7 @@ PTR_DST = $FD
 
 ; ---------------------------------------------------------------------------
 
-        .segment "CODE"
+        .segment "LOADER"
 
 boot:
         jsr wedge_copy
@@ -58,16 +59,16 @@ boot:
 ; direct-mode loop - and a test has to be able to get the wedge to $C000 and
 ; carry on.
 wedge_copy:
-        lda #<__WEDGE_LOAD__
+        lda #<__CODE_LOAD__
         sta PTR_SRC
-        lda #>__WEDGE_LOAD__
+        lda #>__CODE_LOAD__
         sta PTR_SRC+1
-        lda #<__WEDGE_RUN__
+        lda #<__CODE_RUN__
         sta PTR_DST
-        lda #>__WEDGE_RUN__
+        lda #>__CODE_RUN__
         sta PTR_DST+1
 
-        ldx #>__WEDGE_SIZE__    ; whole pages first
+        ldx #>(__CODE_SIZE__ + __RODATA_SIZE__)   ; whole pages first
         ldy #$00
 @pages: cpx #$00
         beq @tail
@@ -80,7 +81,7 @@ wedge_copy:
         dex
         jmp @pages
 
-@tail:  cpy #<__WEDGE_SIZE__    ; then the odd bytes
+@tail:  cpy #<(__CODE_SIZE__ + __RODATA_SIZE__)   ; then the odd bytes
         beq @copied
         lda (PTR_SRC),y
         sta (PTR_DST),y

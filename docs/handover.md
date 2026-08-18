@@ -23,7 +23,7 @@ lists its own keywords; what is left of it is dispatch.
 | Layer 2 — dos, file, network, http, control, reu | **not started** — Phase 3 |
 | Layer 3 — ca65 / cc65 bindings | working |
 | Layer 3 — the blob (any toolchain, no linking) | **working** — Phase 1, done |
-| Layer 3 — BASIC wedge | **tokeniser and LIST done** — Phase 2, dispatch next |
+| Layer 3 — BASIC wedge | **working** — Phase 2; generic `UCI`, observers, `.crt` left |
 | Layer 3 — Oscar64, llvm-mos, KickC | not started; the blob is now their route in |
 
 ```
@@ -32,8 +32,8 @@ make blob             GREEN     2860 bytes, 89 relocations
 make -C examples/asm  GREEN
 make -C examples/cc65 GREEN
 make hardware         GREEN
-make wedge            GREEN     uci.prg, 580 bytes; the wedge itself is 346
-make test             GREEN     86 host unit tests + 97 tests across 8 suites
+make wedge            GREEN     uci.prg, 2636 bytes; wedge + SDK at $C000 is 2931
+make test             GREEN     86 host unit tests + 108 tests across 8 suites
 make hardware-run     GREEN     4/4 scenarios on real hardware, 13 checks each
                                 except uci-disabled, which asserts one clean
                                 failure and is meant to report failed=1
@@ -162,7 +162,7 @@ a message naming the fix unless `tests/emulator/roms` holds `basic.bin` and
 | `absent.suite` | `sim` — nothing at `$DF1B` | failing fast with no Ultimate |
 | `blob.suite` | `u64sim` | the blob through its jump table, no symbols |
 | `blob-relocated.suite` | `u64sim` | the blob moved at run time |
-| `basic.suite` | `sim` **+ real BASIC ROM** | the wedge's tokeniser and its LIST lookup |
+| `basic.suite` | `u64sim` **+ real BASIC ROM** | the wedge: tokenising, LIST lookup, and commands running against a simulated Ultimate |
 
 **Most tests need no new assembly.** `harness.s` exports a request block and the
 buffers it points at, so a suite fills the block from the DSL and calls

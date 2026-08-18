@@ -23,7 +23,25 @@ suites {
 
     ; The .prg loads at $0801; the wedge runs at $C000. Every test needs it
     ; moved there first, which is why copying is an entry point of its own.
+    ; FRETOP and MEMSIZ are pinned to $A000 because $E3BF takes them from the
+    ; KERNAL's memory-top call, which needs a machine this backend does not
+    ; simulate. Without them string space is nowhere and UST$ or UDAT$ fails on
+    ; allocation rather than on anything the wedge did.
+    ;
+    ; $FF87 is the KERNAL's RAM test, $E3BF is BASIC's zero page bring-up, and
+    ; $A67A resets the stack. None is optional. $E3BF copies the CHRGET routine
+    ; into zero page, without which nothing that reads BASIC text runs at all;
+    ; $A67A is what the cold start does straight afterwards, and without it
+    ; FRMEVL runs out of stack the moment an argument is an expression. On a
+    ; real machine the user has been through all three before typing LOAD.
     setup {
+      jsr($ff87, stop_on_rts = true, fail_on_brk = true)
+      jsr($e3bf, stop_on_rts = true, fail_on_brk = true)
+      jsr($a67a, stop_on_rts = true, fail_on_brk = true)
+      $0033 = $00
+      $0034 = $a0
+      $0037 = $00
+      $0038 = $a0
       jsr([wedge_copy], stop_on_rts = true, fail_on_brk = true)
       jsr([wedge_install], stop_on_rts = true, fail_on_brk = true)
     }
@@ -33,11 +51,19 @@ suites {
       $0305 = $00
       [IQPLOP] = $00
       $0307 = $00
+      [IGONE] = $00
+      $0309 = $00
+      [IEVAL] = $00
+      $030b = $00
       jsr([wedge_install], stop_on_rts = true, fail_on_brk = true)
-      assert([ICRNCH] == $15, "ICRNCH low byte points into the wedge")
-      assert($0305 == $c0, "ICRNCH high byte")
-      assert([IQPLOP] == $f7, "IQPLOP low byte")
-      assert($0307 == $c0, "IQPLOP high byte")
+      assert([ICRNCH] == [wedge_crunch].l, "ICRNCH points at the tokenizer")
+      assert($0305 == [wedge_crunch].h, "...both bytes of it")
+      assert([IQPLOP] == [wedge_qplop].l, "IQPLOP points at the LIST hook")
+      assert($0307 == [wedge_qplop].h, "...both bytes")
+      assert([IGONE] == [wedge_gone].l, "IGONE points at statement dispatch")
+      assert($0309 == [wedge_gone].h, "...both bytes")
+      assert([IEVAL] == [wedge_eval].l, "IEVAL points at term evaluation")
+      assert($030b == [wedge_eval].h, "...both bytes")
     }
 
     ; The control for every substitution test below. $A57C is the ROM's own
@@ -282,5 +308,296 @@ suites {
       jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
       assert($0200 == $00, "still an empty line")
     }
+
+    ; ----------------------------------------------------------------------
+    ; Dispatch. From here the tokens do not just exist, they run: the text goes
+    ; through the wedge's own tokenizer, then TXTPTR is aimed just past the
+    ; token and the statement handler is entered as IGONE would enter it.
+    ;
+    ; TXTPTR lands on the space after the token rather than on the first
+    ; argument, because CHRGOT skips spaces itself - which is exactly what the
+    ; handler relies on when BASIC calls it for real.
+    ; ----------------------------------------------------------------------
+
+    ; UCI 1,1 - IDENTIFY on Ultimate DOS. It cannot fail, so it is the
+    ; cheapest thing that proves the whole path: tokenize, dispatch, marshal,
+    ; transport, and the reply landing where the observers read it.
+    test("uci-statement-runs-a-command", "the generic statement reaches the device") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $31
+      $0207 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "ULTIMATE_OK")
+      assert([wedge_target] == $01, "target 1 was parsed")
+      assert([wedge_command] == $01, "command 1 was parsed")
+      assert([wedge_reply] == $55, "the reply starts 'U' of ULTIMATE")
+    }
+
+    ; Arguments. ECHO returns the command bytes verbatim, so it is the one
+    ; command that can show what actually went on the wire - which is the only
+    ; way to tell a marshalling bug from a transport one.
+    test("uci-statement-marshals-byte-arguments", "one numeric argument is one byte") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $32
+      $0207 = $34
+      $0208 = $30
+      $0209 = $2c
+      $020a = $37
+      $020b = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_command] == $f0, "240 is DOS_CMD_ECHO")
+      assert([wedge_arglen] == $01, "one argument, one byte")
+      assert([wedge_argbuf] == $07, "the argument byte")
+      assert([wedge_reply] == $01, "ECHO replies with the target byte")
+      assert(peekbyte([wedge_reply] + $01) == $f0, "then the command")
+      assert(peekbyte([wedge_reply] + $02) == $07, "then the argument, as sent")
+    }
+
+    test("uci-uw-forces-a-16-bit-argument", "UW(300) is two bytes, LSB first, where the default rule would send one") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $32
+      $0207 = $34
+      $0208 = $30
+      $0209 = $2c
+      $020a = $55
+      $020b = $57
+      $020c = $28
+      $020d = $33
+      $020e = $30
+      $020f = $30
+      $0210 = $29
+      $0211 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_arglen] == $02, "two bytes, not one")
+      assert([wedge_argbuf] == $2c, "low byte of 300")
+      assert(peekbyte([wedge_argbuf] + $01) == $01, "high byte")
+      assert(peekbyte([wedge_reply] + $02) == $2c, "and that is what ECHO saw")
+      assert(peekbyte([wedge_reply] + $03) == $01, "both bytes of it")
+    }
+
+    test("uci-ul-forces-a-32-bit-argument", "UL(100000) survives a value GETADR alone could not carry") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $32
+      $0207 = $34
+      $0208 = $30
+      $0209 = $2c
+      $020a = $55
+      $020b = $4c
+      $020c = $28
+      $020d = $31
+      $020e = $30
+      $020f = $30
+      $0210 = $30
+      $0211 = $30
+      $0212 = $30
+      $0213 = $29
+      $0214 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_arglen] == $04, "four bytes")
+      assert([wedge_argbuf] == $a0, "100000 is $000186A0, LSB first")
+      assert(peekbyte([wedge_argbuf] + $01) == $86, "...")
+      assert(peekbyte([wedge_argbuf] + $02) == $01, "...")
+      assert(peekbyte([wedge_argbuf] + $03) == $00, "...")
+      assert(peekbyte([wedge_reply] + $02) == $a0, "and ECHO agrees")
+      assert(peekbyte([wedge_reply] + $05) == $00, "to the last byte")
+    }
+
+    test("uci-marshals-a-string-argument", "a string contributes its bytes, with no length and no terminator") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $32
+      $0207 = $34
+      $0208 = $30
+      $0209 = $2c
+      $020a = $22
+      $020b = $48
+      $020c = $49
+      $020d = $22
+      $020e = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_arglen] == $02, "two characters, two bytes")
+      assert([wedge_argbuf] == $48, "'H'")
+      assert(peekbyte([wedge_argbuf] + $01) == $49, "'I'")
+      assert(peekbyte([wedge_reply] + $02) == $48, "ECHO saw 'H'")
+      assert(peekbyte([wedge_reply] + $03) == $49, "and 'I'")
+    }
+
+    test("uci-mixes-numbers-and-strings", "OPEN_FILE's shape: a byte then a name, which is the common case") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $32
+      $0207 = $34
+      $0208 = $30
+      $0209 = $2c
+      $020a = $31
+      $020b = $2c
+      $020c = $22
+      $020d = $41
+      $020e = $2e
+      $020f = $50
+      $0210 = $52
+      $0211 = $47
+      $0212 = $22
+      $0213 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_arglen] == $06, "one byte plus five characters")
+      assert([wedge_argbuf] == $01, "the attribute byte")
+      assert(peekbyte([wedge_argbuf] + $01) == $41, "'A'")
+      assert(peekbyte([wedge_argbuf] + $05) == $47, "'G' of PRG")
+    }
+
+    ; ----------------------------------------------------------------------
+    ; Observers. These go through IEVAL, which is entered with TXTPTR sitting
+    ; *before* the term - the ROM's handler does its own CHRGET - so the token
+    ; goes at $0200 and the pointer one byte behind it.
+    ; ----------------------------------------------------------------------
+
+    ; A target constant. FAC holding 1.0 is exponent $81 with the mantissa
+    ; normalised to $80, which is what "the wedge returned the number 1" looks
+    ; like from outside.
+    test("ueval-returns-a-target-constant", "UDOS1 evaluates to target 1") {
+      $0200 = $d5
+      $0201 = $00
+      $007a = $ff
+      $007b = $01
+      jsr([wedge_eval], stop_on_rts = true, fail_on_brk = true)
+      assert($0061 == $81, "FAC exponent for 1.0")
+      assert($0062 == $80, "and its mantissa")
+      assert($000d == $00, "a number, not a string")
+    }
+
+    test("ueval-returns-the-last-target-constant", "UHTTP is target 6") {
+      $0200 = $da
+      $0201 = $00
+      $007a = $ff
+      $007b = $01
+      jsr([wedge_eval], stop_on_rts = true, fail_on_brk = true)
+      assert($0061 == $83, "6.0 is 1.5 x 2^2")
+      assert($0062 == $c0, "...with this mantissa")
+    }
+
+    ; UERR after a command that cannot fail. Zero is the one FAC value with a
+    ; zero exponent, so this is unambiguous.
+    test("ueval-uerr-is-zero-after-a-command-that-worked", "the observer reads the real result") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $31
+      $0207 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      assert([wedge_err] == $00, "the command worked")
+      $0200 = $cd
+      $0201 = $00
+      $007a = $ff
+      $007b = $01
+      jsr([wedge_eval], stop_on_rts = true, fail_on_brk = true)
+      assert($0061 == $00, "UERR evaluated to zero")
+      assert($000d == $00, "as a number")
+    }
+
+    ; UDAT$ has to come back as a string, and as a copy - the reply buffer is
+    ; overwritten by the next command, and a BASIC string has to outlive that.
+    test("ueval-udat-returns-a-string", "the reply reaches BASIC as a string value") {
+      $0200 = $55
+      $0201 = $43
+      $0202 = $49
+      $0203 = $20
+      $0204 = $31
+      $0205 = $2c
+      $0206 = $31
+      $0207 = $00
+      $007a = $00
+      $007b = $02
+      jsr([wedge_crunch], stop_on_rts = true, fail_on_brk = true)
+      $007a = $01
+      $007b = $02
+      jsr([wedge_do_uci], stop_on_rts = true, fail_on_brk = true)
+      $0200 = $d1
+      $0201 = $00
+      $007a = $ff
+      $007b = $01
+      jsr([wedge_eval], stop_on_rts = true, fail_on_brk = true)
+      assert($000d == $ff, "VALTYP says string")
+    }
+
+    ; A term the wedge does not own has to reach the ROM with TXTPTR exactly
+    ; where it was, or every ordinary expression in every program breaks.
+    test("ueval-hands-back-terms-it-does-not-own", "an ordinary number still evaluates") {
+      $0200 = $37
+      $0201 = $00
+      $007a = $ff
+      $007b = $01
+      jsr([wedge_eval], stop_on_rts = true, fail_on_brk = true)
+      assert($0061 == $83, "7.0")
+      assert($0062 == $e0, "...with this mantissa")
+      assert($000d == $00, "a number")
+    }
+
   }
 }

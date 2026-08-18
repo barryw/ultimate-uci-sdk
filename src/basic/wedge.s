@@ -28,6 +28,8 @@
         .include "c64rom.inc"
         .include "uci_keywords.inc"
 
+        .import wedge_gone, wedge_eval, wedge_sdk_init
+
         .export wedge_install
         .export wedge_crunch, wedge_qplop, wedge_match
         .export wedge_print_keyword, wedge_find_keyword, wedge_len
@@ -35,14 +37,15 @@
 
 ; Exported for the test suite, whose memory references take a symbol and not an
 ; address. They are ROM and zero page facts, not wedge storage.
-        .export BUF, TXTPTR, ICRNCH, IQPLOP, DORES
+        .export BUF, TXTPTR, ICRNCH, IQPLOP, IGONE, IEVAL, DORES
 
 ; The table is walked with 8-bit arithmetic, so it has to fit in one page.
         .assert uci_keywords_size < 256, error, "keyword table outgrew one page"
 
-; Assembled to run at WEDGERAM, loaded wherever the loader puts it, and copied
-; there before anything calls it. See uci-wedge.cfg.
-        .segment "WEDGE"
+; The CODE segment loads with the .prg and runs at $C000; the loader copies it
+; there. The SDK's own modules land in the same segment, so a NEW cannot leave
+; BASIC growing over the transport. See uci-wedge.cfg.
+        .segment "CODE"
 
 ; ---------------------------------------------------------------------------
 ; Installation.
@@ -60,7 +63,15 @@ wedge_install:
         sta IQPLOP
         lda #>wedge_qplop
         sta IQPLOP+1
-        rts
+        lda #<wedge_gone
+        sta IGONE
+        lda #>wedge_gone
+        sta IGONE+1
+        lda #<wedge_eval
+        sta IEVAL
+        lda #>wedge_eval
+        sta IEVAL+1
+        jmp wedge_sdk_init
 
 ; ---------------------------------------------------------------------------
 ; ICRNCH - tokenise.

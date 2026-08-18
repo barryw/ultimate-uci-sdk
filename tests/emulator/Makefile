@@ -145,7 +145,8 @@ basic: $(WEDGE_PRG) basic.sym
 	@if [ -r "$(C64_ROMS)/basic.bin" ] && [ -r "$(C64_ROMS)/kernal.bin" ]; then \
 	  mkdir -p roms; \
 	  [ "$(C64_ROMS)" = "roms" ] || cp "$(C64_ROMS)/basic.bin" "$(C64_ROMS)/kernal.bin" roms/; \
-	  $(SIM6502) -s /code/tests/emulator/basic.suite --backend sim; \
+	  $(SIM6502) -s /code/tests/emulator/basic.suite \
+	    --backend u64sim --u64sim-fs-root $(FS_ROOT); \
 	else \
 	  echo "skipping basic.suite: no C64 ROM images."; \
 	  echo "  put basic.bin and kernal.bin in tests/emulator/roms,"; \
@@ -158,10 +159,13 @@ $(WEDGE_PRG): FORCE
 	$(MAKE) -C $(ROOT)/src/basic
 
 # The wedge's symbols, filtered from its link map exactly as the harness's are.
-WEDGE_SYMS := BUF TXTPTR ICRNCH IQPLOP DORES \
+WEDGE_SYMS := BUF TXTPTR ICRNCH IQPLOP IGONE IEVAL DORES \
               wedge_copy wedge_install wedge_crunch wedge_qplop \
               wedge_print_keyword wedge_find_keyword wedge_len \
-              wedge_src wedge_dst wedge_verbatim
+              wedge_src wedge_dst wedge_verbatim \
+              wedge_gone wedge_eval wedge_do_uci wedge_err \
+              wedge_target wedge_command wedge_arglen wedge_argbuf \
+              wedge_reply wedge_status uci_req
 
 basic.sym: $(WEDGE_PRG)
 	awk -v want="$(WEDGE_SYMS)" ' \
