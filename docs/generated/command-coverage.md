@@ -39,8 +39,8 @@ commands as tested that no test has ever sent.
 | Ultimate DOS commands | `DOS_CMD_COPY_UI_PATH` | `$15` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_CREATE_DIR` | `$16` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_COPY_HOME_PATH` | `$17` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_LOAD_REU` | `$21` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_SAVE_REU` | `$22` | no API yet | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_LOAD_REU` | `$21` | tested | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_SAVE_REU` | `$22` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_MOUNT_DISK` | `$23` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_UMOUNT_DISK` | `$24` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_SWAP_DISK` | `$25` | no API yet | simulator + hardware |
@@ -127,7 +127,7 @@ commands as tested that no test has ever sent.
 | | |
 | --- | --- |
 | commands defined | 101 |
-| exercised by a test | 22 (21%) |
+| exercised by a test | 24 (23%) |
 | wrapped but untested | 0 |
 
 The low figure is expected while the SDK is still a vertical slice:

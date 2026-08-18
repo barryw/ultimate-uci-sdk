@@ -290,6 +290,32 @@ uint8_t ultimate_save(const char *name, uint16_t start, uint16_t len);
 /* The address after the last byte the previous load wrote. */
 uint16_t ultimate_last_end(void);
 
+/*
+ * The RAM expansion.
+ *
+ * Two pairs, and they are not the same operation twice. ultimate_reu_stash()
+ * and ultimate_reu_fetch() move bytes between C64 RAM and the expansion over
+ * the REU's own DMA registers, because no UCI command does it. The transfer
+ * runs with the CPU halted, so it is finished when the call returns and
+ * nothing here can block.
+ *
+ * ultimate_reu_load() and ultimate_reu_save() move bytes between the expansion
+ * and the *currently open file* - open it with ultimate_open() first - without
+ * any of them passing through the C64 at all.
+ *
+ * Lengths are bytes. A DMA length of 0 means 65536, which is the REU's own
+ * convention rather than an SDK invention.
+ *
+ * Whether there is an expansion at all is the machine owner's decision, exactly
+ * as turbo is: ultimate_reu_available() answers it, and the DMA pair returns
+ * ULTIMATE_ERR_NOT_SUPPORTED rather than pretending.
+ */
+uint8_t ultimate_reu_available(void);
+uint8_t ultimate_reu_stash(uint16_t addr, uint32_t reuaddr, uint16_t len);
+uint8_t ultimate_reu_fetch(uint16_t addr, uint32_t reuaddr, uint16_t len);
+uint8_t ultimate_reu_load(uint32_t reuaddr, uint32_t len);
+uint8_t ultimate_reu_save(uint32_t reuaddr, uint32_t len);
+
 /* A short, stable, English description of an ULTIMATE_* code. Never NULL. */
 const char *ultimate_strerror(uint8_t err);
 

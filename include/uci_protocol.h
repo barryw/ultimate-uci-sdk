@@ -290,6 +290,42 @@
 #define U64_TURBO_NO_BADLINES 0x80  /* set to stop the VIC stealing cycles */
 #define U64_TURBO_UNAVAILABLE 0xFF  /* what both registers read when turbo is off in config */
 
+/* ---- REU registers (NOT UCI) ---- */
+/* The second and last thing the SDK reaches without the command interface, */
+/* for the same reason as turbo: no UCI command moves bytes between C64 RAM */
+/* and the REU. The register set is the 1750's, implemented in */
+/* fpga/cart_slot/vhdl_source/reu.vhd, and the command interface overlays */
+/* $DF1B-$DF1F above it - the REU decodes $DF00-$DF17 only, so the two */
+/* coexist. A transfer runs under DMA with the CPU halted, so it is */
+/* finished by the time the next instruction runs. */
+#define REU_REG_STATUS   57088  /* R    bit 7 IRQ, 6 done, 5 verify error, 4 size; reading clears 6 and 5 */
+#define REU_REG_COMMAND  57089  /* R/W  bit 7 execute, 5 autoload, 4 start now, bits 1-0 mode */
+#define REU_REG_C64_LO   57090  /* R/W  C64 base address, low */
+#define REU_REG_C64_HI   57091  /* R/W  C64 base address, high */
+#define REU_REG_ADDR_LO  57092  /* R/W  REU base address, low */
+#define REU_REG_ADDR_MID 57093  /* R/W  REU base address, middle */
+#define REU_REG_ADDR_HI  57094  /* R/W  REU base address, high */
+#define REU_REG_LEN_LO   57095  /* R/W  transfer length, low */
+#define REU_REG_LEN_HI   57096  /* R/W  transfer length, high; 0 means 65536 */
+#define REU_REG_IRQMASK  57097  /* R/W  bit 7 enable, 6 on done, 5 on verify error */
+#define REU_REG_CONTROL  57098  /* R/W  bit 7 fix C64 address, bit 6 fix REU address */
+
+/* ---- REU command and status bits ---- */
+/* Written to REU_REG_COMMAND and read back from REU_REG_STATUS. */
+/* REU_CMD_NOW is not optional for a program driving the REU itself: with */
+/* it clear the transfer waits for a write to $FF00, which is the trick a */
+/* cartridge uses and a nuisance everywhere else. */
+#define REU_CMD_EXECUTE       0x80  /* start the transfer */
+#define REU_CMD_AUTOLOAD      0x20  /* reload address and length after it finishes */
+#define REU_CMD_NOW           0x10  /* start now rather than on a write to $FF00 */
+#define REU_MODE_STASH        0x00  /* C64 -> REU */
+#define REU_MODE_FETCH        0x01  /* REU -> C64 */
+#define REU_MODE_SWAP         0x02  /* exchange both ways */
+#define REU_MODE_VERIFY       0x03  /* compare without writing anything */
+#define REU_STAT_DONE         0x40  /* the transfer finished; cleared by reading the register */
+#define REU_STAT_VERIFY_ERROR 0x20  /* a verify found a difference */
+#define REU_STAT_SIZE         0x10  /* set on 256K and larger */
+
 /* ---- Ultimate 64 speed indices ---- */
 /* Index into the machine's speed table. **Only these four mean the same */
 /* thing on both machines.** The U64 runs 1,2,3,4,5,6,8..48 MHz and the */
@@ -340,7 +376,7 @@
 /* How much RAM the core needs, and where. All of it is placeable: see */
 /* UCI_ZP and UCI_VARS in docs/asm-abi.md. */
 #define UCI_ZP_SIZE   4  /* zero page bytes the core needs */
-#define UCI_VARS_SIZE 111  /* non-zero-page bytes the whole SDK needs */
+#define UCI_VARS_SIZE 119  /* non-zero-page bytes the whole SDK needs */
 
 /* ---- ASCII literals ---- */
 /* Bytes that come off the wire are always written numerically. An */

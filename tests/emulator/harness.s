@@ -47,6 +47,9 @@
         .import ultimate_write, ultimate_seek, ultimate_delete
         .import ult_attrib, ult_addr, ult_max, ult_end, ult_num
         .import ultimate_load, ultimate_bload, ultimate_save
+        .import ultimate_reu_available, ultimate_reu_stash, ultimate_reu_fetch
+        .import ultimate_reu_load, ultimate_reu_save
+        .import ult_reu, ult_reulen
         .import ult_buf, ult_buflen, ult_outlen, ult_color
 
         ; --- entry points ---
@@ -71,6 +74,8 @@
         .export t_create, t_write, t_seek, t_delete
         .export wr_len, seek_pos
         .export t_load, t_bload, t_save, load_addr, load_max, load_end
+        .export t_reu_avail, t_reu_stash, t_reu_fetch
+        .export t_reu_load, t_reu_save, reu_at, reu_len
         .export dir_attrib
         .export t_req_reset
         .export t_exec
@@ -147,6 +152,8 @@ load_max:     .res 2
 load_end:     .res 2
 wr_len:       .res 2      ; how many bytes t_write sends from buf_data
 seek_pos:     .res 4      ; t_seek's 32-bit position, little endian
+reu_at:       .res 4      ; the REU address a transfer uses
+reu_len:      .res 4      ; and how many bytes it moves
 
 req:         .res UCI_REQ_SIZE
 buf_args:    .res ARGS_MAX
@@ -496,6 +503,58 @@ t_bload:
 t_save: jsr set_load_args
         jsr ultimate_save
         sta result
+        rts
+
+; --- the RAM expansion ---
+;
+; The simulator has plain RAM at $DF00-$DF0A rather than a REU, which is enough
+; to prove the registers are programmed with the right bytes in the right order
+; and not enough to move anything. The suite pokes the done bit itself to say
+; which outcome it is testing; hardware does the real transfer.
+
+t_reu_avail:
+        jsr ultimate_reu_available
+        sta result
+        rts
+
+t_reu_stash:
+        jsr set_reu_args
+        jsr ultimate_reu_stash
+        sta result
+        rts
+
+t_reu_fetch:
+        jsr set_reu_args
+        jsr ultimate_reu_fetch
+        sta result
+        rts
+
+t_reu_load:
+        jsr set_reu_args
+        jsr ultimate_reu_load
+        sta result
+        rts
+
+t_reu_save:
+        jsr set_reu_args
+        jsr ultimate_reu_save
+        sta result
+        rts
+
+; The C64 end comes from load_addr, which every other transfer in this harness
+; already uses for "where in memory".
+set_reu_args:
+        ldx #$03
+@copy:  lda reu_at,x
+        sta ult_reu,x
+        lda reu_len,x
+        sta ult_reulen,x
+        dex
+        bpl @copy
+        lda load_addr
+        sta ult_addr
+        lda load_addr + 1
+        sta ult_addr + 1
         rts
 
 ; The name is in `reply`, put there by the suite; the address and the limit come

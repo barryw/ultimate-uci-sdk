@@ -298,6 +298,42 @@
 .label U64_TURBO_NO_BADLINES      = $80  // set to stop the VIC stealing cycles
 .label U64_TURBO_UNAVAILABLE      = $FF  // what both registers read when turbo is off in config
 
+// ---- REU registers (NOT UCI) ----
+// The second and last thing the SDK reaches without the command interface,
+// for the same reason as turbo: no UCI command moves bytes between C64 RAM
+// and the REU. The register set is the 1750's, implemented in
+// fpga/cart_slot/vhdl_source/reu.vhd, and the command interface overlays
+// $DF1B-$DF1F above it - the REU decodes $DF00-$DF17 only, so the two
+// coexist. A transfer runs under DMA with the CPU halted, so it is
+// finished by the time the next instruction runs.
+.label REU_REG_STATUS             = $DF00  // R    bit 7 IRQ, 6 done, 5 verify error, 4 size; reading clears 6 and 5
+.label REU_REG_COMMAND            = $DF01  // R/W  bit 7 execute, 5 autoload, 4 start now, bits 1-0 mode
+.label REU_REG_C64_LO             = $DF02  // R/W  C64 base address, low
+.label REU_REG_C64_HI             = $DF03  // R/W  C64 base address, high
+.label REU_REG_ADDR_LO            = $DF04  // R/W  REU base address, low
+.label REU_REG_ADDR_MID           = $DF05  // R/W  REU base address, middle
+.label REU_REG_ADDR_HI            = $DF06  // R/W  REU base address, high
+.label REU_REG_LEN_LO             = $DF07  // R/W  transfer length, low
+.label REU_REG_LEN_HI             = $DF08  // R/W  transfer length, high; 0 means 65536
+.label REU_REG_IRQMASK            = $DF09  // R/W  bit 7 enable, 6 on done, 5 on verify error
+.label REU_REG_CONTROL            = $DF0A  // R/W  bit 7 fix C64 address, bit 6 fix REU address
+
+// ---- REU command and status bits ----
+// Written to REU_REG_COMMAND and read back from REU_REG_STATUS.
+// REU_CMD_NOW is not optional for a program driving the REU itself: with
+// it clear the transfer waits for a write to $FF00, which is the trick a
+// cartridge uses and a nuisance everywhere else.
+.label REU_CMD_EXECUTE            = $80  // start the transfer
+.label REU_CMD_AUTOLOAD           = $20  // reload address and length after it finishes
+.label REU_CMD_NOW                = $10  // start now rather than on a write to $FF00
+.label REU_MODE_STASH             = $00  // C64 -> REU
+.label REU_MODE_FETCH             = $01  // REU -> C64
+.label REU_MODE_SWAP              = $02  // exchange both ways
+.label REU_MODE_VERIFY            = $03  // compare without writing anything
+.label REU_STAT_DONE              = $40  // the transfer finished; cleared by reading the register
+.label REU_STAT_VERIFY_ERROR      = $20  // a verify found a difference
+.label REU_STAT_SIZE              = $10  // set on 256K and larger
+
 // ---- Ultimate 64 speed indices ----
 // Index into the machine's speed table. **Only these four mean the same
 // thing on both machines.** The U64 runs 1,2,3,4,5,6,8..48 MHz and the
@@ -348,7 +384,7 @@
 // How much RAM the core needs, and where. All of it is placeable: see
 // UCI_ZP and UCI_VARS in docs/asm-abi.md.
 .label UCI_ZP_SIZE                = $04  // zero page bytes the core needs
-.label UCI_VARS_SIZE              = $6F  // non-zero-page bytes the whole SDK needs
+.label UCI_VARS_SIZE              = $77  // non-zero-page bytes the whole SDK needs
 
 // ---- ASCII literals ----
 // Bytes that come off the wire are always written numerically. An

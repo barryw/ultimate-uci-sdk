@@ -150,6 +150,10 @@ static const char scratch_path[] = {
     0x77, 0x72, 0x2E, 0x74, 0x6D, 0x70, 0x00    /* wr.tmp */
 };
 
+/* What was in the expansion before the REU tests, and what they put there. */
+static uint8_t reu_before[32];
+static uint8_t reu_work[32];
+
 static uint8_t saved[UCI_PALETTE_BYTES];
 static uint8_t readback[UCI_PALETTE_BYTES];
 
@@ -546,6 +550,81 @@ int main(void)
             ultimate_close();
     }
 after_write:
+
+    /*
+     * The RAM expansion, both halves of it: the DMA registers, which are the
+     * only way to move bytes between C64 RAM and the expansion, and
+     * DOS_CMD_LOAD_REU, which moves a file into it without the C64 seeing any
+     * of them.
+     *
+     * Whether there is an expansion at all is the machine owner's setting, the
+     * same as turbo, so skipping is a normal outcome. hwtest.py has a scenario
+     * that switches it on.
+     *
+     * Not destructive: the 32 bytes at REU $000000 are read first and written
+     * back last, so the expansion ends holding exactly what it held. The same
+     * shape as the palette tests above, for the same reason.
+     */
+    if (!ultimate_reu_available()) {
+        skip("reu-round-trip", "no ram expansion in the ultimate settings");
+    } else {
+        uint8_t i;
+
+        check("reu-save-what-was-there", ULTIMATE_OK,
+              ultimate_reu_fetch((uint16_t)reu_before, 0, sizeof(reu_before)));
+
+        for (i = 0; i < 8; ++i)
+            reu_work[i] = (uint8_t)(0xA0 + i);
+        check("reu-stash", ULTIMATE_OK,
+              ultimate_reu_stash((uint16_t)reu_work, 0, 8));
+
+        /* Wipe it first, or a fetch that did nothing would still pass. */
+        memset(reu_work, 0, sizeof(reu_work));
+        check("reu-fetch", ULTIMATE_OK,
+              ultimate_reu_fetch((uint16_t)reu_work, 0, 8));
+        check("reu-round-trip", 0xA0, (int)reu_work[0]);
+        check("reu-round-trip-end", 0xA7, (int)reu_work[7]);
+
+        /*
+         * And the file half. hello.txt is 28 bytes; LOAD_REU puts them in the
+         * expansion with none of them passing through here, so reading them
+         * back out is the only way to see that it worked.
+         */
+        if (ultimate_open(hello_path, DOS_FA_READ) != ULTIMATE_OK) {
+            skip("reu-load-from-a-file", "the fixture is not on the device");
+        } else {
+            check("reu-load-from-a-file", ULTIMATE_OK,
+                  ultimate_reu_load(0, 28));
+            ultimate_close();
+
+            memset(reu_work, 0, sizeof(reu_work));
+            ultimate_reu_fetch((uint16_t)reu_work, 0, 28);
+            check("reu-load-really-moved-it", 0x48, (int)reu_work[0]);  /* 'H' */
+        }
+
+        /*
+         * And out of the expansion into a file, which is the pair of the one
+         * above. It needs somewhere to write: the bench machine's stick is
+         * full, so this skips there rather than failing, exactly as the write
+         * tests do.
+         */
+        err = ultimate_open(scratch_path, DOS_FA_CREATE_ALWAYS | DOS_FA_WRITE);
+        if (err != ULTIMATE_OK) {
+            skip("reu-save-to-a-file", "nowhere writable on this device");
+        } else {
+            err = ultimate_reu_save(0, 8);
+            ultimate_close();
+            if (err == ULTIMATE_ERR_DEVICE)
+                skip("reu-save-to-a-file", "the device refused the write");
+            else
+                check("reu-save-to-a-file", ULTIMATE_OK, err);
+            ultimate_delete(scratch_path);
+        }
+
+        /* Put the expansion back exactly as it was found. */
+        check("reu-restored", ULTIMATE_OK,
+              ultimate_reu_stash((uint16_t)reu_before, 0, sizeof(reu_before)));
+    }
 
     printf("1..%u\n", test_no);
     printf("# %u passed, %u failed, %u skipped\n", passed, failed, skipped);

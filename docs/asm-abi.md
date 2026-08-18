@@ -45,7 +45,7 @@ custom linker script, or an assembler with no segment support at all.
 | Knob | Default | What it places |
 |---|---|---|
 | `UCI_ZP` | `$FB` | `UCI_ZP_SIZE` (4) bytes of zero page |
-| `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (111) bytes of variables |
+| `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (119) bytes of variables |
 | the request block | — | not a knob: `uci_exec` takes it by pointer |
 
 ```
@@ -147,6 +147,11 @@ sharing them.
 | `ultimate_bload` | `ult_buf`, `ult_addr`, `ult_max` | `A` = result, `ult_end` = end |
 | `ultimate_save` | `ult_buf`, `ult_addr` = start, `ult_max` = length | `A` = result |
 | `ultimate_last_end` | — | `A`/`X` = the address after the last load |
+| `ultimate_reu_available` | — | `A` = 1 when the expansion answers |
+| `ultimate_reu_stash` | `ult_addr`, `ult_reu`, `ult_reulen` | `A` = result code |
+| `ultimate_reu_fetch` | the same three, the other way | `A` = result code |
+| `ultimate_reu_load` | `ult_reu`, `ult_reulen`, and an open file | `A` = result code |
+| `ultimate_reu_save` | the same, out of the expansion | `A` = result code |
 | `uci_present` | — | `A` = 1 when the signature is on the bus |
 | `uci_ident` | — | `A` = the raw identification register |
 | `uci_req_clear` | — | zeroes the request block |

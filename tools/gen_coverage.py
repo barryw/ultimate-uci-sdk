@@ -58,6 +58,8 @@ WRAPPED = {
     "DOS_CMD_WRITE_DATA":         ("ultimate_write", "ultimate_save"),
     "DOS_CMD_FILE_SEEK":          ("ultimate_seek",),
     "DOS_CMD_DELETE_FILE":        ("ultimate_delete",),
+    "DOS_CMD_LOAD_REU":           ("ultimate_reu_load",),
+    "DOS_CMD_SAVE_REU":           ("ultimate_reu_save",),
     "SOFTIEC_CMD_LOAD_SU":        ("ultimate_load",),
     "SOFTIEC_CMD_LOAD_EX":        ("ultimate_load",),
 }

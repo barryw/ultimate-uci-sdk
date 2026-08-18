@@ -79,4 +79,39 @@ ULTIMATE_INC = 1
 ; is unpleasant to find.
 .global uci_req_clear
 
+; ---------------------------------------------------------------------------
+; The services. Each one takes its wider arguments in the shared variable block
+; below rather than in registers, because most of them have more arguments than
+; a 6502 has registers. docs/asm-abi.md has the table.
+; ---------------------------------------------------------------------------
+
+.global ultimate_palette_get, ultimate_palette_set
+.global ultimate_palette_set_color, ultimate_palette_reset
+.global ult_color            ; index, r, g, b for palette_set_color
+
+.global ultimate_turbo_available, ultimate_turbo_get
+.global ultimate_turbo_set, ultimate_turbo_badlines
+
+.global ultimate_chdir, ultimate_getpath
+.global ultimate_opendir, ultimate_readdir
+.global ultimate_open, ultimate_close, ultimate_read
+.global ultimate_write, ultimate_seek, ultimate_delete
+.global ult_attrib           ; open's DOS_FA_* mask in, readdir's attributes out
+.global ult_num              ; seek's 32-bit position
+
+.global ultimate_load, ultimate_bload, ultimate_save, ultimate_last_end
+.global ult_addr             ; where a load puts it, or a save takes it from
+.global ult_max              ; bload's limit, save's length
+.global ult_end              ; the address after the last byte loaded
+
+.global ultimate_reu_available
+.global ultimate_reu_stash, ultimate_reu_fetch
+.global ultimate_reu_load, ultimate_reu_save
+.global ult_reu, ult_reulen  ; REU address, then length: eight bytes, in that
+                              ; order, because the DOS pair sends them as one span
+
+; Reading a directory is one live exchange, one entry per call, and these are
+; the two halves of it for a caller driving the transport itself:
+.global uci_exec_first, uci_exec_next, uci_more
+
 .endif

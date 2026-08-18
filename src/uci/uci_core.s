@@ -42,6 +42,7 @@
         .export ult_scratch, ult_req, ult_probe, ult_color
         .export ult_attrib, ult_dir, ult_num
         .export ult_fargs, ult_addr, ult_max, ult_end, ult_got
+        .export ult_reu, ult_reulen
         .export uci_stat
 
 ; ---------------------------------------------------------------------------
@@ -117,7 +118,11 @@ ult_max         = UCI_VARS + 61 + 2 * UCI_REQ_SIZE  ; bload's limit, save's leng
 ult_end         = UCI_VARS + 63 + 2 * UCI_REQ_SIZE  ; after the last byte loaded
 ult_got         = UCI_VARS + 65 + 2 * UCI_REQ_SIZE  ; bytes the last chunk moved
 
-.assert (67 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+; --- reu service (src/uci/reu.s) ---
+ult_reu         = UCI_VARS + 67 + 2 * UCI_REQ_SIZE  ; REU address, 24 bits of 32
+ult_reulen      = UCI_VARS + 71 + 2 * UCI_REQ_SIZE  ; and the length beside it
+
+.assert (75 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
         .export uci_req
 
@@ -173,6 +178,12 @@ ult_addr:       .res 2          ; ...the address field, which callers write
 ult_max:        .res 2
 ult_end:        .res 2
 ult_got:        .res 2
+
+; --- reu service (src/uci/reu.s) ---
+; One block, because the DOS REU pair takes its two arguments as eight
+; consecutive bytes on the wire and the DMA half wants the same two numbers.
+ult_reu:        .res 4          ; REU address, 24 bits used of 32
+ult_reulen:     .res 4          ; how many bytes; the DMA half uses the low word
 
 .endif
 

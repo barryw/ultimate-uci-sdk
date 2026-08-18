@@ -1374,5 +1374,147 @@ suites {
       jsr([t_delete], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $00, "and the fixture tree is as it was found")
     }
+
+    ; --- the RAM expansion ---
+    ;
+    ; $DF00-$DF0A under sim6502 is ordinary read/write memory rather than a REU,
+    ; which is exactly what makes these worth having: the registers can be read
+    ; back byte for byte after a transfer was asked for, and the done bit can be
+    ; put into either state to check both answers. What cannot be proved here is
+    ; that a byte moved - tests/hardware/ucitest.c stashes and fetches on a real
+    ; Ultimate with the expansion switched on.
+    ;
+    ; The probe reads back what it wrote, so plain RAM looks like a REU to it.
+    ; That is stated in reu.s and it is why these tests can run at all.
+
+    test("sdk-reu-programs-every-register", "the address and length reach the right bytes") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+
+      $df00 = $40               ; REU_STAT_DONE: a transfer that finished
+      [load_addr] = $34         ; the C64 end: $1234
+      [load_addr] + $01 = $12
+      [reu_at] = $45            ; and the REU end: $012345
+      [reu_at] + $01 = $23
+      [reu_at] + $02 = $01
+      [reu_at] + $03 = $00
+      [reu_len] = $00           ; 256 bytes
+      [reu_len] + $01 = $01
+      [reu_len] + $02 = $00
+      [reu_len] + $03 = $00
+
+      [result] = $ff
+      jsr([t_reu_stash], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+
+      assert($df02 == $34, "C64 address low")
+      assert($df03 == $12, "C64 address high")
+      assert($df04 == $45, "REU address low")
+      assert($df05 == $23, "REU address middle")
+      assert($df06 == $01, "REU address high - the 24-bit one, not truncated")
+      assert($df07 == $00, "length low")
+      assert($df08 == $01, "length high")
+      assert($df01 == $90, "EXECUTE and NOW, with mode 00: C64 to REU")
+    }
+
+    test("sdk-reu-fetch-is-the-other-direction", "one bit apart, and it is the right bit") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+
+      $df00 = $40
+      [load_addr] = $00
+      [load_addr] + $01 = $c0
+      [reu_at] = $00
+      [reu_at] + $01 = $00
+      [reu_at] + $02 = $00
+      [reu_at] + $03 = $00
+      [reu_len] = $00           ; 0 is 65536 bytes, which is the REU's own
+      [reu_len] + $01 = $00     ; convention and not an SDK invention
+      [reu_len] + $02 = $00
+      [reu_len] + $03 = $00
+
+      [result] = $ff
+      jsr([t_reu_fetch], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert($df01 == $91, "mode 01: REU to C64")
+      assert($df07 == $00, "and a length of zero went out as zero")
+      assert($df08 == $00, "...both halves of it")
+    }
+
+    ; The done bit is the only evidence a transfer happened, and it is cleared by
+    ; reading it - so a caller that gets ULTIMATE_OK has been told by the
+    ; hardware, not by the SDK's optimism.
+    test("sdk-reu-notices-nothing-happened", "no done bit is a failure, not a success") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+
+      $df00 = $00
+      [load_addr] = $00
+      [load_addr] + $01 = $c0
+      [reu_at] = $00
+      [reu_at] + $01 = $00
+      [reu_at] + $02 = $00
+      [reu_at] + $03 = $00
+      [reu_len] = $10
+      [reu_len] + $01 = $00
+      [reu_len] + $02 = $00
+      [reu_len] + $03 = $00
+
+      [result] = $ff
+      jsr([t_reu_stash], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $06, "ULTIMATE_ERR_IO")
+    }
+
+    ; The other half of the service, and the half that does go through
+    ; uci_exec: DOS_CMD_LOAD_REU moves the open file into the expansion without
+    ; any of it passing through the C64. There is no filename in the command -
+    ; it works on whatever is open, exactly as READ_DATA does.
+    ;
+    ; **u64sim does not implement it**, and answers "21,UNKNOWN COMMAND". That
+    ; is pinned here rather than skipped, for the same reason the palette
+    ; commands are: it is the case an older firmware presents, and a caller has
+    ; to get ULTIMATE_ERR_NOT_SUPPORTED out of it rather than a hang or a lie.
+    ; The command really running is tests/hardware/ucitest.c, where firmware
+    ; 3.15 answers "00,OK" and a sentence saying how many bytes it moved.
+    test("sdk-reu-load-takes-the-open-file", "an unimplemented REU load is reported, not guessed at") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $2f            ; chdir "/Usb0"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $00
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "at the root")
+
+      [reply0] = $62            ; "big.bin"
+      [reply1] = $69
+      [reply2] = $67
+      [reply3] = $2e
+      [reply0] + $04 = $62
+      [reply0] + $05 = $69
+      [reply0] + $06 = $6e
+      [reply0] + $07 = $00
+      [result] = $ff
+      jsr([t_open], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the file is open")
+
+      [reu_at] = $00
+      [reu_at] + $01 = $00
+      [reu_at] + $02 = $00
+      [reu_at] + $03 = $00
+      [reu_len] = $58           ; 600 bytes, the whole of big.bin
+      [reu_len] + $01 = $02
+      [reu_len] + $02 = $00
+      [reu_len] + $03 = $00
+      [result] = $ff
+      jsr([t_reu_load], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED, from this firmware")
+
+      [result] = $ff
+      jsr([t_close], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and the file closed")
+    }
   }
 }

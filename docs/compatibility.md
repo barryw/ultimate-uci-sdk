@@ -148,7 +148,12 @@ The command interface overlays the last five REU registers. The REU proper uses
 `$DF00-$DF0A`, so the two coexist — but a program that pokes the whole
 `$DF00-$DF1F` range as if it were one device will disturb the interface.
 
-The SDK touches exactly `$DF1B-$DF1F` and nothing else; the unit tests assert it.
+The SDK touches `$DF1B-$DF1F` for the command interface, and `$DF00-$DF0A` in
+`src/uci/reu.s` alone, where driving the REU is the whole point — there is no
+UCI command that moves bytes between C64 RAM and the expansion. Nothing else in
+the range is written from anywhere. `tools/test_registers.py` asserts both
+halves of that: no `$DFxx` literal exists in the SDK at all, and the REU
+register names appear in `reu.s` and in no other file.
 
 ## Where the SDK is stricter than the documentation
 

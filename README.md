@@ -37,7 +37,9 @@ it under an emulator and on real hardware, and exposes it to assembly and C.
 
 **Status: early.** The transport, the error model and capability detection are
 complete and tested — under a simulated Ultimate, and on a real Ultimate 64
-Elite running firmware 3.15. The file, network and HTTP services are next.
+Elite running firmware 3.15. So are the palette, turbo, file and REU services:
+directories, open/read/write/seek, load and save, and both directions of the
+RAM expansion. The network and HTTP services are next.
 
 ## What hardware does it support?
 
@@ -197,7 +199,7 @@ public model does not expose them.
 Built for a machine with 38 kilobytes.
 
 - No heap, no hidden buffers. Every byte lands in a buffer you own.
-- 111 bytes of static RAM in total, request block included. No allocation, ever.
+- 119 bytes of static RAM in total, request block included. No allocation, ever.
 - Four bytes of zero page, at an address you choose.
 - No interrupts required, and no interrupt handler installed.
 - Every entry point is bounded: it completes or returns `ULTIMATE_ERR_TIMEOUT`.
