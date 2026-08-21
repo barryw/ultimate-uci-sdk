@@ -17,6 +17,7 @@ steps:
   - name: conventional-commits
     image: alpine:3.22
     commands:
+      - set -eu
       - apk add --no-cache curl git
       - curl -fsSL -o /tmp/cog.tar.gz https://github.com/cocogitto/cocogitto/releases/download/7.0.0/cocogitto-7.0.0-x86_64-unknown-linux-musl.tar.gz
       - tar -xzf /tmp/cog.tar.gz -C /tmp
@@ -27,6 +28,7 @@ steps:
   - name: build
     image: debian:bookworm-slim
     commands:
+      - set -eu
       - apt-get update -qq
       - apt-get install -y -qq --no-install-recommends cc65 git make python3
       - git config --global --add safe.directory "$CI_WORKSPACE"
@@ -39,6 +41,7 @@ steps:
   - name: emulator
     image: ghcr.io/barryw/sim6502:v5.0.1
     commands:
+      - set -eu
       - ln -s "$CI_WORKSPACE" /code
       - dotnet /app/Sim6502TestRunner.dll -s /code/tests/emulator/protocol.suite --backend u64sim --u64sim-fs-root /code/tests/emulator/fixtures/usb0
       - dotnet /app/Sim6502TestRunner.dll -s /code/tests/emulator/sdk.suite --backend u64sim --u64sim-fs-root /code/tests/emulator/fixtures/usb0
@@ -55,8 +58,9 @@ steps:
       GH_TOKEN:
         from_secret: github_token
     commands:
+      - set -eu
       - apt-get update -qq
-      - apt-get install -y -qq --no-install-recommends ca-certificates cc65 curl gh git latexmk make python3 texlive-fonts-recommended texlive-latex-extra texlive-latex-recommended
+      - apt-get install -y -qq --no-install-recommends ca-certificates cc65 curl gh git latexmk make python3 texlive-fonts-extra texlive-fonts-recommended texlive-latex-extra texlive-latex-recommended
       - curl -fsSL -o /tmp/cog.tar.gz https://github.com/cocogitto/cocogitto/releases/download/7.0.0/cocogitto-7.0.0-x86_64-unknown-linux-musl.tar.gz
       - tar -xzf /tmp/cog.tar.gz -C /tmp
       - find /tmp -name cog -type f -exec mv {} /usr/local/bin/cog \;
