@@ -52,3 +52,6 @@ guide/*.toc
 guide/*.fls
 guide/*.fdb_latexmk
 guide/chapters/*.aux
+
+# Release bundles are produced from a clean checkout by Woodpecker.
+dist/

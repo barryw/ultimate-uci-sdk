@@ -1,0 +1,30 @@
+from_latest_tag = true
+ignore_merge_commits = true
+tag_prefix = "v"
+branch_whitelist = ["main"]
+skip_ci = "[skip ci]"
+
+[changelog]
+path = "CHANGELOG.md"
+template = "remote"
+remote = "github.com"
+repository = "ultimate-uci-sdk"
+owner = "barryw"
+
+[git_hooks.commit-msg]
+script = """#!/bin/sh
+set -e
+cog verify --file "$1"
+"""
+
+[commit_types]
+feat = { changelog_title = "Features", bump_minor = true }
+fix = { changelog_title = "Bug Fixes", bump_patch = true }
+perf = { changelog_title = "Performance", bump_patch = true }
+refactor = { changelog_title = "Refactoring", bump_patch = true }
+revert = { changelog_title = "Reverts", bump_patch = true }
+docs = { changelog_title = "Documentation", bump_patch = true }
+test = { changelog_title = "Tests", bump_patch = true }
+build = { changelog_title = "Build", bump_patch = true }
+ci = { changelog_title = "CI/CD", bump_patch = true }
+chore = { changelog_title = "Miscellaneous", bump_patch = true }

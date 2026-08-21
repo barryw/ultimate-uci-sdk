@@ -10,6 +10,7 @@
 #   make hardware-run U64_HOST=<ip>   drive it over the REST API
 #   make time-run U64_HOST=<ip>       time a UCI round trip in frames
 #   make protocol    regenerate the protocol constants     (Python 3)
+#   make release VERSION=vX.Y.Z   package every release artifact
 #   make all         everything that needs no hardware
 #
 # SPDX-License-Identifier: MIT
@@ -91,6 +92,11 @@ wedge:
 coverage:
 	python3 tools/gen_coverage.py --check
 
+release: lib blob examples wedge
+	@test -n "$(VERSION)" || { echo "VERSION is required (for example v1.2.3)"; exit 2; }
+	$(MAKE) -B -C guide
+	tools/package-release.sh "$(VERSION)"
+
 clean:
 	$(MAKE) -C src/basic clean
 	$(MAKE) -C tests/emulator clean
@@ -101,4 +107,4 @@ clean:
 	$(MAKE) -C bindings/blob clean
 
 .PHONY: all test unittest lib blob examples emulator hardware hardware-run \
-		basic-run time-run protocol coverage clean
+		basic-run time-run protocol coverage release clean

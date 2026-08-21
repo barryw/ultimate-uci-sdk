@@ -1,0 +1,73 @@
+when:
+  - event: push
+    branch: main
+    evaluate: 'CI_COMMIT_MESSAGE not contains "[skip ci]"'
+
+labels:
+  platform: linux/amd64
+
+clone:
+  git:
+    image: woodpeckerci/plugin-git
+    settings:
+      depth: 0
+      tags: true
+
+steps:
+  - name: conventional-commits
+    image: alpine:3.22
+    commands:
+      - apk add --no-cache curl git
+      - curl -fsSL -o /tmp/cog.tar.gz https://github.com/cocogitto/cocogitto/releases/download/7.0.0/cocogitto-7.0.0-x86_64-unknown-linux-musl.tar.gz
+      - tar -xzf /tmp/cog.tar.gz -C /tmp
+      - find /tmp -name cog -type f -exec mv {} /usr/local/bin/cog \;
+      - git config --global --add safe.directory "$CI_WORKSPACE"
+      - 'LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true); if [ -n "$LATEST_TAG" ]; then cog check --from-latest-tag; else BASE=$(git rev-list --reverse HEAD | sed -n "2p"); cog check "$BASE..HEAD"; fi'
+
+  - name: build
+    image: debian:bookworm-slim
+    commands:
+      - apt-get update -qq
+      - apt-get install -y -qq --no-install-recommends cc65 git make python3
+      - git config --global --add safe.directory "$CI_WORKSPACE"
+      - make protocol
+      - 'git diff --exit-code || { echo "Generated files are stale; run make protocol and commit them."; exit 1; }'
+      - make unittest lib blob examples wedge coverage
+      - make -C tests/emulator all
+    depends_on: [conventional-commits]
+
+  - name: emulator
+    image: ghcr.io/barryw/sim6502:v5.0.1
+    commands:
+      - ln -s "$CI_WORKSPACE" /code
+      - dotnet /app/Sim6502TestRunner.dll -s /code/tests/emulator/protocol.suite --backend u64sim --u64sim-fs-root /code/tests/emulator/fixtures/usb0
+      - dotnet /app/Sim6502TestRunner.dll -s /code/tests/emulator/sdk.suite --backend u64sim --u64sim-fs-root /code/tests/emulator/fixtures/usb0
+      - dotnet /app/Sim6502TestRunner.dll -s /code/tests/emulator/sdk-placed.suite --backend u64sim --u64sim-fs-root /code/tests/emulator/fixtures/usb0
+      - dotnet /app/Sim6502TestRunner.dll -s /code/tests/emulator/timeout.suite --backend u64sim --u64sim-fs-root /code/tests/emulator/fixtures/usb0 --u64sim-uci-latency 200000
+      - dotnet /app/Sim6502TestRunner.dll -s /code/tests/emulator/absent.suite
+      - dotnet /app/Sim6502TestRunner.dll -s /code/tests/emulator/blob.suite --backend u64sim --u64sim-fs-root /code/tests/emulator/fixtures/usb0
+      - dotnet /app/Sim6502TestRunner.dll -s /code/tests/emulator/blob-relocated.suite --backend u64sim --u64sim-fs-root /code/tests/emulator/fixtures/usb0
+    depends_on: [build]
+
+  - name: release
+    image: debian:bookworm-slim
+    environment:
+      GH_TOKEN:
+        from_secret: github_token
+    commands:
+      - apt-get update -qq
+      - apt-get install -y -qq --no-install-recommends ca-certificates cc65 curl gh git latexmk make python3 texlive-fonts-recommended texlive-latex-extra texlive-latex-recommended
+      - curl -fsSL -o /tmp/cog.tar.gz https://github.com/cocogitto/cocogitto/releases/download/7.0.0/cocogitto-7.0.0-x86_64-unknown-linux-musl.tar.gz
+      - tar -xzf /tmp/cog.tar.gz -C /tmp
+      - find /tmp -name cog -type f -exec mv {} /usr/local/bin/cog \;
+      - git config --global user.name "Woodpecker CI"
+      - git config --global user.email "ci@woodpecker.local"
+      - git config --global --add safe.directory "$CI_WORKSPACE"
+      - git remote set-url origin "https://x-access-token:$GH_TOKEN@github.com/$CI_REPO.git"
+      - 'VERSION=$(cog bump --auto --dry-run) && echo "Releasing $VERSION"'
+      - cog bump --auto --skip-ci
+      - 'VERSION=$(git describe --tags --abbrev=0) && make -B -C guide && tools/package-release.sh "$VERSION"'
+      - 'VERSION=$(git describe --tags --abbrev=0) && cog changelog --at "$VERSION" > /tmp/release-notes.md'
+      - git push origin HEAD:main --follow-tags
+      - 'VERSION=$(git describe --tags --abbrev=0) && gh release create "$VERSION" dist/* --title "Ultimate SDK $VERSION" --notes-file /tmp/release-notes.md --latest'
+    depends_on: [emulator]

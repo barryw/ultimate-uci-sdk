@@ -206,6 +206,9 @@ GET fills 48 bytes; SET COLOUR 6 TO RED and RESET return ULTIMATE_OK.
 Get and set take a direct pointer in \cmd{A}/\cmd{X}. The single-colour entry
 reads index, red, green and blue from the four consecutive \cmd{ult\_color}
 bytes. Reset restores the built-in live palette.
+Firmware without these commands returns
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}; branch on \cmd{A} before using the
+48-byte result from \cmd{ultimate\_palette\_get}.
 
 \evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/palette.s}}
 

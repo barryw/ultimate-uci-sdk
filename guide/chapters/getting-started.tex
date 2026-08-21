@@ -17,6 +17,11 @@ There is no blanket minimum firmware version. Targets were added over time, so
 programs call \cmd{ultimate\_detect()} and test the capability they need. The
 palette is newer than firmware 3.15; HTTP appears in 3.15.
 
+The control target predates the palette commands, so its presence is not a
+palette capability test. Call a palette function and handle
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}; the SDK returns that result when older
+firmware answers that it does not know the command.
+
 \evidence{\cmd{docs/compatibility.md}; \cmd{docs/uci.md};
 \cmd{include/ultimate.h}}
 

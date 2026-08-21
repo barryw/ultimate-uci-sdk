@@ -216,8 +216,14 @@ ultimate_detect(&caps);
 if (ultimate_has_dos(&caps))     { /* files: every firmware with a UCI */ }
 if (ultimate_has_network(&caps)) { /* raw TCP and UDP sockets */ }
 if (ultimate_has_http(&caps))    { /* HTTP client: firmware 3.15+ */ }
-if (ultimate_has_control(&caps)) { /* drives, freeze, reboot, REU, palette */ }
+if (ultimate_has_control(&caps)) { /* control target; individual commands vary */ }
 ```
+
+The palette commands arrived after firmware 3.15, but the control target is
+older, so target detection cannot prove that those four commands exist. Call a
+palette function and handle `ULTIMATE_ERR_NOT_SUPPORTED`; the SDK translates
+the older firmware's `21,UNKNOWN COMMAND` reply and leaves the raw status
+available through `uci_last_device_code()` for diagnostics.
 
 An Ultimate-II+ on current firmware can do more than an Ultimate 64 on old
 firmware, which is why the model name is for bug reports and splash screens
@@ -296,6 +302,14 @@ simulated Ultimate found it in minutes.
 | [bindings/blob/README.md](bindings/blob/README.md) | the jump table and parameter block, for toolchains that cannot link |
 | [docs/handover.md](docs/handover.md) | picking the SDK up cold: state, traps, ground truth |
 | [docs/handover-cleanup.md](docs/handover-cleanup.md) | the most recent work, and what is next in the order it should be done |
+
+## Releases and conventional commits
+
+Install the repository's commit hook once with `cog install-hook --all`.
+Commits use the Conventional Commits form, for example `feat: add a service` or
+`fix(palette): preserve the device status`. Every push to `main` is checked,
+tested, versioned by Cocogitto, and published with the guide, cc65 library,
+standalone blob, BASIC wedge, examples, source archive and checksums.
 
 ## Credits
 

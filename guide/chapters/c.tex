@@ -130,6 +130,9 @@ RESTORE BUILT-IN PALETTE: ULTIMATE_OK
 \cmd{ultimate\_palette\_set()} writes all of them. The single-colour call sets
 index~6 to red. \cmd{ultimate\_palette\_reset()} restores the built-in palette;
 none of these calls writes flash or a palette file.
+On firmware without the palette commands, each call returns
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}; test the result before using data from
+\cmd{ultimate\_palette\_get()}.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/palette.s}}
 
