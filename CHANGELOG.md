@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.2.0](https://github.com/barryw/ultimate-uci-sdk/compare/40b6e9aaa2f05353800e019ec4ac64db1e88695a..v0.2.0) - 2026-08-21
+#### Features
+- (**release**) embed SDK version - ([40b6e9a](https://github.com/barryw/ultimate-uci-sdk/commit/40b6e9aaa2f05353800e019ec4ac64db1e88695a)) - Barry Walker
+
+- - -
+
 ## [v0.1.1](https://github.com/barryw/ultimate-uci-sdk/compare/ddd2d9437412812f5dda1b346b12b648edf3a25e..v0.1.1) - 2026-08-21
 #### CI/CD
 - publish release tags - ([fef423e](https://github.com/barryw/ultimate-uci-sdk/commit/fef423e1121e1827f6761eeb2d5873397d65c6fb)) - Barry Walker
