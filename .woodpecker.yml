@@ -72,6 +72,6 @@ steps:
       - cog bump --auto --skip-ci
       - 'VERSION=$(git describe --tags --abbrev=0) && make -B -C guide && tools/package-release.sh "$VERSION"'
       - 'VERSION=$(git describe --tags --abbrev=0) && cog changelog --at "$VERSION" > /tmp/release-notes.md'
-      - git push origin HEAD:main --follow-tags
-      - 'VERSION=$(git describe --tags --abbrev=0) && gh release create "$VERSION" dist/* --title "Ultimate SDK $VERSION" --notes-file /tmp/release-notes.md --latest'
+      - git push origin HEAD:main --tags
+      - 'VERSION=$(git describe --tags --abbrev=0) && gh release create "$VERSION" dist/* --title "Ultimate SDK $VERSION" --notes-file /tmp/release-notes.md'
     depends_on: [emulator]
