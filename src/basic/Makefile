@@ -14,6 +14,7 @@
 ROOT   := ../..
 CA65   ?= ca65
 LD65   ?= ld65
+VERSION ?= $(shell git -C $(ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)
 
 ASMINC := $(ROOT)/bindings/asm
 
@@ -38,6 +39,11 @@ GENERATED := $(ASMINC)/uci_protocol.inc $(ASMINC)/uci_keywords.inc \
 %.o: %.s $(GENERATED) c64rom.inc
 	$(CA65) -t c64 -g -I . -I $(ASMINC) -o $@ $<
 
+version.inc: FORCE
+	@printf '.define SDK_VERSION "%s"\n' "$(VERSION)" > $@
+
+install.o: version.inc
+
 $(LIB): FORCE
 	$(MAKE) -C $(ROOT)/bindings/cc65 BUILD=build-banked \
 	  ASM_DEFINES="-D UCI_BANKED"
@@ -52,7 +58,7 @@ uci.crt: uci-cart.bin
 	python3 $(ROOT)/tools/make_crt.py uci-cart.bin uci.crt "ULTIMATE UCI WEDGE"
 
 clean:
-	rm -f loader.o cart.o $(COMMON)
+	rm -f loader.o cart.o $(COMMON) version.inc
 	rm -rf $(ROOT)/bindings/cc65/build-banked
 	rm -f uci.prg uci.lbl uci-cart.bin uci-cart.lbl uci.crt
 

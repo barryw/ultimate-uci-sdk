@@ -15,6 +15,7 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 rm -rf "$dist"
 mkdir -p "$dist" "$tmp/$name"
 git archive --format=tar HEAD | tar -xf - -C "$tmp/$name"
+printf '%s\n' "$version" > "$tmp/$name/VERSION"
 
 # Add ignored build products to the source tree at their normal paths.
 cp bindings/cc65/build/ultimate.lib "$tmp/$name/bindings/cc65/"

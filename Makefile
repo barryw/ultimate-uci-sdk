@@ -92,9 +92,10 @@ wedge:
 coverage:
 	python3 tools/gen_coverage.py --check
 
-release: lib blob examples wedge
+release: lib blob examples
 	@test -n "$(VERSION)" || { echo "VERSION is required (for example v1.2.3)"; exit 2; }
-	$(MAKE) -B -C guide
+	$(MAKE) -B -C src/basic VERSION="$(VERSION)"
+	$(MAKE) -B -C guide VERSION="$(VERSION)"
 	tools/package-release.sh "$(VERSION)"
 
 clean:

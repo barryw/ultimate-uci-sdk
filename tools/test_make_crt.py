@@ -20,8 +20,10 @@ CART = os.path.join(BASIC, "uci-cart.bin")
 CRT = os.path.join(BASIC, "uci.crt")
 PRG_LBL = os.path.join(BASIC, "uci.lbl")
 CART_LBL = os.path.join(BASIC, "uci-cart.lbl")
+VERSION_INC = os.path.join(BASIC, "version.inc")
 
-BUILT = all(os.path.exists(p) for p in (PRG, CART, PRG_LBL, CART_LBL))
+BUILT = all(os.path.exists(p) for p in
+            (PRG, CART, PRG_LBL, CART_LBL, VERSION_INC))
 
 
 def labels(path):
@@ -142,6 +144,13 @@ class TestTheTwoBuildsCarryTheSameWedge(unittest.TestCase):
         self.assertEqual(self.prg[6], 0x9E, "SYS")
         self.assertEqual(self.prg[7:11], b"2061")
         self.assertEqual(self.prg_lbl["boot"], 2061)
+
+    def test_the_banner_contains_the_build_version(self):
+        with open(VERSION_INC) as fh:
+            version = fh.read().split('"')[1]
+        banner = ("SDK " + version).upper().encode("ascii")
+        self.assertIn(banner, self.prg)
+        self.assertIn(banner, self.cart)
 
 
 if __name__ == "__main__":

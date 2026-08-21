@@ -70,7 +70,7 @@ steps:
       - git remote set-url origin "https://x-access-token:$GH_TOKEN@github.com/$CI_REPO.git"
       - 'VERSION=$(cog bump --auto --dry-run) && echo "Releasing $VERSION"'
       - cog bump --auto --skip-ci
-      - 'VERSION=$(git describe --tags --abbrev=0) && make -B -C guide && tools/package-release.sh "$VERSION"'
+      - 'VERSION=$(git describe --tags --abbrev=0) && make -B -C src/basic VERSION="$VERSION" && make -B -C guide VERSION="$VERSION" && tools/package-release.sh "$VERSION"'
       - 'VERSION=$(git describe --tags --abbrev=0) && cog changelog --at "$VERSION" > /tmp/release-notes.md'
       - git push origin HEAD:main --tags
       - 'VERSION=$(git describe --tags --abbrev=0) && gh release create "$VERSION" dist/* --title "Ultimate SDK $VERSION" --notes-file /tmp/release-notes.md'

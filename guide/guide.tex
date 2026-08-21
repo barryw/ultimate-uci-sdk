@@ -18,6 +18,7 @@
 
 \usepackage{ultimatesdk}
 \usepackage[hidelinks,pdfusetitle]{hyperref}
+\input{version.tex}
 
 % Keep source traceability beside each claim without printing it in the guide.
 \newcommand{\evidence}[1]{}
@@ -68,6 +69,9 @@
   \node[anchor=base,text=white,
         font=\fontfamily{pag}\mdseries\fontsize{21}{21}\selectfont]
        at (50,110) {REFERENCE GUIDE};
+  \node[anchor=base,text=white,
+        font=\fontfamily{pag}\mdseries\fontsize{11}{11}\selectfont]
+       at (50,102) {RELEASE \SDKVersion};
   \coverband
   % The machine lies across the foot at a slight tilt, overlapping the top of
   % the stripes exactly as the photograph does.

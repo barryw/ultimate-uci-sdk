@@ -43,6 +43,7 @@ tests/emulator/roms/
 src/basic/uci.prg
 src/basic/uci.crt
 src/basic/uci-cart.bin
+src/basic/version.inc
 
 # The guide builds a PDF and a pile of TeX litter.
 guide/*.aux
@@ -52,6 +53,7 @@ guide/*.toc
 guide/*.fls
 guide/*.fdb_latexmk
 guide/chapters/*.aux
+guide/version.tex
 
 # Release bundles are produced from a clean checkout by Woodpecker.
 dist/

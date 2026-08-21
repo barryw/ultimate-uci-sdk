@@ -8,6 +8,7 @@
 ; SPDX-License-Identifier: MIT
 
         .include "c64rom.inc"
+        .include "version.inc"
 
         .import __CODE_LOAD__, __CODE_RUN__, __CODE_SIZE__
         .import __RODATA_SIZE__, __RODATA_LOAD__
@@ -115,7 +116,9 @@ wedge_copy:
 ; that maps both ranges back to letters hides it completely.
 wedge_banner:
         .byte $0D
-        .byte "ultimate uci basic wedge installed."
+        .byte "ultimate uci basic wedge"
+        .byte $0D
+        .byte "sdk ", SDK_VERSION
         .byte $0D
         .byte "viva la commodore!"
         .byte $0D, $00
