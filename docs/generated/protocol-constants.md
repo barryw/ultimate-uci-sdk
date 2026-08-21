@@ -20,7 +20,7 @@ the target and command bytes, in order.
 A bare `<x>` next to a string-shaped name is raw bytes with no length and no
 terminator; it is always either last or followed by the `$NN` the firmware
 splits on. Trailing arguments may be omitted where the target defaults them —
-`DOS_CMD_GET_TIME` and `CTRL_CMD_GET_HWINFO` both do.
+`DOS_CMD_GET_TIME` and deprecated `CTRL_CMD_GET_HWINFO` both do.
 
 An empty cell means the command takes no arguments, or that the firmware does
 not document what it takes and the SDK has never sent it. The distinction is
@@ -236,7 +236,7 @@ Fixed-width blobs the network target exchanges.
 | `CTRL_CMD_DECODE_TRACK` | `$11` |  | GCR -> binary in REU |
 | `CTRL_CMD_ENCODE_TRACK` | `$12` |  | INFERRED: firmware only, not in the published spec |
 | `CTRL_CMD_EASYFLASH` | `$20` | `$00 <bank> <baseaddr>` | sector erase; baseaddr bit $20 selects the high ROM |
-| `CTRL_CMD_GET_HWINFO` | `$28` | `<sub>` | sub may be omitted; the target defaults it to CTRL_HWINFO_MODEL |
+| `CTRL_CMD_GET_HWINFO` | `$28` | `<sub>` | deprecated; sub may be omitted; defaults to CTRL_HWINFO_MODEL |
 | `CTRL_CMD_GET_DRVINFO` | `$29` | `<effective_addr>` |  |
 | `CTRL_CMD_ENABLE_DRIVE_A` | `$30` |  |  |
 | `CTRL_CMD_DISABLE_DRIVE_A` | `$31` |  |  |
@@ -260,12 +260,12 @@ Runtime palette control. Affects the live palette only; it does not touch flash 
 | `UCI_PALETTE_COLORS` | 16 | colors in a VIC-II palette |
 | `UCI_PALETTE_BYTES` | 48 | bytes in a full palette frame (16 * RGB) |
 
-## Control: hardware info sub-commands
+## Control: deprecated hardware info sub-commands
 
 | Name | Value | Notes |
 | --- | --- | --- |
 | `CTRL_HWINFO_MODEL` | `$00` | ASCII model name, e.g. 'ULTIMATE 64' |
-| `CTRL_HWINFO_SID` | `$01` | SID configuration frames |
+| `CTRL_HWINFO_SID` | `$01` | deprecated SID configuration frames |
 
 ## Control: drive type codes
 

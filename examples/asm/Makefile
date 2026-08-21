@@ -12,7 +12,7 @@ CL65   ?= cl65
 
 LIB    := $(ROOT)/bindings/cc65/build/ultimate.lib
 
-all: identify.prg
+all: identify.prg sid-info.prg
 
 $(LIB): FORCE
 	$(MAKE) -C $(ROOT)/bindings/cc65 TARGET=$(TARGET)
@@ -20,8 +20,11 @@ $(LIB): FORCE
 identify.prg: identify.s $(LIB)
 	$(CL65) -t $(TARGET) --asm-include-dir $(ROOT)/bindings/asm -o $@ identify.s $(LIB)
 
+sid-info.prg: sid-info.s $(LIB)
+	$(CL65) -t $(TARGET) --asm-include-dir $(ROOT)/bindings/asm -o $@ sid-info.s $(LIB)
+
 clean:
-	rm -f identify.prg identify.o
+	rm -f identify.prg identify.o sid-info.prg sid-info.o
 
 FORCE:
 

@@ -24,6 +24,8 @@ cp bindings/blob/build/ultimate-8000.bin \
 cp src/basic/uci.prg src/basic/uci.crt "$tmp/$name/src/basic/"
 cp examples/asm/identify.prg "$tmp/$name/examples/asm/"
 cp examples/cc65/identify.prg "$tmp/$name/examples/cc65/"
+cp demos/sid-visualizer/sid-visualizer.prg \
+   "$tmp/$name/demos/sid-visualizer/"
 cp guide/guide.pdf "$tmp/$name/guide/"
 
 tar -czf "$dist/$name.tar.gz" -C "$tmp" "$name"
@@ -33,6 +35,8 @@ cp bindings/blob/build/ultimate-8000.bin "$dist/ultimate-8000-$version.bin"
 cp bindings/blob/build/ultimate-8000.reloc "$dist/ultimate-8000-$version.reloc"
 cp src/basic/uci.prg "$dist/uci-$version.prg"
 cp src/basic/uci.crt "$dist/uci-$version.crt"
+cp demos/sid-visualizer/sid-visualizer.prg \
+   "$dist/ultimate-sid-visualizer-$version.prg"
 
 if command -v sha256sum >/dev/null 2>&1; then
     (cd "$dist" && sha256sum -- * > SHA256SUMS)

@@ -56,3 +56,12 @@ UCI_STATIC_ASSERT(caps_present, offsetof(ultimate_capabilities, present), 0);
 UCI_STATIC_ASSERT(caps_ident, offsetof(ultimate_capabilities, ident), 1);
 UCI_STATIC_ASSERT(caps_targets, offsetof(ultimate_capabilities, targets), 2);
 UCI_STATIC_ASSERT(caps_size, sizeof(ultimate_capabilities), 4);
+
+/* The SID reply is received directly into this count-prefixed structure. */
+UCI_STATIC_ASSERT(sid_primary, offsetof(ultimate_sid, primary_address), 0);
+UCI_STATIC_ASSERT(sid_secondary, offsetof(ultimate_sid, secondary_address), 2);
+UCI_STATIC_ASSERT(sid_type, offsetof(ultimate_sid, type), 4);
+UCI_STATIC_ASSERT(sid_record_size, sizeof(ultimate_sid), 5);
+UCI_STATIC_ASSERT(sid_count, offsetof(ultimate_sid_info, count), 0);
+UCI_STATIC_ASSERT(sid_records, offsetof(ultimate_sid_info, sid), 1);
+UCI_STATIC_ASSERT(sid_info_size, sizeof(ultimate_sid_info), 21);

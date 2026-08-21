@@ -37,6 +37,7 @@
         .import uci_abort
         .import uci_last_code
         .import ultimate_available, ultimate_identify, ultimate_get_model
+        .import ultimate_legacy_get_sid_info
         .import ultimate_strerror
         .import ultimate_palette_get, ultimate_palette_set
         .import ultimate_palette_set_color, ultimate_palette_reset
@@ -68,6 +69,7 @@
         .export t_detect
         .export t_identify
         .export t_get_model
+        .export t_sid_info, t_sid_info_null
         .export t_palette_get, t_palette_set
         .export t_palette_color, t_palette_reset
         .export t_palette_get_null, t_palette_set_null
@@ -101,6 +103,7 @@
         .export reply
         .export reply_len
         .export caps
+        .export sid_info
 
         ; --- parameters ---
         .export ident_target, ident_buflen
@@ -143,6 +146,7 @@ devcode:    .res 2
 reply_len:  .res 2
 caps:       .res 4      ; ultimate_capabilities: present, ident, targets(2)
 reply:      .res REPLY_MAX
+sid_info:   .res ULTIMATE_SID_INFO_SIZE
 
 net_iface:  .res 1
 net_sock:   .res 1
@@ -294,6 +298,20 @@ t_identify:
 t_get_model:
         jsr set_ult_buf
         jsr ultimate_get_model
+        sta result
+        rts
+
+t_sid_info:
+        lda #<sid_info
+        ldx #>sid_info
+        jsr ultimate_legacy_get_sid_info
+        sta result
+        rts
+
+t_sid_info_null:
+        lda #$00
+        ldx #$00
+        jsr ultimate_legacy_get_sid_info
         sta result
         rts
 

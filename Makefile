@@ -18,7 +18,7 @@
 .DEFAULT_GOAL := test
 
 
-all: lib examples emulator wedge
+all: lib examples emulator wedge demos
 
 # The SDK itself is 6502 assembly, so the only place that logic can be tested
 # is on a 6502 - that is what `emulator` is for. `unittest` covers the one
@@ -48,6 +48,12 @@ blob:
 examples: lib
 	$(MAKE) -C examples/asm
 	$(MAKE) -C examples/cc65
+
+demos: lib
+	$(MAKE) -C demos/sid-visualizer
+
+demo-run: lib
+	$(MAKE) -C demos/sid-visualizer run U64_HOST=$(U64_HOST)
 
 emulator: lib
 	$(MAKE) -C tests/emulator run
@@ -96,6 +102,7 @@ release: lib blob examples
 	@test -n "$(VERSION)" || { echo "VERSION is required (for example v1.2.3)"; exit 2; }
 	$(MAKE) -B -C src/basic VERSION="$(VERSION)"
 	$(MAKE) -B -C guide VERSION="$(VERSION)"
+	$(MAKE) -B -C demos/sid-visualizer VERSION="$(VERSION)"
 	tools/package-release.sh "$(VERSION)"
 
 clean:
@@ -104,8 +111,9 @@ clean:
 	$(MAKE) -C tests/hardware clean
 	$(MAKE) -C examples/asm clean
 	$(MAKE) -C examples/cc65 clean
+	$(MAKE) -C demos/sid-visualizer clean
 	$(MAKE) -C bindings/cc65 clean
 	$(MAKE) -C bindings/blob clean
 
-.PHONY: all test unittest lib blob examples emulator hardware hardware-run \
+.PHONY: all test unittest lib blob examples demos demo-run emulator hardware hardware-run \
 		basic-run time-run protocol coverage release clean

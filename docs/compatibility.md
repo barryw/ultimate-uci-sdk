@@ -77,6 +77,12 @@ The interface has grown targets over time. Probe, do not assume.
 | 3.15 | HTTP target (`$06`); IRQ-on-completion; `CTRL_CMD_GET_HWINFO` sub-command optional |
 | after 3.15 | runtime palette commands `$51`-`$54` on the control target |
 
+The firmware documentation marks `CTRL_CMD_GET_HWINFO` deprecated. Current
+firmware still implements it, but no replacement C64-side UCI command is
+published. `ultimate_get_model()` is retained for compatibility, and the SID
+wrapper is therefore named `ultimate_legacy_get_sid_info()`. Treat
+`ULTIMATE_ERR_NOT_SUPPORTED` as an expected future result from either call.
+
 ```c
 ultimate_capabilities caps;
 ultimate_detect(&caps);
@@ -106,7 +112,8 @@ Two things worth knowing about what the probe reports:
   firmware has the target", which is the thing you actually need to know. Still
   fall back on a command failing rather than on the probe — the probe cannot see
   a mounted image, a valid path, or a full disk.
-- **`ultimate_get_model()` is for humans.** It reads `CTRL_CMD_GET_HWINFO`,
+- **`ultimate_get_model()` is for humans.** It reads the deprecated
+  `CTRL_CMD_GET_HWINFO`,
   which needs the control target and returns mixed-case strings —
   `Ultimate 64 Elite`, `Ultimate II+`, `Ultimate 64-II`. Note the case: unlike
   the uppercase identification strings, this one renders as graphics glyphs if

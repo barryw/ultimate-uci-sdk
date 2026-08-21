@@ -17,6 +17,7 @@
         .import uci_set_timeout_a, uci_get_timeout_a, uci_last_code
         .import ultimate_init, ultimate_available, ultimate_detect
         .import ultimate_identify, ultimate_get_model, ultimate_strerror
+        .import ultimate_legacy_get_sid_info
         .import uci_req_clear, uci_decode, uci_status_fmt
         .import ultimate_palette_get, ultimate_palette_set
         .import ultimate_palette_set_color, ultimate_palette_reset
@@ -126,6 +127,7 @@ blob_start:
         jmp blob_http_close             ; +$A9
         jmp blob_http_free_all          ; +$AC
         jmp blob_reu_size               ; +$AF
+        jmp blob_legacy_sid_info        ; +$B2
 
 ; ---------------------------------------------------------------------------
 ; The parameter block.
@@ -282,6 +284,14 @@ blob_reu_size:
         sta bp_len
         stx bp_len + 1
         lda #ULTIMATE_OK
+        jmp blob_done
+
+; The deprecated HWINFO command's count-prefixed SID records fit in bp_reply.
+; A blob caller reads the same layout as a linked caller without a pointer.
+blob_legacy_sid_info:
+        lda #<bp_reply
+        ldx #>bp_reply
+        jsr ultimate_legacy_get_sid_info
         jmp blob_done
 
 blob_reu_stash:

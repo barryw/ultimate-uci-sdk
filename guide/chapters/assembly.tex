@@ -78,6 +78,7 @@ inside a service.
 \evidence{\cmd{bindings/asm/uci\_protocol.inc};
 \cmd{src/uci/uci\_zp.inc}; \cmd{docs/asm-abi.md}}
 
+\Needspace{30\baselineskip}
 \section{Initialize, Detect And Describe The Machine}
 
 \begin{listingbox}
@@ -106,6 +107,7 @@ capabilities records the detected targets.
 boolean rather than a result code. \cmd{ultimate\_detect} takes the address of
 the four-byte capability block directly in \cmd{A}/\cmd{X}.
 
+\Needspace{20\baselineskip}
 \subsection*{Identify a target with and without the optional length output}
 
 \begin{listingbox}
@@ -131,6 +133,7 @@ text_length = 20 with the pointer; no length is stored with zero.
 Both calls terminate the text in \cmd{ult\_buf}. The first stores its length
 through \cmd{ult\_outlen}; zero disables that optional output.
 
+\Needspace{25\baselineskip}
 \subsection*{Read the model with and without the optional length output}
 
 \begin{listingbox}
@@ -149,8 +152,50 @@ text_length is optional in the same way as IDENTIFY.
 \end{outputbox}
 
 \cmd{ultimate\_get\_model} uses the same buffer contract but needs no target
-argument.
+argument. Its underlying \cmd{CTRL\_CMD\_GET\_HWINFO} command is marked
+deprecated by the firmware documentation; this existing wrapper remains for
+compatibility.
 
+\Needspace{32\baselineskip}
+\subsection*{Read SID addresses through deprecated HWINFO}
+
+\begin{listingbox}
+\hspace*{2em}lda \#<sid\_info\
+\hspace*{2em}ldx \#>sid\_info\
+\hspace*{2em}jsr ultimate\_legacy\_get\_sid\_info\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+\hspace*{2em}lda sid\_info + ULTIMATE\_SID\_INFO\_COUNT\
+\hspace*{2em}; iterate this many ULTIMATE_SID_RECORD_SIZE-byte records\
+\hspace*{2em}ldx \#ULTIMATE\_SID\_INFO\_RECORDS + ULTIMATE\_SID\_PRIMARY\_ADDRESS\
+\hspace*{2em}lda sid\_info,x\
+\hspace*{2em}sta first\_sid\_address\
+\hspace*{2em}lda sid\_info + 1,x\
+\hspace*{2em}sta first\_sid\_address + 1\
+\
+sid\_info:          .res ULTIMATE\_SID\_INFO\_SIZE\
+first\_sid\_address: .res 2
+\end{listingbox}
+
+\begin{outputbox}
+sid_info count = 4\\
+primary addresses = \$D400, \$D400, \$D400, \$D400
+\end{outputbox}
+
+Records begin at \cmd{ULTIMATE\_SID\_INFO\_RECORDS}. Within each record,
+\cmd{ULTIMATE\_SID\_PRIMARY\_ADDRESS} and
+\cmd{ULTIMATE\_SID\_SECONDARY\_ADDRESS} name two little-endian words, and
+\cmd{ULTIMATE\_SID\_TYPE} names the raw type byte. The type is not a 6581 or
+8580 identifier. Firmware still implements this query, but marks HWINFO
+deprecated and publishes no replacement C64-side UCI command. The legacy name
+is deliberate; handle \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED} and read no record
+unless the call returned \cmd{ULTIMATE\_OK}.
+
+\evidence{\cmd{bindings/asm/ultimate.inc}; \cmd{src/uci/ultimate.s};
+\cmd{software/io/command\_interface/control\_target.cc}}
+
+\Needspace{15\baselineskip}
 \subsection*{Turn a result into text}
 
 \begin{listingbox}
@@ -754,7 +799,6 @@ unfinished exchange and is safe while idle.
 \hspace*{2em}setptr uci\_req + UCI\_REQ\_DATA, raw\_reply\
 \hspace*{2em}setword uci\_req + UCI\_REQ\_DATAMAX, 64\
 \hspace*{2em}jsr uci\_exec\_block\
-\
 \hspace*{2em}jsr uci\_req\_clear\
 \hspace*{2em}lda \#UCI\_TARGET\_DOS1\
 \hspace*{2em}sta uci\_req + UCI\_REQ\_TARGET\
@@ -763,7 +807,6 @@ unfinished exchange and is safe while idle.
 \hspace*{2em}setptr uci\_req + UCI\_REQ\_ARGS, time\_format\
 \hspace*{2em}setword uci\_req + UCI\_REQ\_ARGLEN, 1\
 \hspace*{2em}jsr uci\_exec\_block\
-\
 \hspace*{2em}jsr uci\_req\_clear\
 \hspace*{2em}lda \#UCI\_TARGET\_CONTROL\
 \hspace*{2em}sta uci\_req + UCI\_REQ\_TARGET\
@@ -772,11 +815,9 @@ unfinished exchange and is safe while idle.
 \hspace*{2em}setptr uci\_req + UCI\_REQ\_DATA, raw\_reply\
 \hspace*{2em}setword uci\_req + UCI\_REQ\_DATAMAX, 64\
 \hspace*{2em}jsr uci\_exec\_block\
-\
 \hspace*{2em}setptr uci\_req + UCI\_REQ\_ARGS, hwinfo\_model\
 \hspace*{2em}setword uci\_req + UCI\_REQ\_ARGLEN, 1\
 \hspace*{2em}jsr uci\_exec\_block\
-\
 time\_format: .byte 0\
 hwinfo\_model: .byte CTRL\_HWINFO\_MODEL\
 raw\_reply:   .res 64
@@ -788,11 +829,10 @@ GET_TIME returns the formatted time.\\
 Both GET_HWINFO forms return the model name.
 \end{outputbox}
 
-Clearing the request makes every optional pointer and length zero. The first
-command therefore has no arguments, payload or status buffer. The second adds
-the optional GET\_TIME format byte. The hardware-info command is then sent
-without its selector and with an explicit model selector. Set payload, data or
-status spans in the same pointer-plus-length form only when needed.
+Clearing the request leaves every optional span empty. The time command then
+supplies its optional format byte. Deprecated GET\_HWINFO is shown without and
+with its model selector only to demonstrate both wire forms. Set other spans
+only when needed.
 
 \subsection*{Use a caller-owned request block}
 

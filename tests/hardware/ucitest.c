@@ -233,6 +233,7 @@ static uint8_t reu_work[32];
 
 static uint8_t saved[UCI_PALETTE_BYTES];
 static uint8_t readback[UCI_PALETTE_BYTES];
+static ultimate_sid_info sid_info;
 
 /*
  * Machine-readable result block, for a host driver that reads memory over the
@@ -251,7 +252,7 @@ static uint8_t readback[UCI_PALETTE_BYTES];
  * polls for it and then reads the rest can never catch a half-written block.
  */
 #define RESULT_BLOCK  ((uint8_t *)0x033C)
-#define RESULT_FORMAT 3
+#define RESULT_FORMAT 4
 #define RESULT_DONE   0xA5
 
 static uint8_t turbo_ran;
@@ -260,6 +261,8 @@ static uint8_t net_sock_ran;
 static uint8_t http_ran;
 static uint16_t reu_banks;
 static uint8_t reu_probe_clean;
+static uint8_t sid_physical_count;
+static uint16_t sid_physical_address[2];
 
 static void publish(void)
 {
@@ -287,6 +290,14 @@ static void publish(void)
     RESULT_BLOCK[17] = (uint8_t)reu_banks;
     RESULT_BLOCK[18] = (uint8_t)(reu_banks >> 8);
     RESULT_BLOCK[19] = reu_probe_clean;
+    /* Format 4: the physical socket records, for comparison with the settings
+       REST endpoint by the host harness. */
+    RESULT_BLOCK[20] = sid_info.count;
+    RESULT_BLOCK[21] = sid_physical_count;
+    RESULT_BLOCK[22] = (uint8_t)sid_physical_address[0];
+    RESULT_BLOCK[23] = (uint8_t)(sid_physical_address[0] >> 8);
+    RESULT_BLOCK[24] = (uint8_t)sid_physical_address[1];
+    RESULT_BLOCK[25] = (uint8_t)(sid_physical_address[1] >> 8);
     RESULT_BLOCK[12] = RESULT_DONE;     /* last, always */
 }
 
@@ -370,8 +381,32 @@ int main(void)
     check("detect-present", 1, caps.present);
     check("detect-has-dos", 1, ultimate_has_dos(&caps));
 
+    /* The count and every record are received in one call. The host harness
+       independently reads the two configured socket addresses over REST and
+       compares them with the physical records published above. */
+    if (!ultimate_has_control(&caps)) {
+        skip("legacy-sid-info", "no control target on this firmware");
+    } else {
+        uint8_t i;
+        err = ultimate_legacy_get_sid_info(&sid_info);
+        check("legacy-sid-info", ULTIMATE_OK, err);
+        if (err == ULTIMATE_OK) {
+            for (i = 0; i < sid_info.count; ++i) {
+                uint8_t kind = (uint8_t)(sid_info.sid[i].type & 0x7F);
+                printf("# sid %u primary=$%04x secondary=$%04x type=$%02x\n",
+                       (uint8_t)(i + 1), sid_info.sid[i].primary_address,
+                       sid_info.sid[i].secondary_address, sid_info.sid[i].type);
+                if ((kind == 4 || kind == 5) && sid_physical_count < 2) {
+                    sid_physical_address[sid_physical_count] =
+                        sid_info.sid[i].primary_address;
+                    ++sid_physical_count;
+                }
+            }
+        }
+    }
+
     /*
-     * 8: command framing, end to end. ECHO hands back the exact bytes the
+     * Command framing, end to end. ECHO hands back the exact bytes the
      * Ultimate received, so a mismatch here means the command never made it
      * onto the wire the way we wrote it.
      */

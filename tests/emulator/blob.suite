@@ -341,5 +341,16 @@ suites {
       jsr($8082, stop_on_rts = true, fail_on_brk = true)   ; +$82 reu_save
       assert($8100 == $04, "and the same for reu_save")
     }
+
+    test("blob-legacy-sid-info", "deprecated SID records reach the blob parameter block") {
+      jsr($8004, stop_on_rts = true, fail_on_brk = true)
+      $8100 = $ff
+      $8151 = $ff
+      jsr($80b2, stop_on_rts = true, fail_on_brk = true)
+      ; u64sim returns its model string for every deprecated GET_HWINFO selector. The SDK
+      ; rejects that malformed SID reply and clears the count in bp_reply.
+      assert($8100 == $03, "bp_result is ULTIMATE_ERR_PROTOCOL")
+      assert($8151 == $00, "the SID count is clear after failure")
+    }
   }
 }

@@ -23,6 +23,7 @@
         .export ultimate_identify
         .export ultimate_detect,    _ultimate_detect
         .export ultimate_get_model
+        .export ultimate_legacy_get_sid_info, _ultimate_legacy_get_sid_info
         ; The other service modules build on these four.
         .export ult_req_clear, ult_exec_string
         .export ult_have_buf, ult_invalid
@@ -34,6 +35,8 @@
 ; a real identification string is clipped and therefore cannot be mistaken for
 ; it.
 ULT_SCRATCH_LEN = 16
+ULT_SID_MAX = 4
+ULT_SID_INFO_SIZE = 1 + ULT_SID_MAX * 5
 
         uci_code
 
@@ -360,6 +363,8 @@ _ultimate_detect:
 ;
 ; The sub-command byte is optional from firmware 3.15 on but required before it,
 ; so it is always sent.
+; Firmware documentation marks CTRL_CMD_GET_HWINFO deprecated. This existing
+; model wrapper is retained for compatibility.
 ;
 ; The string that comes back is mixed case ("Ultimate 64 Elite"), unlike the
 ; uppercase identification strings - see docs/uci.md. A program printing it on a
@@ -400,3 +405,94 @@ ult_no_target:
 
 ult_hwinfo_arg:
         .byte CTRL_HWINFO_MODEL
+
+; ---------------------------------------------------------------------------
+; ultimate_legacy_get_sid_info   A/X = caller's ULT_SID_INFO_SIZE-byte block
+;                      -> A = ULTIMATE_* result
+;
+; The reply already has the public structure's layout: count, then five-byte
+; records containing two little-endian addresses and the raw type byte. Keep it
+; in place and validate the count against the actual reply length.
+; CTRL_CMD_GET_HWINFO is deprecated, hence this entry point's legacy name.
+; ---------------------------------------------------------------------------
+        uci_code
+
+ultimate_legacy_get_sid_info:
+_ultimate_legacy_get_sid_info:
+        sta ult_buf
+        stx ult_buf + 1
+        ora ult_buf + 1
+        beq @invalid
+
+        jsr @clear_count
+        jsr ult_req_clear
+        lda #UCI_TARGET_CONTROL
+        sta ult_req + UCI_REQ_TARGET
+        lda #CTRL_CMD_GET_HWINFO
+        sta ult_req + UCI_REQ_COMMAND
+        lda #<ult_hwinfo_sid_arg
+        sta ult_req + UCI_REQ_ARGS
+        lda #>ult_hwinfo_sid_arg
+        sta ult_req + UCI_REQ_ARGS + 1
+        lda #$01
+        sta ult_req + UCI_REQ_ARGLEN
+        lda ult_buf
+        sta ult_req + UCI_REQ_DATA
+        lda ult_buf + 1
+        sta ult_req + UCI_REQ_DATA + 1
+        lda #ULT_SID_INFO_SIZE
+        sta ult_req + UCI_REQ_DATAMAX
+
+        lda #<ult_req
+        ldx #>ult_req
+        jsr uci_exec
+        cmp #ULTIMATE_OK
+        bne @failed
+
+        lda ult_req + UCI_REQ_DATALEN + 1
+        bne @protocol
+        lda ult_buf
+        sta uci_ptr
+        lda ult_buf + 1
+        sta uci_ptr + 1
+        ldy #$00
+        lda (uci_ptr),y
+        tax
+        cpx #ULT_SID_MAX + 1
+        bcs @protocol
+        lda ult_sid_reply_lengths,x
+        cmp ult_req + UCI_REQ_DATALEN
+        bne @protocol
+        lda #ULTIMATE_OK
+        ldx #$00
+        rts
+
+@protocol:
+        lda #ULTIMATE_ERR_PROTOCOL
+@failed:
+        pha
+        jsr @clear_count
+        pla
+        ldx #$00
+        rts
+
+@invalid:
+        jmp ult_invalid
+
+@clear_count:
+        lda ult_buf
+        sta uci_ptr
+        lda ult_buf + 1
+        sta uci_ptr + 1
+        lda #$00
+        ldy #$00
+        sta (uci_ptr),y
+        rts
+
+        .rodata
+
+ult_hwinfo_sid_arg:
+        .byte CTRL_HWINFO_SID
+
+ult_sid_reply_lengths:
+        .byte 1, 6, 11, 16, 21

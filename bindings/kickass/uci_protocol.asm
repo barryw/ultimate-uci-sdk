@@ -177,7 +177,7 @@
 .label CTRL_CMD_DECODE_TRACK      = $11  // GCR -> binary in REU
 .label CTRL_CMD_ENCODE_TRACK      = $12  // INFERRED: firmware only, not in the published spec
 .label CTRL_CMD_EASYFLASH         = $20  // $00 <bank> <baseaddr> - sector erase; baseaddr bit $20 selects the high ROM
-.label CTRL_CMD_GET_HWINFO        = $28  // <sub> - sub may be omitted; the target defaults it to CTRL_HWINFO_MODEL
+.label CTRL_CMD_GET_HWINFO        = $28  // <sub> - deprecated; sub may be omitted; defaults to CTRL_HWINFO_MODEL
 .label CTRL_CMD_GET_DRVINFO       = $29  // <effective_addr>
 .label CTRL_CMD_ENABLE_DRIVE_A    = $30
 .label CTRL_CMD_DISABLE_DRIVE_A   = $31
@@ -198,9 +198,9 @@
 .label UCI_PALETTE_COLORS         = $10  // colors in a VIC-II palette
 .label UCI_PALETTE_BYTES          = $30  // bytes in a full palette frame (16 * RGB)
 
-// ---- Control: hardware info sub-commands ----
+// ---- Control: deprecated hardware info sub-commands ----
 .label CTRL_HWINFO_MODEL          = $00  // ASCII model name, e.g. 'ULTIMATE 64'
-.label CTRL_HWINFO_SID            = $01  // SID configuration frames
+.label CTRL_HWINFO_SID            = $01  // deprecated SID configuration frames
 
 // ---- Control: drive type codes ----
 // From CTRL_CMD_GET_DRVINFO.

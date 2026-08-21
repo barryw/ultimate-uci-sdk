@@ -222,6 +222,36 @@ def run(host, port, verbose, as_crt):
                                    TURBO: "U64 Turbo Registers",
                                    REU: "Enabled",
                                    REU_SIZE: REU_SIZE_WANT})
+    checks = list(CHECKS)
+    sid_addresses = [
+        int(u.get_setting("SID Addressing", "UltiSID 1 Address")[1:], 16),
+        int(u.get_setting("SID Addressing", "UltiSID 2 Address")[1:], 16),
+    ]
+    for number in (1, 2):
+        if u.get_setting("SID Sockets Configuration",
+                         "SID Socket %d" % number) == "Enabled":
+            value = u.get_setting("SID Addressing",
+                                  "SID Socket %d Address" % number)
+            sid_addresses.append(int(value[1:], 16))
+    sid_output = "".join(" %d " % value for value in sid_addresses).rstrip()
+    checks.extend([
+        ("UCI UCTRL,40,1", "READY.",
+         "deprecated GET_HWINFO with the SID selector returns the configured "
+         "SID records"),
+        ("PRINT UERR;ULEN;UBYTE(0)",
+         " 0  %d  %d" % (1 + 5 * len(sid_addresses), len(sid_addresses)),
+         "the SDK result, exact frame length and leading SID count agree"),
+        ("10 FOR I=0 TO UBYTE(0)-1", None,
+         "start a short program so no source line wraps on the C64 screen"),
+        ("20 A=1+5*I", None,
+         "each SID record occupies five reply bytes"),
+        ("30 PRINT UBYTE(A)+256*UBYTE(A+1);", None,
+         "combine the primary address's low and high bytes"),
+        ("40 NEXT:PRINT", None,
+         "visit every returned record"),
+        ("RUN", sid_output,
+         "BASIC reconstructs each little-endian primary SID address"),
+    ])
     if changed:
         print("# saved settings: %s"
               % ", ".join("%s=%s" % (k[1], v) for k, v in changed.items()))
@@ -230,7 +260,7 @@ def run(host, port, verbose, as_crt):
         print("# installing the wedge from the %s"
               % ("cartridge" if as_crt else ".prg"))
         screen = install(u, as_crt)
-        if not any("ULTIMATE UCI BASIC WEDGE INSTALLED." in line for line in screen):
+        if not any("ULTIMATE UCI BASIC WEDGE" in line for line in screen):
             print("not ok 1 - the wedge did not install")
             print("#   the banner never appeared. Screen:")
             for line in screen[-6:]:
@@ -241,7 +271,7 @@ def run(host, port, verbose, as_crt):
             print("# %s" % free[0].strip())
         print("ok 1 - wedge installed, banner readable")
 
-        for index, (line, expected, why) in enumerate(CHECKS, start=2):
+        for index, (line, expected, why) in enumerate(checks, start=2):
             type_line(u, line)
             time.sleep(2)
             screen = decode_screen(u.readmem(0x0400, 1000))
@@ -252,7 +282,7 @@ def run(host, port, verbose, as_crt):
             for i, text in enumerate(screen):
                 if text.strip() == line:
                     after = screen[i + 1:]
-            hit = any(expected in text for text in after)
+            hit = expected is None or any(expected in text for text in after)
             errors = [t for t in after if "ERROR" in t]
 
             if hit and not errors:

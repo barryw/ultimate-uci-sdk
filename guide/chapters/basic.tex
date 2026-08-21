@@ -87,9 +87,43 @@ SoftwareIEC and HTTP targets. Use these names as the first argument to
 
 Command 38 is \cmd{DOS\_CMD\_GET\_TIME}. Line~10 omits its optional format
 byte; line~20 supplies it explicitly. Command 40 is
-\cmd{CTRL\_CMD\_GET\_HWINFO}; lines~30 and 40 show its omitted and explicit
-model selector. Both commands default an omitted argument to zero. A number
+\cmd{CTRL\_CMD\_GET\_HWINFO}; the firmware documentation marks it deprecated.
+Lines~30 and 40 show its omitted and explicit model selector only to make the
+wire format clear. Both commands default an omitted argument to zero. A number
 normally contributes one byte; known wide arguments are widened automatically.
+
+\Needspace{30\baselineskip}
+\subsection*{Read SID addresses through deprecated HWINFO}
+
+\begin{screen}
+5 REM LEGACY: HWINFO IS DEPRECATED\\
+10 UCI UCTRL,40,1\\
+20 IF UERR THEN PRINT "SID INFO FAILED";UERR:END\\
+30 PRINT "SID COUNT";UBYTE(0)\\
+40 FOR I=0 TO UBYTE(0)-1\\
+50 A=1+5*I\\
+60 PRINT "SID";I+1;UBYTE(A)+256*UBYTE(A+1)\\
+70 NEXT\\
+RUN\\
+SID COUNT 4\\
+SID 1  54272\\
+SID 2  54272\\
+SID 3  54272\\
+SID 4  54272\\
+READY.
+\end{screen}
+
+The explicit selector 1 requests SID information through a command the
+firmware documentation marks deprecated. Firmware still implements it but may
+remove it, and no replacement C64-side UCI command is currently published.
+Byte zero is the record
+count. Each five-byte record starts with the primary address, least-significant
+byte first; line~60 reconstructs that address. Decimal 54272 is \cmd{\$D400}.
+The following two bytes are the optional secondary address and the fifth is a
+raw type value, not a 6581 or 8580 model identifier.
+
+\evidence{\cmd{src/basic/dispatch.s}; \cmd{tests/hardware/basictest.py};
+\cmd{software/io/command\_interface/control\_target.cc}}
 
 \subsection*{Force raw argument widths}
 

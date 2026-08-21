@@ -29,6 +29,9 @@ guide_assembly_calls:
         lda #UCI_TARGET_DOS1
         jsr ultimate_identify
         jsr ultimate_get_model
+        lda #<sid_info
+        ldx #>sid_info
+        jsr ultimate_legacy_get_sid_info
         lda #ULTIMATE_ERR_IO
         jsr ultimate_strerror
         lda #<palette
@@ -103,3 +106,4 @@ buffer:   .res 512
 palette:  .res UCI_PALETTE_BYTES
 word_out: .res 2
 request:  .res UCI_REQ_SIZE
+sid_info: .res ULTIMATE_SID_INFO_SIZE

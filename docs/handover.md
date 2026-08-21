@@ -162,8 +162,9 @@ palette code it never calls, and it reuses `ult_req_clear` from `ultimate.s`
 rather than growing a second copy. Add the module to `src/uci/sources.mk` and
 both bindings pick it up.
 
-The pattern is in `src/uci/ultimate.s`, `ultimate_get_model`. Wider parameters go
-in the shared variable block rather than on any stack.
+The pattern is in `src/uci/ultimate.s`, `ultimate_get_model`; that wrapper is
+retained for compatibility even though its HWINFO command is deprecated. Wider
+parameters go in the shared variable block rather than on any stack.
 
 Three constraints that are not negotiable, because they are what the SDK sells:
 

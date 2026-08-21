@@ -45,7 +45,7 @@ against version 5.
 | `+$1F` | `ultimate_available` | | `A` = 1 when up |
 | `+$22` | `ultimate_detect` | `A`/`X` = capability block | `A` = result |
 | `+$25` | `ultimate_identify` | `A` = target | `A` = result |
-| `+$28` | `ultimate_get_model` | | `A` = result |
+| `+$28` | `ultimate_get_model` | | `A` = result; deprecated HWINFO compatibility |
 | `+$2B` | `ultimate_strerror` | `A` = result code | `A`/`X` = PETSCII text |
 | `+$2E` | `uci_req_clear` | | zeroes the request block at `uci_req` |
 | `+$31` | `uci_decode` | `uci_dec_target`/`uci_dec_ptr`/`uci_dec_len` | `A` = result |
@@ -100,10 +100,16 @@ well as returning it in `A`.
 | `+$A9` | `http_close` | `bp_http` | `bp_result` |
 | `+$AC` | `http_free_all` | | `bp_result` |
 | `+$AF` | `reu_size` | | `bp_len` = size in 64K banks, 0 = none |
+| `+$B2` | `legacy_sid_info` | | deprecated HWINFO; `bp_reply` = count and SID records, `bp_result` |
 
 A directory walk is one live exchange: `+$55` then `+$58` until it answers
 `ULTIMATE_END` (`10`), with no other command in between. `+$7F` and `+$82` work
 on whatever `+$5B` left open and carry no filename of their own.
+
+`legacy_sid_info` is named explicitly: firmware still implements its
+`CTRL_CMD_GET_HWINFO` selector, but the firmware documentation marks that
+command deprecated and publishes no C64-side UCI replacement. Handle
+`ULTIMATE_ERR_NOT_SUPPORTED` in case it is removed.
 
 **A socket read never waits for the wire.** `+$97` answers straight away
 whether or not anything has arrived, so a caller polls: `bp_result` of

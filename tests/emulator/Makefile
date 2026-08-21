@@ -56,6 +56,7 @@ harness.prg harness.lbl: harness.s $(LIB)
 HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_available \
                 t_identify_dos1 t_identify_absent t_detect \
                 t_identify t_get_model t_req_reset t_exec t_wedge \
+                t_sid_info t_sid_info_null sid_info \
                 t_palette_get t_palette_set t_palette_color t_palette_reset \
                 t_palette_get_null t_palette_set_null pal_index \
                 t_turbo_available t_turbo_get t_turbo_set t_turbo_badlines \

@@ -169,7 +169,7 @@
 #define CTRL_CMD_DECODE_TRACK      0x11  /* GCR -> binary in REU */
 #define CTRL_CMD_ENCODE_TRACK      0x12  /* INFERRED: firmware only, not in the published spec */
 #define CTRL_CMD_EASYFLASH         0x20  /* $00 <bank> <baseaddr> - sector erase; baseaddr bit $20 selects the high ROM */
-#define CTRL_CMD_GET_HWINFO        0x28  /* <sub> - sub may be omitted; the target defaults it to CTRL_HWINFO_MODEL */
+#define CTRL_CMD_GET_HWINFO        0x28  /* <sub> - deprecated; sub may be omitted; defaults to CTRL_HWINFO_MODEL */
 #define CTRL_CMD_GET_DRVINFO       0x29  /* <effective_addr> */
 #define CTRL_CMD_ENABLE_DRIVE_A    0x30
 #define CTRL_CMD_DISABLE_DRIVE_A   0x31
@@ -190,9 +190,9 @@
 #define UCI_PALETTE_COLORS 16  /* colors in a VIC-II palette */
 #define UCI_PALETTE_BYTES  48  /* bytes in a full palette frame (16 * RGB) */
 
-/* ---- Control: hardware info sub-commands ---- */
+/* ---- Control: deprecated hardware info sub-commands ---- */
 #define CTRL_HWINFO_MODEL 0x00  /* ASCII model name, e.g. 'ULTIMATE 64' */
-#define CTRL_HWINFO_SID   0x01  /* SID configuration frames */
+#define CTRL_HWINFO_SID   0x01  /* deprecated SID configuration frames */
 
 /* ---- Control: drive type codes ---- */
 /* From CTRL_CMD_GET_DRVINFO. */

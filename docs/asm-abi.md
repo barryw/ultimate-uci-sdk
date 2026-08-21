@@ -10,9 +10,9 @@ else — no C runtime, no software stack, no start-up code, no initialised data.
 
 That is a tested property, not a promise: `sdk-assembly-abi` in
 `tests/emulator/sdk.suite` nulls cc65's software stack pointer before calling
-`ultimate_init`, `uci_exec`, `ultimate_identify` and `ultimate_get_model`, so
-anything reaching for it would write through a null pointer into the 6510's port
-registers rather than working by accident.
+`ultimate_init`, `uci_exec`, `ultimate_identify`, `ultimate_get_model` and
+`ultimate_legacy_get_sid_info`, so anything reaching for it would write through a null
+pointer into the 6510's port registers rather than working by accident.
 
 The usual link is still `cl65`, because it is what assembles this and links the
 library:
@@ -120,7 +120,8 @@ sharing them.
 | `ultimate_init` | — | `A` = `ULTIMATE_OK` or an error code |
 | `ultimate_available` | — | `A` = 1 when the SDK is up |
 | `ultimate_identify` | `A` = target, `ult_buf`, `ult_buflen`, `ult_outlen` | `A` = result code |
-| `ultimate_get_model` | `ult_buf`, `ult_buflen`, `ult_outlen` | `A` = result code |
+| `ultimate_get_model` | `ult_buf`, `ult_buflen`, `ult_outlen` | `A` = result; deprecated HWINFO compatibility |
+| `ultimate_legacy_get_sid_info` | `A`/`X` = pointer to `ULTIMATE_SID_INFO_SIZE` bytes | `A` = result; deprecated HWINFO |
 | `ultimate_detect` | `A`/`X` = pointer to a 4-byte capability block | `A` = result code |
 | `ultimate_strerror` | `A` = result code | `A`/`X` = pointer to the text, in PETSCII |
 | `ultimate_palette_get` | `A`/`X` = pointer to 48 bytes | `A` = result code |
@@ -277,7 +278,7 @@ The Ultimate speaks ASCII. Target identification strings are uppercase, and the
 C64's default character set prints uppercase ASCII unchanged, so those can go
 straight to `CHROUT`.
 
-The model name from `CTRL_CMD_GET_HWINFO` cannot: it is mixed case
+The model name from deprecated `CTRL_CMD_GET_HWINFO` cannot: it is mixed case
 (`Ultimate 64 Elite`), and lowercase ASCII renders as graphics glyphs. Fold it to
 upper case, or convert properly, before printing. Anything else containing
 lowercase needs the same treatment.

@@ -35,7 +35,7 @@ from u64_settings import Ultimate, read_settings, restore_settings  # noqa: E402
 
 # The result block ucitest.prg publishes into the cassette buffer.
 RESULT_ADDR = 0x033C
-RESULT_LEN = 24        # room for the format-3 flags and a little growth
+RESULT_LEN = 28        # room for the format-4 SID addresses and a little growth
 RESULT_MAGIC = b"UCIT"
 RESULT_DONE = 0xA5
 
@@ -81,6 +81,13 @@ class Result:
         # The size the C64 measured for itself, in 64K banks.
         self.reu_banks = (block[17] | (block[18] << 8)) if self.format >= 3 else 0
         self.reu_probe_clean = bool(block[19]) if self.format >= 3 else False
+        # Format 4: SID records classified as physical sockets by the C64.
+        self.sid_count = block[20] if self.format >= 4 else 0
+        self.sid_physical_count = block[21] if self.format >= 4 else 0
+        self.sid_physical_addresses = [
+            block[22] | (block[23] << 8),
+            block[24] | (block[25] << 8),
+        ] if self.format >= 4 else []
 
     def __str__(self):
         if not self.valid:
@@ -154,6 +161,27 @@ def expect_clean_pass_with_net(r, state=None):
         state = state if state is not None else {}
         state["note"] = ("skipped for want of a peer: " + ", ".join(missing))
     return None
+
+
+def expect_sid_addresses(expected):
+    """The UCI socket addresses must match the independently read settings."""
+    def check(r, state=None):
+        problem = expect_clean_pass_with_net(r, state)
+        if problem:
+            return problem
+        if r.sid_physical_count != len(expected):
+            return ("expected %d physical SID records, received %d"
+                    % (len(expected), r.sid_physical_count))
+        actual = r.sid_physical_addresses[:r.sid_physical_count]
+        if actual != expected:
+            return ("configured SID socket addresses %s, UCI returned %s"
+                    % (["$%04X" % v for v in expected],
+                       ["$%04X" % v for v in actual]))
+        state = state if state is not None else {}
+        state["note"] = ("physical SID addresses: " +
+                         ", ".join("$%04X" % v for v in actual))
+        return None
+    return check
 
 
 def expect_reu_size(want):
@@ -335,6 +363,22 @@ def main():
     print("# %s, firmware %s (fpga %s, core %s)"
           % (info.get("product"), info.get("firmware_version"),
              info.get("fpga_version"), info.get("core_version")))
+
+    expected_sids = []
+    try:
+        for number in (1, 2):
+            enabled = u.get_setting("SID Sockets Configuration",
+                                    "SID Socket %d" % number)
+            if enabled == "Enabled":
+                address = u.get_setting("SID Addressing",
+                                        "SID Socket %d Address" % number)
+                expected_sids.append(int(address[1:], 16))
+    except (KeyError, urllib.error.URLError, OSError, ValueError):
+        expected_sids = None
+
+    if expected_sids is not None:
+        settings, _check = SCENARIOS[1]["steps"][0]
+        SCENARIOS[1]["steps"][0] = (settings, expect_sid_addresses(expected_sids))
 
     touched = {CMD_IF, REU, IEC_DRIVE, TURBO}
     saved = read_settings(u, touched)

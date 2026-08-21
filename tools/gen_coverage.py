@@ -41,7 +41,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # READ_DATA, which a machine with an IEC drive never sees it send.
 WRAPPED = {
     "UCI_CMD_IDENTIFY":           ("ultimate_identify", "ultimate_detect"),
-    "CTRL_CMD_GET_HWINFO":        ("ultimate_get_model",),
+    "CTRL_CMD_GET_HWINFO":        ("ultimate_get_model", "ultimate_legacy_get_sid_info"),
     "CTRL_CMD_GET_PALETTE":       ("ultimate_palette_get",),
     "CTRL_CMD_SET_PALETTE":       ("ultimate_palette_set",),
     "CTRL_CMD_SET_PALETTE_COLOR": ("ultimate_palette_set_color",),
@@ -106,7 +106,7 @@ HARDWARE_ONLY = {
 
 # Sub-command bytes are arguments, not commands: counting them would inflate
 # the total and mark them covered whenever the argument value coincides.
-NOT_COMMAND_GROUPS = {"Control: hardware info sub-commands"}
+NOT_COMMAND_GROUPS = {"Control: deprecated hardware info sub-commands"}
 
 
 def command_groups():
@@ -279,7 +279,7 @@ def main():
     for title, items in command_groups():
         family = title.split("(")[0].strip()
         targets = group_targets(title)
-        for name, value, _comment in items:
+        for name, value, comment in items:
             covered = name in sent_names or any(
                 cmd == value and (not targets or tgt is None or tgt in targets)
                 for tgt, cmd in sent_pairs) or any(
@@ -294,6 +294,8 @@ def main():
                 totals["gap"] += 1
             else:
                 status = "no API yet"
+            if "deprecated" in comment.lower():
+                status += "; deprecated"
             where = ("simulator + hardware"
                      if family in SIMULATED_TARGETS and name not in HARDWARE_ONLY
                      else "hardware only")

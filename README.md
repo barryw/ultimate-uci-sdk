@@ -72,11 +72,16 @@ enable it in the ultimate settings menu.
 | files and directories | `chdir`, `getpath`, `opendir`, `readdir`, `open`, `close`, `read`, `write`, `seek`, `delete` |
 | load and save | `load`, `bload`, `save` — the load takes the firmware's fast path when there is one |
 | the RAM expansion | `reu_stash`, `reu_fetch`, file-to-expansion without the C64 in between, and `reu_size` to find out how much there is |
+| configured SID addresses | `ultimate_legacy_get_sid_info` uses deprecated HWINFO and returns every primary and optional secondary mapping |
 | the running palette | `palette_get`, `palette_set`, `palette_set_color`, `palette_reset` |
 | CPU speed on an Ultimate 64 | `turbo_set`, `turbo_get`, `turbo_badlines` |
 | TCP and UDP sockets | `net_connect`, `net_udp`, `net_read`, `net_write`, `net_close`, and the machine's own address from `net_ipconfig` |
 | fetching a URL | `http_get` in one call, or `http_open`/`http_header`/`http_exchange` when a request needs headers |
 | anything else the firmware offers | the generic form: any command, on any target, with framing, timeouts and error translation handled |
+
+The Ultimate-only [Machine Yearning SID visualizer](demos/sid-visualizer/)
+drives six 24-bit palette colours from six live SID voices. Its bundled music
+has a separate CC BY-NC 4.0 licence; the SDK remains MIT-licensed.
 
 The JSON body builder has no wrapper — thirteen commands for a machine with 38K
 of BASIC — and neither do the four TCP listener commands, whose numbers are not

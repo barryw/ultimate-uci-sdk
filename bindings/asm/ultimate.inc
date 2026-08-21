@@ -62,13 +62,26 @@ ULTIMATE_INC = 1
 ; These three take more than fits in registers, so the extra parameters go in
 ; the shared variable block below - set them before calling. See docs/asm-abi.md.
 .global ultimate_identify    ; A = target, ult_buf/ult_buflen/ult_outlen -> A = result
-.global ultimate_get_model   ; ult_buf/ult_buflen/ult_outlen set -> A = result
+.global ultimate_get_model   ; deprecated HWINFO; retained for compatibility
+.global ultimate_legacy_get_sid_info ; deprecated HWINFO; A/X = SID info block
 .global ultimate_detect      ; A/X = pointer to a 4-byte capability block -> A = result
 .global ultimate_strerror    ; A = result code -> A/X = pointer to PETSCII text
 
 .global ult_buf, ult_buflen  ; caller's output buffer and its size, for
 .global ult_outlen           ; ultimate_identify / ultimate_get_model; ult_outlen
                               ; is where the length written is reported, 0 for nowhere
+
+; The legacy function's count-prefixed result. Each record is the firmware's
+; two little-endian addresses followed by its raw type byte. HWINFO is marked
+; deprecated and may disappear; handle ULTIMATE_ERR_NOT_SUPPORTED.
+ULTIMATE_SID_MAX                = 4
+ULTIMATE_SID_RECORD_SIZE        = 5
+ULTIMATE_SID_INFO_SIZE          = 1 + ULTIMATE_SID_MAX * ULTIMATE_SID_RECORD_SIZE
+ULTIMATE_SID_INFO_COUNT         = 0
+ULTIMATE_SID_INFO_RECORDS       = 1
+ULTIMATE_SID_PRIMARY_ADDRESS    = 0
+ULTIMATE_SID_SECONDARY_ADDRESS  = 2
+ULTIMATE_SID_TYPE               = 4
 
 ; The core takes a request block by pointer, so a program with several blocks
 ; can call it directly instead of going through uci_req:

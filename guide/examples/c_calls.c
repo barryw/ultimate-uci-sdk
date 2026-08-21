@@ -4,6 +4,7 @@
 #include "uci.h"
 
 static ultimate_capabilities caps;
+static ultimate_sid_info sid_info;
 static uci_request req;
 static uint8_t bytes[512];
 static char text[64];
@@ -22,6 +23,7 @@ void guide_c_calls(void)
     byte_value = ultimate_identify(UCI_TARGET_DOS1, text, sizeof text, NULL);
     byte_value = ultimate_get_model(text, sizeof text, &word_value);
     byte_value = ultimate_get_model(text, sizeof text, NULL);
+    byte_value = ultimate_legacy_get_sid_info(&sid_info);
     byte_value = ultimate_palette_get(bytes);
     byte_value = ultimate_palette_set(bytes);
     byte_value = ultimate_palette_set_color(0, 0, 0, 0);

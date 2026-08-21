@@ -127,6 +127,17 @@ suites {
 
       jsr([t_get_model], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $00, "ultimate_get_model")
+
+      ; u64sim's deprecated GET_HWINFO predates the SID selector and returns the model for
+      ; every argument. The SDK must reject that text as a malformed SID frame
+      ; and leave the caller with zero records.
+      [sid_info] = $ff
+      jsr([t_sid_info], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "ultimate_legacy_get_sid_info rejects a malformed reply")
+      assert([sid_info] == $00, "and clears the count")
+
+      jsr([t_sid_info_null], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ultimate_legacy_get_sid_info rejects a null pointer")
     }
 
     ; ---------------------------------------------------------------- exchange

@@ -36,7 +36,7 @@ commands as tested that no test has ever sent.
 | Ultimate DOS commands | `DOS_CMD_GET_PATH` | `$12` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_OPEN_DIR` | `$13` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_READ_DIR` | `$14` | tested | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_COPY_UI_PATH` | `$15` | no API yet | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_COPY_UI_PATH` | `$15` | no API yet; deprecated | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_CREATE_DIR` | `$16` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_COPY_HOME_PATH` | `$17` | no API yet | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_LOAD_REU` | `$21` | tested | simulator + hardware |
@@ -72,7 +72,7 @@ commands as tested that no test has ever sent.
 | Control commands | `CTRL_CMD_DECODE_TRACK` | `$11` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_ENCODE_TRACK` | `$12` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_EASYFLASH` | `$20` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_GET_HWINFO` | `$28` | tested | simulator + hardware |
+| Control commands | `CTRL_CMD_GET_HWINFO` | `$28` | tested; deprecated | simulator + hardware |
 | Control commands | `CTRL_CMD_GET_DRVINFO` | `$29` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_ENABLE_DRIVE_A` | `$30` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_DISABLE_DRIVE_A` | `$31` | no API yet | simulator + hardware |

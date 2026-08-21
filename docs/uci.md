@@ -219,7 +219,7 @@ files.
 
 **Identification strings are uppercase; the model name is not.** Every string in
 the table above is uppercase ASCII, which a C64 prints unchanged in its default
-character set. `CTRL_CMD_GET_HWINFO` is the exception: it returns
+character set. The deprecated `CTRL_CMD_GET_HWINFO` is the exception: it returns
 `getProductString()`, which is mixed case — `Ultimate 64 Elite`, `Ultimate II+`,
 `Ultimate 64-II`. Lowercase ASCII renders as graphics glyphs in the default
 character set, so a program that prints the model name has to fold or convert it

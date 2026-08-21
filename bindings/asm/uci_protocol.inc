@@ -170,7 +170,7 @@ CTRL_CMD_U64_SAVEMEM       = $0F  ; <filename> - U64 family only
 CTRL_CMD_DECODE_TRACK      = $11  ; GCR -> binary in REU
 CTRL_CMD_ENCODE_TRACK      = $12  ; INFERRED: firmware only, not in the published spec
 CTRL_CMD_EASYFLASH         = $20  ; $00 <bank> <baseaddr> - sector erase; baseaddr bit $20 selects the high ROM
-CTRL_CMD_GET_HWINFO        = $28  ; <sub> - sub may be omitted; the target defaults it to CTRL_HWINFO_MODEL
+CTRL_CMD_GET_HWINFO        = $28  ; <sub> - deprecated; sub may be omitted; defaults to CTRL_HWINFO_MODEL
 CTRL_CMD_GET_DRVINFO       = $29  ; <effective_addr>
 CTRL_CMD_ENABLE_DRIVE_A    = $30
 CTRL_CMD_DISABLE_DRIVE_A   = $31
@@ -191,9 +191,9 @@ CTRL_CMD_RESET_PALETTE     = $54  ; restore the built-in palette (FW > 3.15)
 UCI_PALETTE_COLORS = $10  ; colors in a VIC-II palette
 UCI_PALETTE_BYTES  = $30  ; bytes in a full palette frame (16 * RGB)
 
-; ---- Control: hardware info sub-commands ----
+; ---- Control: deprecated hardware info sub-commands ----
 CTRL_HWINFO_MODEL = $00  ; ASCII model name, e.g. 'ULTIMATE 64'
-CTRL_HWINFO_SID   = $01  ; SID configuration frames
+CTRL_HWINFO_SID   = $01  ; deprecated SID configuration frames
 
 ; ---- Control: drive type codes ----
 ; From CTRL_CMD_GET_DRVINFO.

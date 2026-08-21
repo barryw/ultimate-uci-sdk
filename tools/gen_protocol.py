@@ -199,7 +199,7 @@ GROUPS = [
         ("CTRL_CMD_DECODE_TRACK",      0x11, "GCR -> binary in REU"),
         ("CTRL_CMD_ENCODE_TRACK",      0x12, "INFERRED: firmware only, not in the published spec"),
         ("CTRL_CMD_EASYFLASH",         0x20, "sector erase; baseaddr bit $20 selects the high ROM"),
-        ("CTRL_CMD_GET_HWINFO",        0x28, "sub may be omitted; the target defaults it to CTRL_HWINFO_MODEL"),
+        ("CTRL_CMD_GET_HWINFO",        0x28, "deprecated; sub may be omitted; defaults to CTRL_HWINFO_MODEL"),
         ("CTRL_CMD_GET_DRVINFO",       0x29, ""),
         ("CTRL_CMD_ENABLE_DRIVE_A",    0x30, ""),
         ("CTRL_CMD_DISABLE_DRIVE_A",   0x31, ""),
@@ -221,9 +221,9 @@ GROUPS = [
         ("UCI_PALETTE_BYTES",  48, "bytes in a full palette frame (16 * RGB)"),
     ]),
 
-    ("Control: hardware info sub-commands", "", [
+    ("Control: deprecated hardware info sub-commands", "", [
         ("CTRL_HWINFO_MODEL", 0x00, "ASCII model name, e.g. 'ULTIMATE 64'"),
-        ("CTRL_HWINFO_SID",   0x01, "SID configuration frames"),
+        ("CTRL_HWINFO_SID",   0x01, "deprecated SID configuration frames"),
     ]),
 
     ("Control: drive type codes", "From CTRL_CMD_GET_DRVINFO.", [
@@ -1044,7 +1044,7 @@ def markdown():
         "A bare `<x>` next to a string-shaped name is raw bytes with no length and no",
         "terminator; it is always either last or followed by the `$NN` the firmware",
         "splits on. Trailing arguments may be omitted where the target defaults them —",
-        "`DOS_CMD_GET_TIME` and `CTRL_CMD_GET_HWINFO` both do.",
+        "`DOS_CMD_GET_TIME` and deprecated `CTRL_CMD_GET_HWINFO` both do.",
         "",
         "An empty cell means the command takes no arguments, or that the firmware does",
         "not document what it takes and the SDK has never sent it. The distinction is",

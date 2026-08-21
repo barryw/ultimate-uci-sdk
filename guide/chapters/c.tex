@@ -81,6 +81,9 @@ hardware. \cmd{ultimate\_detect()} fills \cmd{caps}; use the
 \cmd{ultimate\_has\_*()} macros to test targets. The paired identify and model
 calls show the optional final parameter: pass \cmd{\&length} to receive the
 stored string length, or \cmd{NULL} when only the terminated string matters.
+The firmware documentation marks the command behind
+\cmd{ultimate\_get\_model()} deprecated; the SDK retains this existing wrapper
+for compatibility.
 
 \subsection*{Report an error and its raw device code}
 
@@ -102,6 +105,48 @@ control flow.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/ultimate.s};
 \cmd{src/uci/ultimate\_strerror.s}}
+
+\Needspace{32\baselineskip}
+\section{Read SID Addresses Through Deprecated HWINFO}
+
+\begin{listingbox}
+ultimate\_sid\_info info;\
+uint8\_t i;\
+\
+err = ultimate\_legacy\_get\_sid\_info(\&info);\
+if (err == ULTIMATE\_ERR\_NOT\_SUPPORTED)\
+\hspace*{1em}puts("legacy sid query unavailable");\
+else if (err == ULTIMATE\_OK)\
+\hspace*{1em}for (i = 0; i < info.count; ++i)\
+\hspace*{2em}printf("sid \%u: \$\%04x type \$\%02x\textbackslash n",\
+\hspace*{3em}(uint8\_t)(i + 1), info.sid[i].primary\_address,\
+\hspace*{3em}info.sid[i].type);
+\end{listingbox}
+
+\begin{outputbox}
+SID 1: \$D400 TYPE \$83\\
+SID 2: \$D400 TYPE \$83\\
+SID 3: \$D400 TYPE \$85\\
+SID 4: \$D400 TYPE \$85\\
+If firmware removes the command instead:\\
+LEGACY SID QUERY UNAVAILABLE
+\end{outputbox}
+
+Firmware still implements this query, but its documentation marks
+\cmd{CTRL\_CMD\_GET\_HWINFO} deprecated and publishes no replacement
+C64-side UCI command. The function is therefore named
+\cmd{ultimate\_legacy\_get\_sid\_info()}; always handle
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED} in case the command is removed.
+
+The call fetches the count and every configured address in one operation. Each
+record also has a
+\cmd{secondary\_address}; zero means there is no second mapping. The type byte
+is retained exactly as the firmware returns it. It distinguishes current SID
+implementations and mapping modes, not 6581 from 8580, so do not use it as a
+chip model. Check the result before reading the records.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/ultimate.s};
+\cmd{software/io/command\_interface/control\_target.cc}}
 
 \section{Read And Change The Live Palette}
 
@@ -584,9 +629,11 @@ GET_HWINFO: reply contains model name
 
 The identify request has no arguments: zero initialization leaves
 \cmd{args}, \cmd{payload} and their lengths empty. The time request supplies
-its optional format byte. The hardware-info request is first sent without its
+its optional format byte. The deprecated hardware-info request is first sent without its
 optional selector, then with \cmd{CTRL\_HWINFO\_MODEL}; both forms request the
-model. A payload is a second independent span; set it only when required.
+model. It is shown to make the optional wire form explicit, not as a
+recommendation for new commands. A payload is a second independent span; set
+it only when required.
 
 To discard reply data or status deliberately, leave the corresponding pointer
 and capacity zero:

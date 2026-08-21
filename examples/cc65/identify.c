@@ -36,7 +36,7 @@ static const struct {
 
 /*
  * The Ultimate speaks ASCII. Target identification strings are uppercase and
- * print as-is, but the model name from CTRL_CMD_GET_HWINFO is mixed case
+ * print as-is, but the model name from deprecated CTRL_CMD_GET_HWINFO is mixed case
  * ("Ultimate 64 Elite"), and the C64's default character set renders lowercase
  * ASCII as graphics glyphs. Fold it before printing.
  *

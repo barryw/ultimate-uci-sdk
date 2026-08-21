@@ -95,10 +95,53 @@ uint8_t ultimate_identify(uint8_t target, char *buf, uint16_t buflen, uint16_t *
 /*
  * Read the hardware model name, e.g. "ULTIMATE 64".
  *
+ * The firmware documentation marks the underlying CTRL_CMD_GET_HWINFO command
+ * deprecated. This wrapper remains for compatibility with existing programs.
+ *
  * Requires the control target. Returns ULTIMATE_ERR_NOT_SUPPORTED on firmware
  * that predates it. Same NUL-termination rules as ultimate_identify().
  */
 uint8_t ultimate_get_model(char *buf, uint16_t buflen, uint16_t *outlen);
+
+/*
+ * The SID address map reported by the deprecated CTRL_CMD_GET_HWINFO command.
+ *
+ * Firmware returns up to four records: two emulated SIDs followed by the
+ * enabled physical sockets on an Ultimate 64. Both addresses are little-endian
+ * on the wire, so this structure is the reply layout on a 6502. A zero
+ * secondary address means that the record has no second mapping.
+ *
+ * `type` is deliberately raw. Current firmware uses it to describe the SID
+ * implementation and address-mask mode; it does not identify 6581 versus
+ * 8580. Preserve unknown values for forward compatibility.
+ */
+#define ULTIMATE_SID_MAX 4
+
+typedef struct {
+    uint16_t primary_address;
+    uint16_t secondary_address;
+    uint8_t  type;
+} ultimate_sid;
+
+typedef struct {
+    uint8_t      count;
+    ultimate_sid sid[ULTIMATE_SID_MAX];
+} ultimate_sid_info;
+
+/*
+ * Fetch the configured SID addresses through deprecated CTRL_CMD_GET_HWINFO.
+ *
+ * The legacy name is intentional: firmware still implements this command, but
+ * its documentation marks it deprecated and publishes no C64-side UCI
+ * replacement. New code must handle ULTIMATE_ERR_NOT_SUPPORTED in case the
+ * command is removed.
+ *
+ * Returns ULTIMATE_ERR_NOT_SUPPORTED when the control target or selector is
+ * unavailable, ULTIMATE_ERR_PROTOCOL for a malformed reply, and
+ * ULTIMATE_ERR_TRUNCATED if future firmware returns more than four records.
+ * info->count is zero on every failure.
+ */
+uint8_t ultimate_legacy_get_sid_info(ultimate_sid_info *info);
 
 /*
  * The VIC-II palette: what each of the sixteen colour indices actually looks

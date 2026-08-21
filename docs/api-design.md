@@ -192,7 +192,8 @@ if (ultimate_has_http(&caps)) { ... }
 Never "is this an Ultimate 64". An Ultimate-II+ on current firmware has more
 targets than an Ultimate 64 on old firmware, so the model tells you less than the
 probe does. `ultimate_get_model()` exists for display and bug reports, not for
-branching.
+branching; its underlying `CTRL_CMD_GET_HWINFO` command is deprecated and the
+wrapper remains only for compatibility.
 
 Detection works by asking each target to identify itself and recognising the
 firmware's placeholder reply. See [uci.md](uci.md), "Probing for a target", for
