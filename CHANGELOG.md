@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.1.1](https://github.com/barryw/ultimate-uci-sdk/compare/ddd2d9437412812f5dda1b346b12b648edf3a25e..v0.1.1) - 2026-08-21
+#### CI/CD
+- publish release tags - ([fef423e](https://github.com/barryw/ultimate-uci-sdk/commit/fef423e1121e1827f6761eeb2d5873397d65c6fb)) - Barry Walker
+- fail release on guide errors - ([ddd2d94](https://github.com/barryw/ultimate-uci-sdk/commit/ddd2d9437412812f5dda1b346b12b648edf3a25e)) - Barry Walker
+#### Miscellaneous
+- (**version**) v0.1.0 [skip ci] - ([5c2ad43](https://github.com/barryw/ultimate-uci-sdk/commit/5c2ad4342631e49a3b570966f37d8c895c4ae122)) - Woodpecker CI
+
+- - -
+
 ## [v0.1.0](https://github.com/barryw/ultimate-uci-sdk/compare/0e6f06fc739def3d7e63178fc4ea5171bb223b48..v0.1.0) - 2026-08-21
 #### Features
 - UREU - the BASIC half of ultimate_reu_size - ([2b0aef0](https://github.com/barryw/ultimate-uci-sdk/commit/2b0aef04721b57ea4c677368a37486488be6e8a5)) - Barry Walker, Claude Opus 5 (1M context)
