@@ -1,80 +1,115 @@
-% Chapter 5 - the blob.
+% Chapter 5 - the standalone blob.
 
 \guidechapter{OTHER TOOLCHAINS}{%
-  \item Why a jump table
-  \item Loading the blob
-  \item Calling through the table
+  \item Building and identifying the blob
+  \item The stable jump table
   \item The parameter block
-  \item Driving it from BASIC with POKE and SYS
+  \item Calling it from BASIC
+  \item Choosing a different base address
 }
 
-\section{Why A Jump Table}
+\section{Build And Identify The Blob}
 
-KickAssembler, ACME, 64tass, Oscar64, llvm-mos and KickC cannot link a ca65
-object file. Rather than port the SDK to each of them --- six implementations to
-keep in step, and six chances to disagree --- there is one binary with a jump
-table at the front. Every toolchain can \cmd{jsr} an address.
+\cmd{make blob} produces \cmd{bindings/blob/build/ultimate-8000.bin}. Load it
+at \cmd{\$8000}. The first three bytes are the PETSCII signature \cmd{UCI}; the
+fourth is the blob ABI version.
 
-It is not a port. It is the same object files the C library is built from,
-linked differently.
-
-\section{Loading The Blob}
-
-Load \cmd{ultimate.bin} at \cmd{\$8000} and check the signature before calling
-anything:
+This example demonstrates checking the default build before calling it:
 
 \begin{listingbox}
-\hspace*{2em}lda \$C000\\
-\hspace*{2em}cmp \#\$D5\hspace{2em}; 'U' in PETSCII\\
-\hspace*{2em}bne no\_sdk
+\hspace*{2em}lda \$8000\\
+\hspace*{2em}cmp \#\$D5\hspace{2em}; PETSCII 'U'\\
+\hspace*{2em}bne no\_sdk\\
+\hspace*{2em}lda \$8001\\
+\hspace*{2em}cmp \#\$C3\hspace{2em}; PETSCII 'C'\\
+\hspace*{2em}bne no\_sdk\\
+\hspace*{2em}lda \$8002\\
+\hspace*{2em}cmp \#\$C9\hspace{2em}; PETSCII 'I'\\
+\hspace*{2em}bne no\_sdk\\
+\hspace*{2em}lda \$8003\\
+\hspace*{2em}cmp \#1\hspace{3em}; ABI version\\
+\hspace*{2em}bne wrong\_version
 \end{listingbox}
 
-The binary is relocatable: a table of the addresses that need adjusting ships
-with it, so you can move it somewhere else and fix it up.
+\begin{outputbox}
+All four comparisons match; execution continues with ABI version 1.
+\end{outputbox}
 
-\section{Calling Through The Table}
+\evidence{\cmd{bindings/blob/Makefile}; \cmd{bindings/blob/blob.s};
+\cmd{tests/emulator/blob.suite}}
 
-The table starts four bytes in, three bytes per entry, in a published order
-that is append-only --- new entries go on the end and existing ones never move.
+\section{Call The Stable Jump Table}
+
+Entries begin at base plus \cmd{\$04}. Each entry is a three-byte \cmd{jmp};
+new entries are appended so published offsets do not move.
 
 \begin{listingbox}
 \hspace*{2em}jsr \$8004\hspace{2em}; +\$04  uci\_init\\
 \hspace*{2em}jsr \$801C\hspace{2em}; +\$1C  ultimate\_init
 \end{listingbox}
 
-Appendix~C has every offset.
+\begin{outputbox}
+A = ULTIMATE_OK after each initialization call.
+\end{outputbox}
 
-\section{The Parameter Block}
+This demonstrates the two initialization entries. Use
+\cmd{ultimate\_init} for application code; the lower-level \cmd{uci\_init}
+entry is exposed for transport users. Both return a result in \cmd{A}.
 
-A caller cannot pass a filename in \cmd{A}/\cmd{X}, so the entries that need
-more take their arguments from a page-aligned block that follows the table. You
-write the fields, call the entry, and read the result out of the same block.
+The complete offset table is in \cmd{bindings/blob/README.md}.
 
-\begin{reftable}{lp{0.62\linewidth}}
-\cmd{+\$00} & the result code \\
-\cmd{+\$01} & the raw device code \\
-\cmd{+\$03} & an address argument \\
-\cmd{+\$05} & a length, in and out \\
-\cmd{+\$29} & the filename \\
-\cmd{+\$51} & the reply buffer \\
+\evidence{\cmd{bindings/blob/blob.s}; \cmd{bindings/blob/README.md};
+\cmd{tests/emulator/blob.suite}}
+
+\Needspace{20\baselineskip}
+\section{Use The Parameter Block}
+
+Service entries that need several arguments use a 512-byte block at
+base plus \cmd{\$100}. These are the fields needed by the example below:
+
+\begin{reftable}{llp{0.48\linewidth}}
+Offset & Field & Purpose \\
+\midrule
+\cmd{+\$00} & \cmd{bp\_result} & last service result \\
+\cmd{+\$05} & \cmd{bp\_len} & length in or out \\
+\cmd{+\$29} & \cmd{bp\_name} & 40-byte area for a terminated name \\
+\cmd{+\$51} & \cmd{bp\_reply} & 256-byte reply area \\
 \end{reftable}
 
-\section{Driving It From BASIC With POKE And SYS}
+Later fields extend beyond the first page while retaining their published
+offsets. Consult the blob README for the complete layout rather than deriving
+an address from this subset.
 
-The block is page-aligned for a reason: it is the only calling convention BASIC
-can express without a wedge. \bas{poke} the fields, \bas{sys} the entry, and
-\bas{peek} the answer.
+\evidence{\cmd{bindings/blob/blob.s}; \cmd{bindings/blob/README.md};
+\cmd{tests/emulator/blob.suite}}
+
+\section{Call The Blob From BASIC}
+
+The page-aligned block also gives BASIC a calling convention it can express
+with \bas{poke}, \bas{peek} and \bas{sys}:
 
 \begin{screen}
 10 B = 32768 : P = B + 256\\
-20 SYS B + 28 : REM ULTIMATE\_INIT\\
-30 SYS B + 175 : REM REU\_SIZE\\
-40 PRINT "BANKS:"; PEEK(P+5) + PEEK(P+6)*256
+20 IF PEEK(B)<>213 OR PEEK(B+1)<>195 THEN PRINT "NO SDK":END\\
+25 IF PEEK(B+2)<>201 THEN PRINT "NO SDK":END\\
+30 SYS B + 28 : IF PEEK(P) THEN PRINT "INIT FAILED": END\\
+40 SYS B + 175\\
+50 PRINT "REU BANKS:"; PEEK(P+5) + PEEK(P+6)*256
 \end{screen}
 
-\begin{note}
-This is the long way round if you have the wedge --- \bas{ureu} does the same
-thing in four characters. It is here because a program that ships the blob for
-its assembly code can drive it from its BASIC loader too, without shipping the
-wedge as well.
-\end{note}
+Line~30 calls \cmd{ultimate\_init} at offset \cmd{\$1C} and reads
+\cmd{bp\_result}. Line~40 calls \cmd{reu\_size} at offset \cmd{\$AF}; that
+entry returns the 16-bit bank count in \cmd{bp\_len}. This demonstrates using
+the blob without installing the BASIC wedge.
+
+\evidence{\cmd{bindings/blob/blob.s}; \cmd{tests/emulator/blob.suite}}
+
+\section{Choose A Different Base Address}
+
+Prefer building at the final base: \cmd{make -C bindings/blob BASE=7000} links
+a \cmd{\$7000} image directly. When the address is known only at run time, the
+build also emits a relocation table for \cmd{reloc.s}. The relocated emulator
+suite moves the default blob, erases the original and calls the moved copy.
+
+\evidence{\cmd{bindings/blob/Makefile}; \cmd{bindings/blob/reloc.s};
+\cmd{tests/emulator/blob-relocated.suite}}

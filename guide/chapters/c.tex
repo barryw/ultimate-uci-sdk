@@ -1,147 +1,656 @@
 % Chapter 3 - C.
 
 \guidechapter{PROGRAMMING IN C}{%
-  \item Building against the SDK
-  \item The shape of every call
-  \item Buffers belong to you
-  \item Result codes
-  \item Capability detection
-  \item A worked example
+  \item Startup, discovery and diagnostics
+  \item Machine, file and REU services
+  \item Network and HTTP services
+  \item The complete low-level UCI API
 }
 
-\section{Building Against The SDK}
+\section{How To Read The Examples}
 
-Build the library once:
+Every public function from \cmd{ultimate.h} and \cmd{uci.h} appears below.
+Each listing shows one complete operation within a program; calls share state
+only when the text says so. The guide build compiles every displayed call form.
+Unless a listing shows otherwise, it runs after including \cmd{stdio.h}, \cmd{string.h},
+\cmd{ultimate.h} and \cmd{uci.h}. Result-returning calls use this pattern:
 
 \begin{listingbox}
-make lib
+uint8\_t err = ultimate\_init();\
+if (err != ULTIMATE\_OK)\
+\hspace*{1em}printf("init: \%s\textbackslash n", ultimate\_strerror(err));
 \end{listingbox}
 
-then compile against \cmd{include/} and link \cmd{ultimate.lib}:
+\begin{outputbox}
+No text on success. On failure, for example:\\
+INIT: TIMEOUT
+\end{outputbox}
+
+Output boxes show a representative successful run on an Ultimate 64 Elite.
+Model names, paths, directory entries, addresses and network replies naturally
+vary with the machine and the files or servers used.
+
+cc65 maps lowercase source letters to the uppercase byte values shared by
+PETSCII and ASCII. For that reason, path, filename and header literals appear
+in lowercase source even though the firmware receives uppercase text.
+
+Zero is success. Appendix~A lists the remaining results. Include
+\cmd{ultimate.h} for the service API; include \cmd{uci.h} only for the raw
+transport examples at the end of this chapter.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{include/uci.h}}
+
+\section{Start And Discover The Machine}
 
 \begin{listingbox}
-cl65 -t c64 -Osir -I include -o prog.prg prog.c \textbackslash\\
-\hspace*{2em}bindings/cc65/build/ultimate.lib
-\end{listingbox}
-
-One header covers the whole library:
-
-\begin{listingbox}
-\#include <ultimate.h>
-\end{listingbox}
-
-If you need the transport itself --- to send a command the SDK does not wrap ---
-add \cmd{<uci.h>} as well. Most programs never do.
-
-\section{The Shape Of Every Call}
-
-Almost every function in the SDK looks like this:
-
-\begin{listingbox}
-uint8\_t ultimate\_something(\ldots);
-\end{listingbox}
-
-It returns a result code, and \cmd{ULTIMATE\_OK} is zero. Anything it produces
-comes back through a pointer you passed in. There are no global error variables
-to check, nothing is returned in a static buffer, and no call allocates memory.
-
-\begin{listingbox}
-uint16\_t got;\\
-uint8\_t  err;\\
-\\
-err = ultimate\_read(buf, sizeof buf, \&got);\\
-if (err != ULTIMATE\_OK)\\
-\hspace*{1em}return err;
-\end{listingbox}
-
-\section{Buffers Belong To You}
-
-The SDK has no heap and no hidden buffers. Every byte it produces lands in
-memory you own, and it never keeps a pointer after the call returns. That is
-what makes it usable from an interrupt-driven demo, and it is why every call
-that produces data takes both a buffer and its size.
-
-\begin{warning}
-The size you pass is the size of the buffer, not the number of bytes you want.
-If a reply is larger, you get \cmd{ULTIMATE\_ERR\_TRUNCATED}, the count tells
-you how much was kept, and nothing is written past the end.
-\end{warning}
-
-\section{Result Codes}
-
-There are eleven, they never change, and Appendix~B lists them. Three are worth
-knowing straight away:
-
-\begin{reftable}{lp{0.60\linewidth}}
-\cmd{ULTIMATE\_OK} & it worked \\
-\cmd{ULTIMATE\_END} & there is no more --- the end of a directory, or a socket
-  the far end has closed. Not a failure \\
-\cmd{ULTIMATE\_ERR\_TRUNCATED} & it worked, and your buffer was too small \\
-\end{reftable}
-
-Turn any of them into text with:
-
-\begin{listingbox}
-printf("\%s\textbackslash n", ultimate\_strerror(err));
-\end{listingbox}
-
-\section{Capability Detection}
-
-Different machines have different targets, and firmware versions differ too.
-Ask once, at start-up, rather than assuming:
-
-\begin{listingbox}
-ultimate\_capabilities caps;\\
-\\
-ultimate\_detect(\&caps);\\
-if (ultimate\_has\_http(\&caps)) \{ /* fetch things */ \}\\
-if (ultimate\_has\_network(\&caps)) \{ /* sockets */ \}
-\end{listingbox}
-
-The hardware that is not reached through the command interface answers
-separately, because it is not a target: \cmd{ultimate\_turbo\_available()} and
-\cmd{ultimate\_reu\_size()} tell you about the processor speed registers and
-the RAM expansion.
-
-\section{A Worked Example}
-
-This prints the directory, one entry at a time. It is the pattern for every
-walk in the SDK: start it, take entries until \cmd{ULTIMATE\_END}, and check
-the result of the call that ended it.
-
-\begin{listingbox}
-\#include <stdio.h>\\
-\#include <ultimate.h>\\
-\\
-int main(void)\\
-\{\\
-\hspace*{1em}char    name[64];\\
-\hspace*{1em}uint8\_t attrib;\\
-\hspace*{1em}uint8\_t err;\\
-\\
-\hspace*{1em}if (ultimate\_init() != ULTIMATE\_OK) \{\\
-\hspace*{2em}printf("no ultimate\textbackslash n");\\
-\hspace*{2em}return 1;\\
-\hspace*{1em}\}\\
-\\
-\hspace*{1em}err = ultimate\_opendir();\\
-\hspace*{1em}while (err == ULTIMATE\_OK) \{\\
-\hspace*{2em}err = ultimate\_readdir(name, sizeof name, \&attrib);\\
-\hspace*{2em}if (err != ULTIMATE\_OK)\\
-\hspace*{3em}break;\\
-\hspace*{2em}printf("\%s\%s\textbackslash n", name,\\
-\hspace*{3em}(attrib \& DOS\_ATTR\_DIR) ? "/" : "");\\
-\hspace*{1em}\}\\
-\\
-\hspace*{1em}if (err != ULTIMATE\_END)\\
-\hspace*{2em}printf("stopped: \%s\textbackslash n", ultimate\_strerror(err));\\
-\hspace*{1em}return 0;\\
+int main(void)\
+\{\
+\hspace*{1em}ultimate\_capabilities caps;\
+\hspace*{1em}char text[64];\
+\hspace*{1em}uint16\_t length;\
+\hspace*{1em}uint8\_t err = ultimate\_init();\
+\
+\hspace*{1em}if (err != ULTIMATE\_OK || !ultimate\_available()) return 1;\
+\hspace*{1em}err = ultimate\_detect(\&caps);\
+\hspace*{1em}if (err == ULTIMATE\_OK \&\& ultimate\_has\_http(\&caps))\
+\hspace*{2em}puts("http target present");\
+\
+\hspace*{1em}err = ultimate\_identify(UCI\_TARGET\_DOS1,\
+\hspace*{3em}text, sizeof text, \&length);\
+\hspace*{1em}if (err == ULTIMATE\_OK) printf("dos: \%s\textbackslash n", text);\
+\hspace*{1em}err = ultimate\_identify(UCI\_TARGET\_DOS1,\
+\hspace*{3em}text, sizeof text, NULL);\
+\
+\hspace*{1em}err = ultimate\_get\_model(text, sizeof text, \&length);\
+\hspace*{1em}if (err == ULTIMATE\_OK)\
+\hspace*{2em}printf("model received: \%u bytes\textbackslash n", length);\
+\hspace*{1em}err = ultimate\_get\_model(text, sizeof text, NULL);\
+\hspace*{1em}return err != ULTIMATE\_OK;\
 \}
 \end{listingbox}
 
-\begin{note}
-A directory walk is one live exchange with the Ultimate. Do not issue any other
-command in the middle of one --- the block boundaries between entries are the
-only thing separating one name from the next. If you need to stop early, call
-\cmd{uci\_abort()}.
-\end{note}
+\begin{outputbox}
+HTTP TARGET PRESENT\\
+DOS: ULTIMATE-II DOS V1.2\\
+MODEL RECEIVED: 17 BYTES
+\end{outputbox}
+
+\cmd{ultimate\_init()} performs the required startup check;
+\cmd{ultimate\_available()} reads the resulting SDK state without touching
+hardware. \cmd{ultimate\_detect()} fills \cmd{caps}; use the
+\cmd{ultimate\_has\_*()} macros to test targets. The paired identify and model
+calls show the optional final parameter: pass \cmd{\&length} to receive the
+stored string length, or \cmd{NULL} when only the terminated string matters.
+
+\subsection*{Report an error and its raw device code}
+
+\begin{listingbox}
+if (err != ULTIMATE\_OK) \{\
+\hspace*{1em}printf("\%s (device \%u)\textbackslash n",\
+\hspace*{2em}ultimate\_strerror(err), ultimate\_device\_code());\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+TIMEOUT (DEVICE 0)
+\end{outputbox}
+
+\cmd{ultimate\_strerror()} returns stable SDK text.
+\cmd{ultimate\_device\_code()} returns the last target-specific numeric status
+for diagnostics; do not use that firmware-specific number as application
+control flow.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/ultimate.s};
+\cmd{src/uci/ultimate\_strerror.s}}
+
+\section{Read And Change The Live Palette}
+
+\begin{listingbox}
+uint8\_t palette[ULTIMATE\_PALETTE\_BYTES];\
+uint8\_t err;\
+\
+err = ultimate\_palette\_get(palette);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}palette[0] = 0;\
+\hspace*{1em}palette[1] = 0;\
+\hspace*{1em}palette[2] = 0;\
+\hspace*{1em}err = ultimate\_palette\_set(palette);\
+\}\
+\
+err = ultimate\_palette\_set\_color(6, 255, 0, 0);\
+err = ultimate\_palette\_reset();
+\end{listingbox}
+
+\begin{outputbox}
+SET COLOUR 6 TO RED: ULTIMATE_OK\\
+RESTORE BUILT-IN PALETTE: ULTIMATE_OK
+\end{outputbox}
+
+\cmd{ultimate\_palette\_get()} reads all sixteen RGB triples and
+\cmd{ultimate\_palette\_set()} writes all of them. The single-colour call sets
+index~6 to red. \cmd{ultimate\_palette\_reset()} restores the built-in palette;
+none of these calls writes flash or a palette file.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/palette.s}}
+
+\section{Use Ultimate 64 Turbo Control}
+
+\begin{listingbox}
+uint8\_t speed;\
+uint8\_t err;\
+\
+if (ultimate\_turbo\_available()) \{\
+\hspace*{1em}speed = ultimate\_turbo\_get();\
+\hspace*{1em}err = ultimate\_turbo\_set(U64\_SPEED\_4MHZ);\
+\hspace*{1em}err = ultimate\_turbo\_badlines(0);\
+\hspace*{1em}err = ultimate\_turbo\_badlines(1);\
+\hspace*{1em}err = ultimate\_turbo\_set(speed);\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+AVAILABLE = 1\\
+PREVIOUS SPEED = U64_SPEED_1MHZ\\
+SET 4 MHZ, THEN RESTORE SPEED AND BADLINES: ULTIMATE_OK
+\end{outputbox}
+
+\cmd{ultimate\_turbo\_available()} is the capability check and
+\cmd{ultimate\_turbo\_get()} reads the index. The set call changes only speed.
+The two badline calls explicitly show both forms: zero disables badlines and
+non-zero restores them. The final set restores the speed read at entry.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/turbo.s}}
+
+\section{Change And Read The Current Directory}
+
+\begin{listingbox}
+char path[128];\
+uint16\_t length;\
+uint8\_t err;\
+\
+err = ultimate\_chdir("/usb1/games");\
+err = ultimate\_getpath(path, sizeof path, \&length);\
+err = ultimate\_getpath(path, sizeof path, NULL);
+\end{listingbox}
+
+\begin{outputbox}
+path = "/USB1/GAMES"\\
+length = 11
+\end{outputbox}
+
+The change-directory call selects an absolute or relative firmware path. The
+paired getpath calls show its optional output: receive the stored length
+through \cmd{\&length}, or pass \cmd{NULL} when the terminated path is enough.
+
+\subsection*{Read every directory entry}
+
+\begin{listingbox}
+char name[64];\
+uint8\_t attrib;\
+uint8\_t err = ultimate\_opendir();\
+\
+while (err == ULTIMATE\_OK) \{\
+\hspace*{1em}err = ultimate\_readdir(name, sizeof name, \&attrib);\
+\hspace*{1em}if (err == ULTIMATE\_OK) puts(name);\
+\}\
+if (err == ULTIMATE\_END) err = ULTIMATE\_OK;
+\end{listingbox}
+
+\begin{outputbox}
+DATA\\
+BIG.BIN\\
+README.TXT
+\end{outputbox}
+
+\cmd{ultimate\_opendir()} starts one live exchange and each
+\cmd{ultimate\_readdir()} releases one entry. \cmd{ULTIMATE\_END} is normal.
+Issue no unrelated call inside the loop.
+
+When attributes are not needed, pass the documented optional value:
+
+\begin{listingbox}
+err = ultimate\_readdir(name, sizeof name, NULL);
+\end{listingbox}
+
+\begin{outputbox}
+name receives the entry; no attribute byte is stored.
+\end{outputbox}
+
+If a program stops the walk before \cmd{ULTIMATE\_END}, call
+\cmd{uci\_abort()} before issuing another command.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/dos.s}}
+
+\section{Open, Read And Close A File}
+
+\begin{listingbox}
+uint8\_t buf[128];\
+uint16\_t got;\
+uint8\_t err;\
+uint8\_t close\_err;\
+\
+err = ultimate\_open("readme.txt", DOS\_FA\_READ);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}err = ultimate\_seek(0);\
+\hspace*{1em}if (err == ULTIMATE\_OK)\
+\hspace*{2em}err = ultimate\_read(buf, sizeof buf, \&got);\
+\hspace*{1em}close\_err = ultimate\_close();\
+\hspace*{1em}if (err == ULTIMATE\_OK) err = close\_err;\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+got = 128\\
+err = ULTIMATE_OK
+\end{outputbox}
+
+\cmd{ultimate\_open()} establishes the firmware's current file.
+\cmd{ultimate\_seek()} selects an absolute position, \cmd{ultimate\_read()}
+reads from it, and \cmd{ultimate\_close()} releases the same file. A short read
+is end-of-file, not an error; \cmd{got} is the number stored.
+
+The byte-count output is optional:
+
+\begin{listingbox}
+err = ultimate\_read(buf, sizeof buf, NULL);
+\end{listingbox}
+
+\begin{outputbox}
+buf receives bytes and the file advances; the count is discarded.
+\end{outputbox}
+
+That form still advances the open file but discards the count.
+
+\subsection*{Create, write and delete a file}
+
+\begin{listingbox}
+static const uint8\_t message[] = \{0x4f,0x4b,13\};\
+\
+err = ultimate\_open("result.txt",\
+\hspace*{2em}DOS\_FA\_CREATE\_ALWAYS | DOS\_FA\_WRITE);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}err = ultimate\_write(message, sizeof message);\
+\hspace*{1em}close\_err = ultimate\_close();\
+\hspace*{1em}if (err == ULTIMATE\_OK) err = close\_err;\
+\}\
+err = ultimate\_delete("result.txt");
+\end{listingbox}
+
+\begin{outputbox}
+RESULT.TXT: WROTE 3 BYTES, CLOSED, DELETED
+\end{outputbox}
+
+The open flags create or replace the firmware-side file.
+\cmd{ultimate\_write()} appends the specified bytes at its current position;
+\cmd{ultimate\_delete()} removes the named file after it is closed.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/dos.s}}
+
+\section{Load And Save C64 Memory}
+
+\begin{listingbox}
+uint16\_t end;\
+\
+err = ultimate\_load("game.prg", 0);\
+end = ultimate\_last\_end();\
+\
+err = ultimate\_load("font.prg", 0xC000);\
+end = ultimate\_last\_end();\
+\
+err = ultimate\_bload("font.bin", 0xC000, 2048);\
+err = ultimate\_save("screen.bin", 0x0400, 1000);
+\end{listingbox}
+
+\begin{outputbox}
+GAME.PRG END = address after loaded data\\
+FONT.BIN: 2048 bytes loaded at \$C000\\
+SCREEN.BIN: 1000 bytes saved
+\end{outputbox}
+
+The first \cmd{ultimate\_load()} uses the PRG header address; the second shows
+the explicit-address form. Both consume the header, and
+\cmd{ultimate\_last\_end()} returns the address following the last byte.
+\cmd{ultimate\_bload()} reads bounded raw bytes without a header.
+\cmd{ultimate\_save()} replaces a file with the named C64 memory range.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/file.s}}
+
+\section{Move Bytes Through The REU}
+
+\begin{listingbox}
+uint16\_t banks;\
+\
+if (ultimate\_reu\_available()) \{\
+\hspace*{1em}banks = ultimate\_reu\_size();\
+\hspace*{1em}err = ultimate\_reu\_stash(0x0400, 0, 1000);\
+\hspace*{1em}err = ultimate\_reu\_fetch(0x0400, 0, 1000);\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+banks = installed REU size in 64K banks\\
+1000 bytes stashed and fetched: ULTIMATE_OK
+\end{outputbox}
+
+Availability is separate from size, which is returned in 64K banks. Stash
+copies C64 RAM to the REU; fetch copies the same range back. A DMA length of
+zero means 65536 bytes.
+
+\subsection*{Move the current file directly to and from the REU}
+
+\Needspace{18\baselineskip}
+\subsection*{File to REU}
+
+\begin{listingbox}
+err = ultimate\_open("assets.bin", DOS\_FA\_READ);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}err = ultimate\_seek(0);\
+\hspace*{1em}if (err == ULTIMATE\_OK)\
+\hspace*{2em}err = ultimate\_reu\_load(0, 65536UL);\
+\hspace*{1em}ultimate\_close();\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+ASSETS.BIN TO REU \$000000: 65536 BYTES
+\end{outputbox}
+
+\Needspace{16\baselineskip}
+\subsection*{REU to file}
+
+\begin{listingbox}
+err = ultimate\_open("capture.bin",\
+\hspace*{2em}DOS\_FA\_CREATE\_ALWAYS | DOS\_FA\_WRITE);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}err = ultimate\_reu\_save(0, 65536UL);\
+\hspace*{1em}ultimate\_close();\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+REU \$000000 TO CAPTURE.BIN: 65536 BYTES
+\end{outputbox}
+
+These functions take no filename or file handle. The first flow opens the
+firmware's current DOS file, selects its first byte, then copies it to REU
+address zero. The second flow makes a different current file and copies REU
+bytes into it. Close the same firmware-side file after either transfer.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/reu.s}}
+
+\section{Inspect Network Interfaces}
+
+\begin{listingbox}
+uint8\_t count;\
+uint8\_t mac[6];\
+uint8\_t ipconfig[12];\
+\
+err = ultimate\_net\_ifcount(\&count);\
+if (err == ULTIMATE\_OK \&\& count != 0) \{\
+\hspace*{1em}err = ultimate\_net\_macaddr(0, mac);\
+\hspace*{1em}err = ultimate\_net\_ipconfig(0, ipconfig);\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+count = number of network interfaces\\
+mac = six bytes; ipconfig = twelve bytes
+\end{outputbox}
+
+The count call reports available interfaces. The next two calls read the
+six-byte MAC address and twelve-byte IPv4 configuration for interface zero into
+caller-owned buffers.
+
+\section{Use TCP And UDP Sockets}
+
+\begin{listingbox}
+uint8\_t handle;\
+uint8\_t buf[128];\
+uint16\_t got;\
+uint16\_t sent;\
+static const uint8\_t message[] = \{0x48,0x49,13\};\
+\
+err = ultimate\_net\_connect("192.168.1.50", 6502, \&handle);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}err = ultimate\_net\_write(handle, message,\
+\hspace*{3em}sizeof message, \&sent);\
+\hspace*{1em}do \{\
+\hspace*{2em}err = ultimate\_net\_read(handle, buf, sizeof buf, \&got);\
+\hspace*{1em}\} while (err == ULTIMATE\_OK \&\& got == 0);\
+\hspace*{1em}if (err != ULTIMATE\_END)\
+\hspace*{2em}ultimate\_net\_close(handle);\
+\}\
+\
+err = ultimate\_net\_udp("192.168.1.51", 6502, \&handle);\
+if (err == ULTIMATE\_OK)\
+\hspace*{1em}err = ultimate\_net\_close(handle);
+\end{listingbox}
+
+\begin{outputbox}
+TCP: 3 BYTES SENT; REPLY BYTES RETURNED IN got\\
+UDP HANDLE OPENED AND CLOSED
+\end{outputbox}
+
+\cmd{ultimate\_net\_connect()} opens TCP; \cmd{ultimate\_net\_udp()} opens
+UDP. Both return a handle. Write reports bytes accepted through \cmd{sent}; read
+reports bytes stored through \cmd{got}. A successful zero-byte read means
+``not yet'', so poll. \cmd{ULTIMATE\_END} means the peer closed and the handle
+is already released; call \cmd{ultimate\_net\_close()} only for a handle still
+owned by the program.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/net.s}}
+
+\section{Fetch A URL In One Call}
+
+\begin{listingbox}
+static const char url[] = \{\
+\hspace*{1em}0x68,0x74,0x74,0x70,0x3a,0x2f,0x2f,\
+\hspace*{1em}0x31,0x39,0x32,0x2e,0x31,0x36,0x38,0x2e,0x31,\
+\hspace*{1em}0x2e,0x35,0x30,0x2f,0\
+\};\
+uint8\_t reply[512];\
+uint16\_t got;\
+\
+err = ultimate\_http\_get(url, reply, sizeof reply, \&got);
+\end{listingbox}
+
+\begin{outputbox}
+err = ULTIMATE_OK\\
+got = HTTP response-body bytes stored in reply
+\end{outputbox}
+
+\cmd{ultimate\_http\_get()} creates, exchanges and closes one GET request.
+The explicit bytes prevent cc65 from changing lowercase URL characters to the
+C64 character set. \cmd{got} is the body bytes retained; a larger body returns
+\cmd{ULTIMATE\_ERR\_TRUNCATED} and has no continuation.
+
+\section{Build A Multi-step HTTP Request}
+
+This example reuses \cmd{url}, \cmd{reply} and \cmd{got} from the preceding
+one.
+
+\begin{listingbox}
+uint8\_t request;\
+uint8\_t close\_err;\
+uint8\_t body\_handle; /* returned by raw HTTP body commands */\
+\
+err = ultimate\_http\_open(HTTP\_VERB\_GET, url, \&request);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}err = ultimate\_http\_header(request, "accept: text/plain");\
+\hspace*{1em}if (err == ULTIMATE\_OK)\
+\hspace*{1em}err = ultimate\_http\_exchange(request, HTTP\_BODY\_NONE,\
+\hspace*{3em}reply, sizeof reply, \&got);\
+\hspace*{1em}close\_err = ultimate\_http\_close(request);\
+\hspace*{1em}if (err == ULTIMATE\_OK) err = close\_err;\
+\}\
+\
+err = ultimate\_http\_open(HTTP\_VERB\_POST, url, \&request);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}err = ultimate\_http\_exchange(request, body\_handle,\
+\hspace*{3em}reply, sizeof reply, \&got);\
+\hspace*{1em}close\_err = ultimate\_http\_close(request);\
+\hspace*{1em}if (err == ULTIMATE\_OK) err = close\_err;\
+\}\
+\
+err = ultimate\_http\_free\_all();
+\end{listingbox}
+
+\begin{outputbox}
+GET WITHOUT BODY: RESPONSE STORED\\
+POST WITH BODY HANDLE: RESPONSE STORED\\
+ALL HTTP OBJECTS FREED
+\end{outputbox}
+
+Open returns the request handle used by header, exchange and close. The first
+exchange explicitly passes \cmd{HTTP\_BODY\_NONE}; the second shows the
+optional body-handle form. Body construction itself uses raw UCI commands.
+Always close a handle you own. \cmd{ultimate\_http\_free\_all()} is the recovery
+call for slots abandoned by an earlier program.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/http.s}}
+
+\section{Probe And Configure The Raw Transport}
+
+\begin{listingbox}
+uint8\_t present = uci\_signature\_present();\
+uint8\_t ident = uci\_ident\_register();\
+uint8\_t old\_timeout;\
+\
+err = uci\_init();\
+old\_timeout = uci\_get\_timeout();\
+uci\_set\_timeout(UCI\_TIMEOUT\_FOREVER);\
+/* run the deliberately unbounded command */\
+uci\_set\_timeout(old\_timeout);\
+err = uci\_abort();
+\end{listingbox}
+
+\begin{outputbox}
+present = 1\\
+ident = command-interface identification byte\\
+abort = ULTIMATE_OK
+\end{outputbox}
+
+The signature and identification-register calls are immediate register reads.
+\cmd{uci\_init()} performs the functional startup check. Timeout zero means
+wait forever; save and restore the old value. \cmd{uci\_abort()} releases any
+exchange still in progress and is safe when the interface is already idle.
+
+\section{Execute A Raw Command With And Without Arguments}
+
+\begin{listingbox}
+uci\_request req = \{0\};\
+uint8\_t reply[64];\
+uint8\_t status[16];\
+uint8\_t format = 0;\
+uint8\_t sub = CTRL\_HWINFO\_MODEL;\
+\
+req.target = UCI\_TARGET\_DOS1;\
+req.command = UCI\_CMD\_IDENTIFY;\
+req.data = reply;\
+req.datamax = sizeof reply;\
+req.status = status;\
+req.statusmax = sizeof status;\
+err = uci\_exec(\&req);\
+\
+memset(\&req, 0, sizeof req);\
+req.target = UCI\_TARGET\_DOS1;\
+req.command = DOS\_CMD\_GET\_TIME;\
+req.args = \&format;\
+req.arglen = 1;\
+req.data = reply;\
+req.datamax = sizeof reply;\
+err = uci\_exec(\&req);\
+\
+memset(\&req, 0, sizeof req);\
+req.target = UCI\_TARGET\_CONTROL;\
+req.command = CTRL\_CMD\_GET\_HWINFO;\
+req.data = reply;\
+req.datamax = sizeof reply;\
+err = uci\_exec(\&req);\
+\
+req.args = \&sub;\
+req.arglen = 1;\
+err = uci\_exec(\&req);
+\end{listingbox}
+
+\begin{outputbox}
+IDENTIFY: reply contains target name\\
+GET_TIME: reply contains formatted time\\
+GET_HWINFO: reply contains model name
+\end{outputbox}
+
+The identify request has no arguments: zero initialization leaves
+\cmd{args}, \cmd{payload} and their lengths empty. The time request supplies
+its optional format byte. The hardware-info request is first sent without its
+optional selector, then with \cmd{CTRL\_HWINFO\_MODEL}; both forms request the
+model. A payload is a second independent span; set it only when required.
+
+To discard reply data or status deliberately, leave the corresponding pointer
+and capacity zero:
+
+\begin{listingbox}
+req.data = NULL;\
+req.datamax = 0;\
+req.status = NULL;\
+req.statusmax = 0;\
+err = uci\_exec(\&req);
+\end{listingbox}
+
+\begin{outputbox}
+req.datalen = 0\\
+req.statuslen = 0
+\end{outputbox}
+
+\section{Read A Raw Multi-block Reply}
+
+\begin{listingbox}
+err = uci\_exec\_first(\&req);\
+while (err == ULTIMATE\_OK) \{\
+\hspace*{1em}process(req.data, req.datalen);\
+\hspace*{1em}if (!uci\_more\_blocks()) break;\
+\hspace*{1em}err = uci\_exec\_next(\&req);\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+Each iteration receives one reply block; the loop ends when\\
+uci_more_blocks() = 0
+\end{outputbox}
+
+The first call submits the request and returns one reply block. The boolean
+call reports whether another follows; the next call releases the current block
+and receives another. Do not issue an unrelated command inside this loop.
+
+\section{Decode And Inspect Raw Status}
+
+\begin{listingbox}
+static const uint8\_t raw[] = \{\
+\hspace*{1em}0x34,0x30,0x34,0x20,0x4e,0x4f,0x54,\
+\hspace*{1em}0x20,0x46,0x4f,0x55,0x4e,0x44\
+\};\
+uint8\_t expected;\
+uint16\_t device\_code;\
+\
+expected = uci\_status\_format(UCI\_TARGET\_HTTP);\
+err = uci\_decode\_status(UCI\_TARGET\_HTTP, raw, sizeof raw);\
+device\_code = uci\_last\_device\_code();
+\end{listingbox}
+
+\cmd{uci\_status\_format()} describes the target's expected encoding.
+\cmd{uci\_decode\_status()} decodes actual bytes and records their numeric
+status; \cmd{uci\_last\_device\_code()} retrieves it. The decoder accepts an
+empty status as success, so this is also the form without status bytes:
+
+\begin{listingbox}
+err = uci\_decode\_status(UCI\_TARGET\_DOS1, NULL, 0);
+\end{listingbox}
+
+\begin{outputbox}
+expected = UCI_STATUS_FMT_DECIMAL3\\
+err = ULTIMATE_ERR_DEVICE\\
+device_code = 404\\
+empty DOS status = ULTIMATE_OK
+\end{outputbox}
+
+\evidence{\cmd{include/uci.h}; \cmd{src/uci/uci\_core.s};
+\cmd{src/uci/status.s}}

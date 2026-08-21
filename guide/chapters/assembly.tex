@@ -1,115 +1,839 @@
 % Chapter 4 - Assembly.
 
 \guidechapter{PROGRAMMING IN ASSEMBLY}{%
-  \item What assembly callers get
-  \item The calling convention
-  \item The shared variable block
-  \item Zero page, and moving it
-  \item Which calls are bounded in time
+  \item The register and shared-variable conventions
+  \item Relocating the SDK's RAM and zero page
+  \item Every service entry point by example
+  \item Raw request blocks with optional spans
 }
-
-\section{What Assembly Callers Get}
-
-The SDK is written in 6502 assembly, so an assembly caller is talking to it
-directly rather than through a translation layer. There is no C runtime to
-start, no software stack to set up, and nothing to initialise before the first
-\cmd{jsr}. A cartridge that starts at \cmd{\$8000} can call
-\cmd{ultimate\_init} as its first instruction.
-
-\begin{listingbox}
-\hspace*{2em}.include "ultimate.inc"
-\end{listingbox}
-
-That one file declares every entry point and every shared variable.
 
 \section{The Calling Convention}
 
-Three rules cover nearly everything:
+Include \cmd{ultimate.inc} and call the unprefixed entry points. Unless an
+entry below says otherwise, a service returns an \cmd{ULTIMATE\_*} result in
+\cmd{A} and may change \cmd{A}, \cmd{X}, \cmd{Y} and the flags. A byte argument
+uses \cmd{A}; a pointer argument uses low byte in \cmd{A} and high byte in
+\cmd{X}; multi-byte service arguments live in the exported \cmd{ult\_*}
+variables.
 
-\begin{itemize}[leftmargin=1.4em,itemsep=0.25em,topsep=0.4em]
-  \item A result comes back in \cmd{A}, and \cmd{ULTIMATE\_OK} is zero.
-  \item A single pointer argument goes in \cmd{A}/\cmd{X}, low byte first.
-  \item Anything wider than that goes in the shared variable block.
-\end{itemize}
-
-So the simple calls look like this:
-
-\begin{listingbox}
-\hspace*{2em}lda \#<name\\
-\hspace*{2em}ldx \#>name\\
-\hspace*{2em}jsr ultimate\_chdir\\
-\hspace*{2em}cmp \#ULTIMATE\_OK\\
-\hspace*{2em}bne failed
-\end{listingbox}
-
-and the ones that need more set the variables first:
+The examples use these two ordinary ca65 macros to keep pointer and word setup
+visible without repeating four instructions each time:
 
 \begin{listingbox}
-\hspace*{2em}lda \#<buffer\\
-\hspace*{2em}sta ult\_buf\\
-\hspace*{2em}lda \#>buffer\\
-\hspace*{2em}sta ult\_buf + 1\\
-\hspace*{2em}lda \#<64\\
-\hspace*{2em}sta ult\_buflen\\
-\hspace*{2em}lda \#>64\\
-\hspace*{2em}sta ult\_buflen + 1\\
-\hspace*{2em}jsr ultimate\_getpath
+\hspace*{2em}.include "ultimate.inc"\
+\
+.macro setptr location, value\
+\hspace*{2em}lda \#<value\
+\hspace*{2em}sta location\
+\hspace*{2em}lda \#>value\
+\hspace*{2em}sta location + 1\
+.endmacro\
+\
+.macro setword location, value\
+\hspace*{2em}lda \#<value\
+\hspace*{2em}sta location\
+\hspace*{2em}lda \#>value\
+\hspace*{2em}sta location + 1\
+.endmacro
 \end{listingbox}
 
-Appendix~C lists every entry point with what it reads and what it returns.
+\begin{outputbox}
+setptr ult_buf, text stores the address of text in ult_buf.
+\end{outputbox}
 
-\section{The Shared Variable Block}
+\cmd{setptr} and \cmd{setword} emit the same bytes; their different names make
+the purpose clear at each call site. Result branches always compare \cmd{A}
+immediately, before another instruction replaces it.
 
-The SDK needs 143 bytes of RAM, and by default the linker places them in BSS
-like any other variables. A cartridge cannot do that --- its code is in ROM and
-the RAM it may touch is the programmer's decision --- so the whole block can be
-placed instead:
+Assembly output boxes show the returned register or memory values from a
+representative successful run. They omit screen-printing routines so the SDK
+operation itself stays visible.
+
+With the C64 character map, lowercase source letters assemble to the uppercase
+byte values shared by PETSCII and ASCII. Paths, filenames and HTTP text
+therefore appear in lowercase source below but reach the firmware in uppercase.
+
+\evidence{\cmd{bindings/asm/ultimate.inc}; \cmd{docs/asm-abi.md}}
+
+\section{Place The SDK's Working Memory}
+
+The SDK's zero-page block starts at \cmd{UCI\_ZP}, which defaults to
+\cmd{\$FB}. Its size is \cmd{UCI\_ZP\_SIZE}. The normal variable block occupies
+\cmd{UCI\_VARS\_SIZE} bytes in BSS. Define both bases when assembling every SDK
+source to choose fixed locations:
 
 \begin{listingbox}
-ca65 -D UCI\_VARS=\$CF00 \ldots
+ca65 -D UCI\_VARS=\$CF00 -D UCI\_ZP=\$A3 uci\_core.s
 \end{listingbox}
 
-Every variable then becomes an equate at a fixed offset from that address, and
-there is no address in the SDK a cartridge author cannot move.
+\begin{outputbox}
+UCI variables begin at \$CF00; zero-page workspace begins at \$A3.
+\end{outputbox}
 
-\section{Zero Page, And Moving It}
+With \cmd{UCI\_VARS} defined, the core emits no BSS; its variables become
+equates from that address. The SDK installs no interrupt handler and is not
+re-entrant, so an interrupt routine must not call it while foreground code is
+inside a service.
 
-Four bytes, and you choose where. The default is \cmd{\$FB}--\cmd{\$FE},
-which is free on a stock C64 --- the KERNAL uses it only for tape --- and which
-cc65's runtime does not claim.
+\evidence{\cmd{bindings/asm/uci\_protocol.inc};
+\cmd{src/uci/uci\_zp.inc}; \cmd{docs/asm-abi.md}}
+
+\section{Initialize, Detect And Describe The Machine}
 
 \begin{listingbox}
-ca65 -D UCI\_ZP=\$A3 \ldots
+\hspace*{2em}jsr ultimate\_init\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+\hspace*{2em}jsr ultimate\_available\
+\hspace*{2em}beq unavailable\
+\
+\hspace*{2em}lda \#<capabilities\
+\hspace*{2em}ldx \#>capabilities\
+\hspace*{2em}jsr ultimate\_detect\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+capabilities: .res 4
 \end{listingbox}
 
-\begin{note}
-Four bytes is the whole of it. The SDK installs no interrupt handler, requires
-no interrupts to be enabled, and never writes anywhere you did not tell it to.
-\end{note}
+\begin{outputbox}
+A = ULTIMATE_OK\\
+capabilities records the detected targets.
+\end{outputbox}
 
-\section{Which Calls Are Bounded In Time}
+\cmd{ultimate\_init} performs startup. \cmd{ultimate\_available} returns a
+boolean rather than a result code. \cmd{ultimate\_detect} takes the address of
+the four-byte capability block directly in \cmd{A}/\cmd{X}.
 
-Every entry point completes or returns \cmd{ULTIMATE\_ERR\_TIMEOUT} --- with
-three deliberate exceptions, and they are exceptions because the hardware
-leaves no choice.
-
-\cmd{ultimate\_net\_connect}, \cmd{ultimate\_net\_udp} and
-\cmd{ultimate\_http\_exchange} each contain a name lookup and a TCP connection.
-A connection to an address with nothing at it was measured at 30.8 seconds
-before the firmware gave up, and the SDK's timeout budget is a single byte
-counting polls --- it tops out near one second. No value of it can express
-thirty. So those three wait, relying on the firmware's own limit, and put your
-timeout budget back when they return.
+\subsection*{Identify a target with and without the optional length output}
 
 \begin{listingbox}
-\hspace*{2em}jsr uci\_get\_timeout\_a   ; A = the current budget\\
-\hspace*{2em}pha\\
-\hspace*{2em}lda \#UCI\_TIMEOUT\_FOREVER\\
-\hspace*{2em}jsr uci\_set\_timeout\_a\\
-\hspace*{2em}; \ldots something slow \ldots\\
-\hspace*{2em}pla\\
-\hspace*{2em}jsr uci\_set\_timeout\_a
+\hspace*{2em}setptr ult\_buf, text\
+\hspace*{2em}setword ult\_buflen, 64\
+\hspace*{2em}setptr ult\_outlen, text\_length\
+\hspace*{2em}lda \#UCI\_TARGET\_DOS1\
+\hspace*{2em}jsr ultimate\_identify\
+\
+\hspace*{2em}setword ult\_outlen, 0\
+\hspace*{2em}lda \#UCI\_TARGET\_DOS1\
+\hspace*{2em}jsr ultimate\_identify\
+\
+text:        .res 64\
+text\_length: .res 2
 \end{listingbox}
 
-That is the pattern the SDK uses itself, and it is the one to copy if you drive
-a slow command through the generic form.
+\begin{outputbox}
+text = "ULTIMATE-II DOS V1.2"\\
+text_length = 20 with the pointer; no length is stored with zero.
+\end{outputbox}
+
+Both calls terminate the text in \cmd{ult\_buf}. The first stores its length
+through \cmd{ult\_outlen}; zero disables that optional output.
+
+\subsection*{Read the model with and without the optional length output}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, text\
+\hspace*{2em}setword ult\_buflen, 64\
+\hspace*{2em}setptr ult\_outlen, text\_length\
+\hspace*{2em}jsr ultimate\_get\_model\
+\
+\hspace*{2em}setword ult\_outlen, 0\
+\hspace*{2em}jsr ultimate\_get\_model
+\end{listingbox}
+
+\begin{outputbox}
+text = "Ultimate 64 Elite"\\
+text_length is optional in the same way as IDENTIFY.
+\end{outputbox}
+
+\cmd{ultimate\_get\_model} uses the same buffer contract but needs no target
+argument.
+
+\subsection*{Turn a result into text}
+
+\begin{listingbox}
+\hspace*{2em}lda error\_code\
+\hspace*{2em}jsr ultimate\_strerror\
+\hspace*{2em}sta message\_ptr\
+\hspace*{2em}stx message\_ptr + 1\
+\
+error\_code: .res 1\
+message\_ptr: .res 2
+\end{listingbox}
+
+\begin{outputbox}
+message_ptr points to the PETSCII text for error_code.
+\end{outputbox}
+
+\cmd{ultimate\_strerror} returns the PETSCII message pointer in
+\cmd{A}/\cmd{X}; it does not return a result code.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/ultimate.s};
+\cmd{src/uci/ultimate\_strerror.s}}
+
+\Needspace{32\baselineskip}
+\section{Read And Change The Palette}
+
+\begin{listingbox}
+\hspace*{2em}lda \#<palette\
+\hspace*{2em}ldx \#>palette\
+\hspace*{2em}jsr ultimate\_palette\_get\
+\
+\hspace*{2em}lda \#<palette\
+\hspace*{2em}ldx \#>palette\
+\hspace*{2em}jsr ultimate\_palette\_set\
+\
+\hspace*{2em}lda \#6\
+\hspace*{2em}sta ult\_color\
+\hspace*{2em}lda \#255\
+\hspace*{2em}sta ult\_color + 1\
+\hspace*{2em}lda \#0\
+\hspace*{2em}sta ult\_color + 2\
+\hspace*{2em}sta ult\_color + 3\
+\hspace*{2em}jsr ultimate\_palette\_set\_color\
+\
+\hspace*{2em}jsr ultimate\_palette\_reset\
+\
+palette: .res UCI\_PALETTE\_BYTES
+\end{listingbox}
+
+\begin{outputbox}
+GET fills 48 bytes; SET COLOUR 6 TO RED and RESET return ULTIMATE_OK.
+\end{outputbox}
+
+Get and set take a direct pointer in \cmd{A}/\cmd{X}. The single-colour entry
+reads index, red, green and blue from the four consecutive \cmd{ult\_color}
+bytes. Reset restores the built-in live palette.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/palette.s}}
+
+\section{Use Turbo And Badline Control}
+
+\begin{listingbox}
+\hspace*{2em}jsr ultimate\_turbo\_available\
+\hspace*{2em}beq no\_turbo\
+\
+\hspace*{2em}jsr ultimate\_turbo\_get\
+\hspace*{2em}sta old\_speed\
+\
+\hspace*{2em}lda \#U64\_SPEED\_4MHZ\
+\hspace*{2em}jsr ultimate\_turbo\_set\
+\
+\hspace*{2em}lda \#0\
+\hspace*{2em}jsr ultimate\_turbo\_badlines\
+\hspace*{2em}lda \#1\
+\hspace*{2em}jsr ultimate\_turbo\_badlines\
+\
+\hspace*{2em}lda old\_speed\
+\hspace*{2em}jsr ultimate\_turbo\_set\
+\
+old\_speed: .res 1
+\end{listingbox}
+
+\begin{outputbox}
+old_speed = previous speed index\\
+SET 4 MHZ, THEN RESTORE SPEED AND BADLINES: ULTIMATE_OK
+\end{outputbox}
+
+The available and get calls return values directly. Set returns a result. The
+two badline calls show both forms explicitly: zero disables them; non-zero
+restores them. The final set restores the speed read at entry.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/turbo.s}}
+
+\section{Change And Read The Current Directory}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, path\
+\hspace*{2em}jsr ultimate\_chdir\
+\
+\hspace*{2em}setptr ult\_buf, path\_buffer\
+\hspace*{2em}setword ult\_buflen, 128\
+\hspace*{2em}setptr ult\_outlen, path\_length\
+\hspace*{2em}jsr ultimate\_getpath\
+\
+\hspace*{2em}setword ult\_outlen, 0\
+\hspace*{2em}jsr ultimate\_getpath\
+\
+path:        .byte "/usb1/games", 0\
+path\_buffer: .res 128\
+path\_length: .res 2
+\end{listingbox}
+
+\begin{outputbox}
+path_buffer = "/USB1/GAMES"\\
+path_length = 11 when the optional pointer is enabled.
+\end{outputbox}
+
+\cmd{ultimate\_chdir} consumes the terminated path through \cmd{ult\_buf}.
+The two getpath calls show the optional length pointer enabled and disabled.
+
+\subsection*{Read every directory entry}
+
+\begin{listingbox}
+\hspace*{2em}jsr ultimate\_opendir\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+next\_entry:\
+\hspace*{2em}setptr ult\_buf, name\
+\hspace*{2em}setword ult\_buflen, 64\
+\hspace*{2em}jsr ultimate\_readdir\
+\hspace*{2em}cmp \#ULTIMATE\_END\
+\hspace*{2em}beq directory\_done\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\hspace*{2em}lda ult\_attrib\
+\hspace*{2em}; use name and its DOS\_ATTR\_* bits here\
+\hspace*{2em}jmp next\_entry\
+\
+name: .res 64
+\end{listingbox}
+
+\begin{outputbox}
+name receives one entry per call; A becomes ULTIMATE_END after the last.
+\end{outputbox}
+
+Each readdir releases one reply block and writes attributes to
+\cmd{ult\_attrib}. Issue no other command inside the walk. Call
+\cmd{uci\_abort} if leaving before \cmd{ULTIMATE\_END}.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/dos.s}}
+
+\section{Open, Seek, Read, Write And Close Files}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, read\_name\
+\hspace*{2em}lda \#DOS\_FA\_READ\
+\hspace*{2em}jsr ultimate\_open\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+\hspace*{2em}lda \#0\
+\hspace*{2em}sta ult\_num\
+\hspace*{2em}sta ult\_num + 1\
+\hspace*{2em}sta ult\_num + 2\
+\hspace*{2em}sta ult\_num + 3\
+\hspace*{2em}jsr ultimate\_seek\
+\
+\hspace*{2em}setptr ult\_buf, file\_buffer\
+\hspace*{2em}setword ult\_buflen, 128\
+\hspace*{2em}setptr ult\_outlen, bytes\_read\
+\hspace*{2em}jsr ultimate\_read\
+\hspace*{2em}jsr ultimate\_close\
+\
+read\_name:   .byte "readme.txt", 0\
+file\_buffer: .res 128\
+bytes\_read:  .res 2
+\end{listingbox}
+
+\begin{outputbox}
+file_buffer receives up to 128 bytes; bytes_read receives the actual count.
+\end{outputbox}
+
+Open establishes the firmware's current file. Seek selects its absolute
+position. Read stores bytes and, when \cmd{ult\_outlen} is non-zero, their
+count. Close releases that same firmware-side file.
+
+\Needspace{13\baselineskip}
+The count output is optional:
+
+\begin{listingbox}
+\hspace*{2em}; With a readable file already open:\
+\hspace*{2em}setptr ult\_buf, file\_buffer\
+\hspace*{2em}setword ult\_buflen, 128\
+\hspace*{2em}setword ult\_outlen, 0\
+\hspace*{2em}jsr ultimate\_read
+\end{listingbox}
+
+\begin{outputbox}
+file_buffer receives bytes; no byte count is stored.
+\end{outputbox}
+
+\subsection*{Create, write and delete a file}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, write\_name\
+\hspace*{2em}lda \#DOS\_FA\_CREATE\_ALWAYS | DOS\_FA\_WRITE\
+\hspace*{2em}jsr ultimate\_open\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+\hspace*{2em}setptr ult\_buf, message\
+\hspace*{2em}setword ult\_buflen, message\_end - message\
+\hspace*{2em}jsr ultimate\_write\
+\hspace*{2em}jsr ultimate\_close\
+\
+\hspace*{2em}setptr ult\_buf, write\_name\
+\hspace*{2em}jsr ultimate\_delete\
+\
+write\_name: .byte "result.txt", 0\
+message:    .byte "ok", 13\
+message\_end:
+\end{listingbox}
+
+\begin{outputbox}
+RESULT.TXT: 3 bytes written, closed and deleted; A = ULTIMATE_OK.
+\end{outputbox}
+
+The open mask creates or replaces the file. Write consumes
+\cmd{ult\_buflen} bytes from \cmd{ult\_buf}; delete consumes the terminated
+name after the file is closed.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/dos.s}}
+
+\section{Load And Save C64 Memory}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, prg\_name\
+\hspace*{2em}setword ult\_addr, 0\
+\hspace*{2em}jsr ultimate\_load\
+\hspace*{2em}jsr ultimate\_last\_end\
+\hspace*{2em}sta load\_end\
+\hspace*{2em}stx load\_end + 1\
+\
+\hspace*{2em}setword ult\_addr, \$C000\
+\hspace*{2em}jsr ultimate\_load\
+\
+\hspace*{2em}setptr ult\_buf, raw\_name\
+\hspace*{2em}setword ult\_addr, \$C000\
+\hspace*{2em}setword ult\_max, 2048\
+\hspace*{2em}jsr ultimate\_bload\
+\
+\hspace*{2em}setptr ult\_buf, save\_name\
+\hspace*{2em}setword ult\_addr, \$0400\
+\hspace*{2em}setword ult\_max, 1000\
+\hspace*{2em}jsr ultimate\_save\
+\
+prg\_name:  .byte "game.prg", 0\
+raw\_name:  .byte "font.bin", 0\
+save\_name: .byte "screen.bin", 0\
+load\_end:  .res 2
+\end{listingbox}
+
+\begin{outputbox}
+load_end = address after loaded PRG data\\
+FONT.BIN loads at \$C000; SCREEN.BIN receives 1000 bytes.
+\end{outputbox}
+
+An \cmd{ult\_addr} of zero makes load use the PRG header; \cmd{\$C000} shows
+the explicit-address form. \cmd{ultimate\_last\_end} returns the previous load
+end in \cmd{A}/\cmd{X}. Bload consumes no header and obeys \cmd{ult\_max}; save
+uses \cmd{ult\_max} as its length.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/file.s}}
+
+\section{Move Bytes Through The REU}
+
+\begin{listingbox}
+\hspace*{2em}jsr ultimate\_reu\_available\
+\hspace*{2em}beq no\_reu\
+\hspace*{2em}jsr ultimate\_reu\_size\
+\hspace*{2em}sta reu\_banks\
+\hspace*{2em}stx reu\_banks + 1\
+\
+\hspace*{2em}setword ult\_addr, \$0400\
+\hspace*{2em}lda \#0\
+\hspace*{2em}sta ult\_reu\
+\hspace*{2em}sta ult\_reu + 1\
+\hspace*{2em}sta ult\_reu + 2\
+\hspace*{2em}sta ult\_reu + 3\
+\hspace*{2em}setword ult\_reulen, 1000\
+\hspace*{2em}lda \#0\
+\hspace*{2em}sta ult\_reulen + 2\
+\hspace*{2em}sta ult\_reulen + 3\
+\hspace*{2em}jsr ultimate\_reu\_stash\
+\hspace*{2em}jsr ultimate\_reu\_fetch\
+\
+reu\_banks: .res 2
+\end{listingbox}
+
+\begin{outputbox}
+reu_banks = installed REU size in 64K banks\\
+1000 bytes stashed and fetched; A = ULTIMATE_OK.
+\end{outputbox}
+
+Size returns 64K banks in \cmd{A}/\cmd{X}. Stash copies C64 RAM to the REU;
+fetch copies it back. Both read the C64 address, 32-bit REU address and 32-bit
+length from the shared variables.
+
+\subsection*{Move the current file directly to and from the REU}
+
+Both transfers below use REU address zero and a 65536-byte length:
+
+\begin{listingbox}
+\hspace*{2em}lda \#0\
+\hspace*{2em}sta ult\_reu\
+\hspace*{2em}sta ult\_reu + 1\
+\hspace*{2em}sta ult\_reu + 2\
+\hspace*{2em}sta ult\_reu + 3\
+\hspace*{2em}sta ult\_reulen\
+\hspace*{2em}sta ult\_reulen + 1\
+\hspace*{2em}lda \#1\
+\hspace*{2em}sta ult\_reulen + 2\
+\hspace*{2em}lda \#0\
+\hspace*{2em}sta ult\_reulen + 3
+\end{listingbox}
+
+\begin{outputbox}
+ult_reu = \$00000000; ult_reulen = 65536.
+\end{outputbox}
+
+\Needspace{25\baselineskip}
+\subsection*{File to REU}
+
+\begin{listingbox}
+\hspace*{2em}; Open ASSETS.BIN first; it becomes the current DOS file.\
+\hspace*{2em}setptr ult\_buf, asset\_name\
+\hspace*{2em}lda \#DOS\_FA\_READ\
+\hspace*{2em}jsr ultimate\_open\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\hspace*{2em}lda \#0\
+\hspace*{2em}sta ult\_num\
+\hspace*{2em}sta ult\_num + 1\
+\hspace*{2em}sta ult\_num + 2\
+\hspace*{2em}sta ult\_num + 3\
+\hspace*{2em}jsr ultimate\_seek\
+\hspace*{2em}jsr ultimate\_reu\_load\
+\hspace*{2em}jsr ultimate\_close\
+\
+asset\_name: .byte "assets.bin", 0
+\end{listingbox}
+
+\begin{outputbox}
+ASSETS.BIN to REU \$000000: 65536 bytes
+\end{outputbox}
+
+\Needspace{18\baselineskip}
+\subsection*{REU to file}
+
+\begin{listingbox}
+\hspace*{2em}; Open a writable current file before the transfer.\
+\hspace*{2em}setptr ult\_buf, capture\_name\
+\hspace*{2em}lda \#DOS\_FA\_CREATE\_ALWAYS | DOS\_FA\_WRITE\
+\hspace*{2em}jsr ultimate\_open\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\hspace*{2em}jsr ultimate\_reu\_save\
+\hspace*{2em}jsr ultimate\_close\
+\
+capture\_name: .byte "capture.bin", 0
+\end{listingbox}
+
+\begin{outputbox}
+REU \$000000 to CAPTURE.BIN: 65536 bytes
+\end{outputbox}
+
+The REU address is zero and the length bytes encode 65536. Load and save take
+no filename: each operates on the firmware's current open file established by
+the preceding \cmd{ultimate\_open}.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/reu.s}}
+
+\Needspace{32\baselineskip}
+\section{Inspect Network Interfaces}
+
+\begin{listingbox}
+\hspace*{2em}jsr ultimate\_net\_ifcount\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\hspace*{2em}lda ult\_iface\
+\hspace*{2em}beq no\_interfaces\
+\
+\hspace*{2em}lda \#0\
+\hspace*{2em}sta ult\_iface\
+\hspace*{2em}setptr ult\_buf, mac\
+\hspace*{2em}jsr ultimate\_net\_macaddr\
+\hspace*{2em}setptr ult\_buf, ipconfig\
+\hspace*{2em}jsr ultimate\_net\_ipconfig\
+\
+mac:      .res 6\
+ipconfig: .res 12
+\end{listingbox}
+
+\begin{outputbox}
+ult_iface = interface count; mac receives 6 bytes; ipconfig receives 12.
+\end{outputbox}
+
+The count is returned in \cmd{ult\_iface}; the address calls take an interface
+index there and place fixed-size replies at \cmd{ult\_buf}.
+
+\section{Use TCP And UDP Sockets}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, host\
+\hspace*{2em}setword ult\_port, 6502\
+\hspace*{2em}jsr ultimate\_net\_connect\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+\hspace*{2em}setptr ult\_buf, message\
+\hspace*{2em}setword ult\_buflen, message\_end - message\
+\hspace*{2em}jsr ultimate\_net\_write\
+\hspace*{2em}; ult\_socklen is now the number accepted.\
+\
+host:        .byte "192.168.1.50", 0\
+message:     .byte "hi", 13\
+message\_end:
+\end{listingbox}
+
+\begin{outputbox}
+TCP handle is in ult_sock; ult_socklen = 3 bytes accepted.
+\end{outputbox}
+
+\Needspace{25\baselineskip}
+\subsection*{Read and close the TCP socket}
+
+\begin{listingbox}
+poll:\
+\hspace*{2em}setptr ult\_buf, socket\_buffer\
+\hspace*{2em}setword ult\_socklen, 128\
+\hspace*{2em}jsr ultimate\_net\_read\
+\hspace*{2em}cmp \#ULTIMATE\_END\
+\hspace*{2em}beq peer\_closed\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne close\_socket\
+\hspace*{2em}lda ult\_socklen\
+\hspace*{2em}ora ult\_socklen + 1\
+\hspace*{2em}beq poll\
+\
+close\_socket:\
+\hspace*{2em}jsr ultimate\_net\_close\
+\
+socket\_buffer: .res 128
+\end{listingbox}
+
+\begin{outputbox}
+Reply bytes are in socket_buffer; close returns ULTIMATE_OK.
+\end{outputbox}
+
+\Needspace{14\baselineskip}
+\subsection*{UDP}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, host\
+\hspace*{2em}setword ult\_port, 6502\
+\hspace*{2em}jsr ultimate\_net\_udp\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\hspace*{2em}jsr ultimate\_net\_close
+\end{listingbox}
+
+\begin{outputbox}
+UDP handle opens and closes; A = ULTIMATE_OK.
+\end{outputbox}
+
+Connect and UDP return the handle in \cmd{ult\_sock}. Write takes its length
+from \cmd{ult\_buflen} and reports accepted bytes in \cmd{ult\_socklen}. Read
+takes capacity and returns stored bytes through \cmd{ult\_socklen}. A zero-byte
+success means poll again. \cmd{ULTIMATE\_END} means the handle is already gone;
+do not close that ended handle.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/net.s}}
+
+\section{Use The HTTP Client}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_url, url\
+\hspace*{2em}setptr ult\_buf, http\_reply\
+\hspace*{2em}setword ult\_buflen, 512\
+\hspace*{2em}jsr ultimate\_http\_get\
+\hspace*{2em}; ult\_httplen is the number stored.\
+\
+url:           .byte "http://192.168.1.50/", 0\
+accept\_header: .byte "accept: text/plain", 0\
+http\_reply:    .res 512\
+body\_handle:   .res 1
+\end{listingbox}
+
+\begin{outputbox}
+One-call GET stores response bytes; A = ULTIMATE_OK.
+\end{outputbox}
+
+\Needspace{26\baselineskip}
+\subsection*{Multi-step GET without a body}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_url, url\
+\hspace*{2em}lda \#HTTP\_VERB\_GET\
+\hspace*{2em}jsr ultimate\_http\_open\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+\hspace*{2em}setptr ult\_url, accept\_header\
+\hspace*{2em}jsr ultimate\_http\_header\
+\hspace*{2em}lda \#HTTP\_BODY\_NONE\
+\hspace*{2em}sta ult\_body\
+\hspace*{2em}setptr ult\_buf, http\_reply\
+\hspace*{2em}setword ult\_buflen, 512\
+\hspace*{2em}jsr ultimate\_http\_exchange\
+\hspace*{2em}jsr ultimate\_http\_close\
+\
+\end{listingbox}
+
+\begin{outputbox}
+GET without a body stores response bytes; close returns ULTIMATE_OK.
+\end{outputbox}
+
+\Needspace{22\baselineskip}
+\subsection*{POST with a body handle}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_url, url\
+\hspace*{2em}lda \#HTTP\_VERB\_POST\
+\hspace*{2em}jsr ultimate\_http\_open\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\hspace*{2em}lda body\_handle\
+\hspace*{2em}sta ult\_body\
+\hspace*{2em}jsr ultimate\_http\_exchange\
+\hspace*{2em}jsr ultimate\_http\_close\
+\
+\hspace*{2em}jsr ultimate\_http\_free\_all
+\end{listingbox}
+
+\begin{outputbox}
+POST stores response bytes; close and free-all return ULTIMATE_OK.
+\end{outputbox}
+
+The one-call GET creates and releases its own slot. The multi-step form stores
+the request handle in \cmd{ult\_http}; header, exchange and close use it there.
+The two exchange calls show the no-body and body-handle forms explicitly.
+\cmd{ultimate\_http\_free\_all} recovers slots abandoned by an earlier program.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/http.s}}
+
+\section{Probe And Configure The Raw Transport}
+
+\begin{listingbox}
+\hspace*{2em}jsr uci\_present\
+\hspace*{2em}beq no\_interface\
+\hspace*{2em}jsr uci\_ident\
+\hspace*{2em}sta raw\_ident\
+\
+\hspace*{2em}jsr uci\_get\_timeout\_a\
+\hspace*{2em}pha\
+\hspace*{2em}lda \#UCI\_TIMEOUT\_FOREVER\
+\hspace*{2em}jsr uci\_set\_timeout\_a\
+\hspace*{2em}jsr run\_slow\_command\
+\hspace*{2em}tax\
+\hspace*{2em}pla\
+\hspace*{2em}jsr uci\_set\_timeout\_a\
+\hspace*{2em}txa\
+\
+\hspace*{2em}jsr uci\_last\_code\
+\hspace*{2em}sta device\_code\
+\hspace*{2em}stx device\_code + 1\
+\hspace*{2em}jsr uci\_abort
+\end{listingbox}
+
+\begin{outputbox}
+uci_present returns nonzero; raw_ident receives the interface ID.\\
+device_code receives the last target status; abort returns ULTIMATE_OK.
+\end{outputbox}
+
+Present and ident are direct register reads. Timeout zero waits forever; this
+pattern restores the previous budget while preserving the command result.
+Last code returns the raw target status in \cmd{A}/\cmd{X}. Abort releases an
+unfinished exchange and is safe while idle.
+
+\section{Raw Commands: Optional Arguments}
+
+\begin{listingbox}
+\hspace*{2em}jsr uci\_req\_clear\
+\hspace*{2em}lda \#UCI\_TARGET\_DOS1\
+\hspace*{2em}sta uci\_req + UCI\_REQ\_TARGET\
+\hspace*{2em}lda \#UCI\_CMD\_IDENTIFY\
+\hspace*{2em}sta uci\_req + UCI\_REQ\_COMMAND\
+\hspace*{2em}setptr uci\_req + UCI\_REQ\_DATA, raw\_reply\
+\hspace*{2em}setword uci\_req + UCI\_REQ\_DATAMAX, 64\
+\hspace*{2em}jsr uci\_exec\_block\
+\
+\hspace*{2em}jsr uci\_req\_clear\
+\hspace*{2em}lda \#UCI\_TARGET\_DOS1\
+\hspace*{2em}sta uci\_req + UCI\_REQ\_TARGET\
+\hspace*{2em}lda \#DOS\_CMD\_GET\_TIME\
+\hspace*{2em}sta uci\_req + UCI\_REQ\_COMMAND\
+\hspace*{2em}setptr uci\_req + UCI\_REQ\_ARGS, time\_format\
+\hspace*{2em}setword uci\_req + UCI\_REQ\_ARGLEN, 1\
+\hspace*{2em}jsr uci\_exec\_block\
+\
+\hspace*{2em}jsr uci\_req\_clear\
+\hspace*{2em}lda \#UCI\_TARGET\_CONTROL\
+\hspace*{2em}sta uci\_req + UCI\_REQ\_TARGET\
+\hspace*{2em}lda \#CTRL\_CMD\_GET\_HWINFO\
+\hspace*{2em}sta uci\_req + UCI\_REQ\_COMMAND\
+\hspace*{2em}setptr uci\_req + UCI\_REQ\_DATA, raw\_reply\
+\hspace*{2em}setword uci\_req + UCI\_REQ\_DATAMAX, 64\
+\hspace*{2em}jsr uci\_exec\_block\
+\
+\hspace*{2em}setptr uci\_req + UCI\_REQ\_ARGS, hwinfo\_model\
+\hspace*{2em}setword uci\_req + UCI\_REQ\_ARGLEN, 1\
+\hspace*{2em}jsr uci\_exec\_block\
+\
+time\_format: .byte 0\
+hwinfo\_model: .byte CTRL\_HWINFO\_MODEL\
+raw\_reply:   .res 64
+\end{listingbox}
+
+\begin{outputbox}
+IDENTIFY returns the target name.\\
+GET_TIME returns the formatted time.\\
+Both GET_HWINFO forms return the model name.
+\end{outputbox}
+
+Clearing the request makes every optional pointer and length zero. The first
+command therefore has no arguments, payload or status buffer. The second adds
+the optional GET\_TIME format byte. The hardware-info command is then sent
+without its selector and with an explicit model selector. Set payload, data or
+status spans in the same pointer-plus-length form only when needed.
+
+\subsection*{Use a caller-owned request block}
+
+\begin{listingbox}
+\hspace*{2em}lda \#<my\_request\
+\hspace*{2em}ldx \#>my\_request\
+\hspace*{2em}jsr uci\_exec\
+\
+my\_request: .res UCI\_REQ\_SIZE
+\end{listingbox}
+
+\begin{outputbox}
+A = request result; lengths and retained bytes are written into my_request.
+\end{outputbox}
+
+\cmd{uci\_exec} takes the request pointer directly. Use it instead of the
+global block when the program owns more than one request.
+
+\Needspace{30\baselineskip}
+\section{Read A Raw Multi-block Reply}
+
+\begin{listingbox}
+\hspace*{2em}lda \#<my\_request\
+\hspace*{2em}ldx \#>my\_request\
+\hspace*{2em}jsr uci\_exec\_first\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+next\_block:\
+\hspace*{2em}; use this block's UCI\_REQ\_DATALEN bytes\
+\hspace*{2em}lda uci\_more\
+\hspace*{2em}beq all\_blocks\
+\hspace*{2em}jsr uci\_exec\_next\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}beq next\_block
+\end{listingbox}
+
+\begin{outputbox}
+Each iteration receives one block; uci_more = 0 after the final block.
+\end{outputbox}
+
+First submits the request and returns one block. \cmd{uci\_more} is the boolean
+state byte that says whether another follows; next releases the current block
+and receives it. Issue no unrelated command until the final block or call
+\cmd{uci\_abort} when stopping early.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/uci\_core.s}}

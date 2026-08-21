@@ -24,6 +24,7 @@
 \RequirePackage{fancyhdr}
 \RequirePackage{enumitem}
 \RequirePackage{microtype}
+\RequirePackage{needspace}
 \tcbuselibrary{skins,breakable}
 
 % ---------------------------------------------------------------------------
@@ -120,7 +121,7 @@
      \end{minipage}
    \end{flushright}}%
   \clearpage
-  \addcontentsline{toc}{section}{\protect\numberline{\theguidechapter}#1}%
+  \addcontentsline{toc}{chapter}{\protect\numberline{\theguidechapter}#1}%
 }
 
 % ---------------------------------------------------------------------------
@@ -131,7 +132,7 @@
 % border. Uppercase is not a shouting style - it is what the machine displays.
 % ---------------------------------------------------------------------------
 \newtcolorbox{screen}[1][]{%
-  enhanced, breakable,
+  enhanced,
   colback=c64screen, colframe=c64border,
   boxrule=3mm, arc=1mm, outer arc=1mm,
   left=3mm, right=3mm, top=2.5mm, bottom=2.5mm,
@@ -143,12 +144,30 @@
 % A listing of source you keep in a file rather than type at the machine: plain
 % paper, a rule down the left, no screen furniture.
 \newtcolorbox{listingbox}[1][]{%
-  enhanced, breakable,
+  enhanced,
   colback=black!2, colframe=guideblue,
   boxrule=0pt, leftrule=1.6pt, arc=0pt, outer arc=0pt,
   left=3mm, right=3mm, top=2.2mm, bottom=2.2mm,
   before skip=1.0\baselineskip, after skip=1.0\baselineskip,
   fontupper=\ttfamily\small\linespread{1.05}\selectfont,
+  % A trailing backslash in the chapter source tokenises as TeX's
+  % control-space command.  Inside source listings it means newline.
+  before upper={\catcode`\_=12\relax\def\ {\newline}},
+  #1}
+
+% Observable output or returned values from the listing immediately above.
+% This is deliberately smaller than a full C64-screen illustration.
+\newtcolorbox{outputbox}[1][]{%
+  enhanced,
+  title=OUTPUT,
+  colback=c64screen, colframe=c64border,
+  coltitle=c64text, colbacktitle=c64screen,
+  boxrule=1.2mm, arc=1mm, outer arc=1mm,
+  left=3mm, right=3mm, top=1.5mm, bottom=1.5mm,
+  before skip=0.5\baselineskip, after skip=1.0\baselineskip,
+  before={\par\nopagebreak[4]\noindent},
+  fonttitle=\sffamily\bfseries\small,
+  fontupper=\ttfamily\small\color{c64text}\linespread{1.0}\selectfont,
   before upper={\catcode`\_=12\relax},
   #1}
 
@@ -200,5 +219,167 @@
   {\par\vspace{0.5\baselineskip}\small
    \begin{tabular}{@{}#1@{}}\toprule}
   {\bottomrule\end{tabular}\par\vspace{0.7\baselineskip}}
+
+% ---------------------------------------------------------------------------
+% The covers.
+%
+% The 1982 guide's cover is four things stacked, and each one is a piece here:
+%
+%   - a purple-to-blue field with a chart grid ruled across it and a couple of
+%     bright plot lines running over the grid
+%   - the masthead in heavy white caps, with the part that names the machine
+%     set larger and in two-tone colour blocks
+%   - the computer itself lying across the lower third at a slight tilt
+%   - a band of blue stripes along the foot, thinning as they descend, with
+%     the logo sitting in the clear paper below them
+%
+% All four are drawn rather than photographed, so the book still builds from a
+% clean checkout with nothing beside it. The canvas is 100 units wide and the
+% unit is a hundredth of the page width in *both* directions, which keeps the
+% drawing square: a 6 x 9 page is 100 by 150.
+% ---------------------------------------------------------------------------
+\RequirePackage{graphicx}
+\usetikzlibrary{shadings}
+
+% The field. Deep violet at the top, warming through the middle, blue at the
+% lower right - the original is a photographed gradient and this is the same
+% four corners.
+\definecolor{coverdeep}{HTML}{412268}
+\definecolor{coverpurple}{HTML}{3B2C7C}
+\definecolor{covermid}{HTML}{7A5AA8}
+\definecolor{coverblue}{HTML}{2E6FB0}
+\definecolor{covergrid}{HTML}{9CC3E6}
+
+% The plot lines over the grid.
+\definecolor{chartlime}{HTML}{C4D93F}
+\definecolor{chartgreen}{HTML}{6FBF4A}
+\definecolor{chartcoral}{HTML}{F07A3C}
+\definecolor{chartrose}{HTML}{E24A8B}
+
+% The masthead blocks: the flat, saturated inks of the original's numerals.
+\definecolor{blockmagenta}{HTML}{D62A7C}
+\definecolor{blockorange}{HTML}{F2762E}
+\definecolor{blockyellow}{HTML}{F4CE2A}
+\definecolor{blockgreen}{HTML}{45B449}
+\definecolor{blockred}{HTML}{E03A3E}
+\definecolor{blockviolet}{HTML}{7B3FA0}
+
+% The foot: stock paper, stripe blue, and the wordmark ink.
+\definecolor{coverpaper}{HTML}{F4EFE3}
+\definecolor{stripeblue}{HTML}{5B9BD5}
+\definecolor{logoblue}{HTML}{343488}
+
+% The machine. Commodore's beige in three values - top, front, and the side
+% that is turned away from the light.
+\definecolor{c64top}{HTML}{D5C9AC}
+\definecolor{c64front}{HTML}{BCAF92}
+\definecolor{c64side}{HTML}{97896F}
+\definecolor{c64key}{HTML}{4A4038}
+\definecolor{c64fkey}{HTML}{B08D6A}
+
+\newcommand{\mastheadfont}{\fontfamily{pag}\bfseries}
+
+% A whole page given over to one drawing. The body of the argument is TikZ,
+% drawn on the 100-unit canvas described above.
+\newcommand{\coverpicture}[1]{%
+  \clearpage
+  \thispagestyle{empty}%
+  \AddToShipoutPictureBG*{\AtPageLowerLeft{%
+    \begin{tikzpicture}[x=0.01\paperwidth,y=0.01\paperwidth,
+                        inner sep=0pt,line join=round,line cap=round]
+      #1
+    \end{tikzpicture}}}%
+  \null\clearpage}
+
+% The gradient field, from the top of the stripe band to the head of the page.
+\newcommand{\coverfield}{%
+  \shade[upper left=coverdeep,  upper right=coverpurple,
+         lower left=covermid,   lower right=coverblue]
+    (0,34) rectangle (100,150);}
+
+% The chart grid, ruled between two heights and clipped to them.
+\newcommand{\covergridlines}[2]{%
+  \begin{scope}
+    \clip (0,#1) rectangle (100,#2);
+    \foreach \g in {0,6,...,150}
+      \draw[covergrid,opacity=0.26,line width=0.4pt] (0,\g) -- (100,\g);
+    \foreach \g in {-4,4,...,104}
+      \draw[covergrid,opacity=0.26,line width=0.4pt] (\g,#1) -- (\g,#2);
+  \end{scope}}
+
+% The band at the foot: paper, then seven stripes that thin as they fall, then
+% a last full-width rule along the very bottom edge.
+\newcommand{\coverband}{%
+  \fill[coverpaper] (0,0) rectangle (100,34);
+  \foreach \ty/\tw in {30.9/2.6, 27.5/2.3, 24.5/2.0, 21.9/1.7,
+                       19.7/1.4, 17.9/1.1, 16.5/0.8}
+    \fill[stripeblue] (0,\ty) rectangle (100,{\ty+\tw});
+  \fill[stripeblue] (0,0) rectangle (100,1.6);}
+
+% The wordmark, centred on #1 with both weights sharing the baseline at #2.
+\newcommand{\coverlogo}[2]{%
+  \node[anchor=base,text=logoblue,
+        font=\fontfamily{pag}\fontsize{17}{17}\selectfont]
+       at (#1,#2) {{\bfseries ultimate}\hspace{0.55em}{\mdseries SDK}};}
+
+% A masthead letter in two tones: the glyph in one colour, then its lower
+% right half clipped away and drawn again in a second. This is what gives the
+% original's numerals their look, and it costs two nodes.
+\newcommand{\blockletter}[5]{%
+  \node[anchor=base west,text=#4,
+        font=\mastheadfont\fontsize{56}{56}\selectfont] (bl#3) at (#1,#2) {#3};
+  \begin{scope}
+    \clip (bl#3.south west) -- (bl#3.south east) -- (bl#3.north east) -- cycle;
+    \node[anchor=base west,text=#5,
+          font=\mastheadfont\fontsize{56}{56}\selectfont] at (#1,#2) {#3};
+  \end{scope}}
+
+% ---------------------------------------------------------------------------
+% The machine.
+%
+% A flat three-quarter view rather than a photograph: a top face sheared back
+% and to the right, a front face under it, and the one side the view can see.
+% The keyboard is laid out in the top face's own coordinates, so the keys sit
+% in the shear with it and nothing has to be drawn twice.
+%
+% Local coordinates: the body is 62 wide and 5.2 tall at the front, and the
+% top face runs back along (13, 9.5). The caller positions and tilts it.
+% ---------------------------------------------------------------------------
+\newcommand{\covermachine}{%
+  % (u,v) on the top face, u across the keyboard and v towards the back.
+  \def\tp##1##2{({(##1)*62+(##2)*13},{5.2+(##2)*9.5})}%
+  % The side that is turned away, then the front, then the top.
+  \fill[c64side]  (62,0) -- (75,9.5) -- (75,14.7) -- (62,5.2) -- cycle;
+  \fill[c64front] (0,0) -- (62,0) -- (62,5.2) -- (0,5.2) -- cycle;
+  \fill[c64front!85!black] (0,0) rectangle (62,0.9);
+  \fill[c64top]   \tp{0}{0} -- \tp{1}{0} -- \tp{1}{1} -- \tp{0}{1} -- cycle;
+  % A shadow line where the top face meets the front, so the two read apart.
+  \draw[c64side,line width=0.3pt] \tp{0}{0} -- \tp{1}{0};
+  % The keyboard: five rows of fifteen, less the bottom row, which is the
+  % space bar with a few keys either side of it.
+  \foreach \ky in {1,2,3,4}
+    \foreach \kx in {0,...,14} {
+      \fill[c64key]
+        \tp{0.030+\kx*0.0507}{0.120+\ky*0.160} --
+        \tp{0.030+\kx*0.0507+0.0405}{0.120+\ky*0.160} --
+        \tp{0.030+\kx*0.0507+0.0405}{0.120+\ky*0.160+0.115} --
+        \tp{0.030+\kx*0.0507}{0.120+\ky*0.160+0.115} -- cycle;}
+  \foreach \kx in {0,1} {
+      \fill[c64key]
+        \tp{0.030+\kx*0.0507}{0.120} -- \tp{0.030+\kx*0.0507+0.0405}{0.120} --
+        \tp{0.030+\kx*0.0507+0.0405}{0.235} -- \tp{0.030+\kx*0.0507}{0.235} -- cycle;}
+  \fill[c64key] \tp{0.132}{0.120} -- \tp{0.640}{0.120}
+                -- \tp{0.640}{0.235} -- \tp{0.132}{0.235} -- cycle;
+  \foreach \kx in {13,14} {
+      \fill[c64key]
+        \tp{0.030+\kx*0.0507}{0.120} -- \tp{0.030+\kx*0.0507+0.0405}{0.120} --
+        \tp{0.030+\kx*0.0507+0.0405}{0.235} -- \tp{0.030+\kx*0.0507}{0.235} -- cycle;}
+  % The four function keys, in their lighter brown, stacked at the right.
+  \foreach \ky in {0,1,2,3} {
+      \fill[c64fkey]
+        \tp{0.830}{0.130+\ky*0.192} -- \tp{0.945}{0.130+\ky*0.192} --
+        \tp{0.945}{0.130+\ky*0.192+0.140} -- \tp{0.830}{0.130+\ky*0.192+0.140} -- cycle;}
+  % The badge on the front face, right of the keyboard.
+  \fill[c64side] (53.5,1.9) rectangle (60.0,3.6);}
 
 \endinput

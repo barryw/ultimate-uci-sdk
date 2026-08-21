@@ -4,7 +4,7 @@
 %
 % The chapters are separate files under chapters/, and the order here is the
 % order of the book. Front matter first, then getting started, then one chapter
-% per language, then the services, then the appendices.
+% per language, then the appendix.
 %
 % SPDX-License-Identifier: MIT
 
@@ -19,16 +19,66 @@
 \usepackage{ultimatesdk}
 \usepackage[hidelinks,pdfusetitle]{hyperref}
 
+% Keep source traceability beside each claim without printing it in the guide.
+\newcommand{\evidence}[1]{}
+
 \title{Ultimate SDK Programmer's Reference Guide}
 \author{}
 \date{}
 
+% Chapters use the guide's own divider counter. Do not let book.cls invent
+% misleading 0.x section numbers for the contents page.
+\setcounter{secnumdepth}{-1}
+
 \begin{document}
 
 % ---------------------------------------------------------------------------
-% Title page: the blue cover of the original, set plainly.
+% Front cover.
+%
+% The 1982 arrangement: chart on a gridded gradient, the masthead across the
+% head with the short name in colour blocks, the machine lying across the
+% lower third, and the stripe band at the foot. Drawn, not photographed - see
+% ultimatesdk.sty for the pieces.
 % ---------------------------------------------------------------------------
+\coverpicture{%
+  \coverfield
+  \covergridlines{34}{133}
+  % Business graphics, because in 1982 that was what you put on the cover to
+  % say the machine was serious. Two bars, a long plot line that peaks early
+  % and climbs again at the end, and a short one running under it.
+  \fill[chartgreen,opacity=0.55] (5,34) rectangle (11.5,86);
+  \fill[chartcoral,opacity=0.50] (12.5,34) rectangle (19,72);
+  \draw[chartlime,line width=1.7pt]
+    (2,66) -- (7,70) -- (10,82) -- (13,124) -- (16,96) -- (19,108) -- (23,84)
+    -- (27,88) -- (31,76) -- (36,80) -- (41,72) -- (46,76) -- (51,70)
+    -- (56,74) -- (61,72) -- (66,82) -- (71,78) -- (76,92) -- (81,86)
+    -- (86,100) -- (91,94) -- (98,112);
+  \draw[chartrose,line width=1.4pt]
+    (2,60) -- (7,66) -- (11,62) -- (15,76) -- (19,66) -- (23,70) -- (28,62)
+    -- (33,66);
+  % The masthead: the long name in white, the short one in colour blocks.
+  \node[anchor=base west,text=white,
+        font=\mastheadfont\fontsize{47}{47}\selectfont] at (5,132) {ULTIMATE};
+  \blockletter{55.0}{132}{S}{blockmagenta}{blockorange}
+  \blockletter{65.8}{132}{D}{blockyellow}{blockgreen}
+  \blockletter{76.6}{132}{K}{blockviolet}{blockred}
+  \node[anchor=base,text=white,
+        font=\fontfamily{pag}\mdseries\fontsize{21}{21}\selectfont]
+       at (50,118) {PROGRAMMER'S};
+  \node[anchor=base,text=white,
+        font=\fontfamily{pag}\mdseries\fontsize{21}{21}\selectfont]
+       at (50,110) {REFERENCE GUIDE};
+  \coverband
+  % The machine lies across the foot at a slight tilt, overlapping the top of
+  % the stripes exactly as the photograph does.
+  \begin{scope}[shift={(9,42)},rotate=-11]\covermachine\end{scope}
+  \coverlogo{50}{9}}
+
 \frontmatter
+
+% ---------------------------------------------------------------------------
+% Title page: the cover's blue, set plainly and without the furniture.
+% ---------------------------------------------------------------------------
 \thispagestyle{empty}
 \AddToShipoutPictureBG*{\AtPageLowerLeft{%
   \color{guideblue}\rule{\paperwidth}{\paperheight}}}
@@ -39,8 +89,7 @@
  {\fontsize{20}{24}\selectfont REFERENCE GUIDE}\par}
 \vfill
 {\color{white}\centering\normalfont\small
- For the 1541 Ultimate-II, Ultimate 64, Ultimate 64 Elite\\
- and the Commodore 64 Ultimate\par}
+ For Commodore 64 programs using the Ultimate Command Interface\par}
 \vspace{0.10\paperheight}
 \clearpage
 
@@ -49,11 +98,7 @@
 \noindent\small
 First edition.\\[0.4\baselineskip]
 This guide documents the Ultimate SDK, a software development kit for the
-Commodore~64 and the Ultimate family of cartridges and machines.\\[0.6\baselineskip]
-Every figure, timing and behaviour in this book was measured against real
-hardware running firmware 3.15 unless it says otherwise. Where the firmware
-does something other than its documentation describes, this guide follows the
-firmware and says so.\\[0.6\baselineskip]
+Commodore~64 and Ultimate hardware with the command interface.\\[0.6\baselineskip]
 Released under the MIT licence. Commodore, the Commodore logo and Commodore~64
 are trademarks of their respective owners; this guide is not affiliated with or
 endorsed by them.
@@ -64,73 +109,35 @@ endorsed by them.
 % ---------------------------------------------------------------------------
 \cleardoublepage
 \section*{Introduction}
-\addcontentsline{toc}{section}{Introduction}
+\addcontentsline{toc}{chapter}{Introduction}
 
-Welcome. If you have an Ultimate cartridge or an Ultimate~64, you own a
-Commodore~64 that can reach a great deal more than a Commodore~64 ever could
---- files on a USB stick, sixteen megabytes of RAM expansion, a processor that
-runs up to forty-eight times faster than the one Commodore shipped, and a
-network connection to the rest of the world. This guide is about writing
-programs that use all of it.
+The \sdk{} gives a C64 program one API for the Ultimate command interface and
+for the two supported features that use direct hardware registers: REU transfers
+and Ultimate~64 turbo control. The language chapters cover every public call.
 
-The \sdk{} is a library, and it comes in the language you already write in.
-If you write BASIC, it arrives as new keywords you type at the \bas{ready.}
-prompt. If you write C with cc65, it is a header and a library to link. If you
-write assembly, it is a set of entry points and a documented calling
-convention. And if you use a toolchain that cannot link any of those, there is
-a standalone binary with a jump table that any assembler can call.
+\evidence{\cmd{include/ultimate.h}; \cmd{include/uci.h};
+\cmd{tools/test\_registers.py}}
 
-The four routes are not four implementations. They are one implementation,
-reached four ways, and every one of them is tested against the same hardware.
+The implementation is 6502 assembly. cc65 links it as a library; ca65 callers
+use its assembly ABI; BASIC reaches a banked build through a wedge; other
+toolchains call the same object code through a standalone jump-table binary.
 
-\subsection*{What is in it}
-
-The SDK started as a wrapper around the Ultimate Command Interface --- the
-hardware mailbox at \cmd{\$DF1C} that a program uses to ask the cartridge to do
-something --- and it has grown past that. Three of the things it does are not
-command-interface operations at all, because the machine offers them a
-different way:
-
-\begin{itemize}[leftmargin=1.4em,itemsep=0.25em,topsep=0.4em]
-  \item \textbf{Files and directories}, over the command interface.
-  \item \textbf{Loading and saving}, taking the firmware's fast path when
-        there is one.
-  \item \textbf{The RAM expansion}, both by direct memory access --- which is
-        not a command at all, it is the REU's own registers --- and file to
-        expansion without the bytes passing through the C64.
-  \item \textbf{Processor speed} on an Ultimate~64, which is memory-mapped I/O
-        and has no command behind it either.
-  \item \textbf{The screen palette}, all sixteen colours, live.
-  \item \textbf{Network sockets and HTTP}, so a C64 can fetch a file from a
-        web server.
-\end{itemize}
+\evidence{\cmd{src/uci/sources.mk}; \cmd{bindings/cc65/Makefile};
+\cmd{src/basic/Makefile}; \cmd{bindings/blob/Makefile}}
 
 \subsection*{How to read this}
 
-Chapter~1 gets you running something in the next ten minutes, whichever
-language you write in. Chapters~2 to~5 take one language each --- BASIC, C,
-assembly, and everything else --- and are meant to be read start to finish once
-and then dipped into. The chapters after that take one service each and can be
-read in any order, or not at all until you need them.
-
-Everything is small enough to type in. The programs in this book are short on
-purpose: a listing you can enter in a minute and watch work teaches more than
-one you copy from a disk and take on trust.
-
-\begin{note}
-This guide describes behaviour that was measured, not behaviour that was
-assumed. Where a figure appears --- how many cycles something costs, how long a
-connection takes to fail --- it came off a real machine, and the guide says
-which one.
-\end{note}
+Chapter~1 covers setup and chooses a binding. Chapters~2 to~5 document the
+binding-specific rules and every public entry point. Each example says what
+feature it demonstrates; the appendix holds the result-code table.
 
 \subsection*{A word about the name}
 
 The library is called the Ultimate SDK rather than the Ultimate~64 SDK because
-most of it works on every Ultimate from the 1541~Ultimate-II upward, and not
-only on the Ultimate~64. Where something needs a particular machine --- the
-turbo registers need an Ultimate~64 --- the guide says so at the point it
-matters, and the SDK itself tells you at run time rather than guessing.
+the command interface predates the Ultimate~64. Programs probe targets with
+\cmd{ultimate\_detect()} and test the REU and turbo registers separately.
+
+\evidence{\cmd{docs/compatibility.md}; \cmd{include/ultimate.h}}
 
 \mainmatter
 
@@ -139,7 +146,55 @@ matters, and the SDK itself tells you at run time rather than guessing.
 \input{chapters/c}
 \input{chapters/assembly}
 \input{chapters/other-toolchains}
-\input{chapters/services}
 \input{chapters/appendices}
+
+% ---------------------------------------------------------------------------
+% Back cover.
+%
+% The same field and the same band, with a panel of stock paper between them
+% carrying the blurb - which is where the original puts its closing note.
+% ---------------------------------------------------------------------------
+\coverpicture{%
+  \coverfield
+  \covergridlines{34}{150}
+  \fill[coverpaper] (7,54) rectangle (93,136);
+  \fill[guideblue] (7,132.6) rectangle (93,136);
+  \node[anchor=north west,text=guideblue,
+        font=\mastheadfont\fontsize{15}{18}\selectfont]
+       at (11,128) {ONE LIBRARY, FOUR WAYS IN};
+  \node[anchor=north west,text=black,align=left,text width=3.55in,
+        font=\fontsize{9}{12.5}\selectfont]
+       at (11,120.5) {%
+         Use files, REU memory, the live palette, sockets and HTTP from a C64
+         program without implementing the command-interface handshake.\\[0.6em]
+         BASIC, cc65 C, ca65 assembly and the standalone jump table all reach
+         the same 6502 implementation.};
+  \node[anchor=north west,text=black,align=left,text width=3.55in,
+        font=\fontsize{9}{13}\selectfont]
+       at (11,99) {%
+         $\bullet$~~BASIC V2 keywords at the \bas{ready.} prompt\\
+         $\bullet$~~A cc65 library and public headers\\
+         $\bullet$~~A documented ca65 calling convention\\
+         $\bullet$~~A standalone jump table for other toolchains};
+  % A screen, because the book is full of them.
+  \fill[c64border,rounded corners=1pt] (11,62) rectangle (48,80);
+  \fill[c64screen] (12.4,63.4) rectangle (46.6,78.6);
+  \node[anchor=north west,text=c64text,align=left,
+        font=\ttfamily\fontsize{8}{10.5}\selectfont]
+       at (14.0,76.8) {READY.\\PRINT UREU\\\ 32\\READY.};
+  \node[anchor=north west,text=black!75,align=left,text width=1.45in,
+        font=\fontsize{8}{11}\selectfont]
+       at (52,77) {This expression reads the enabled REU size in 64K banks;
+         32 means 2MB.};
+  % The fine print goes on the field, so the band stays as clean as the
+  % front's.
+  \node[anchor=north,text=white!85,font=\fontsize{7.5}{7.5}\selectfont]
+       at (50,42.5) {FOR THE 1541 ULTIMATE-II, THE ULTIMATE 64 AND THE
+                     COMMODORE 64 ULTIMATE};
+  \node[anchor=north,text=white!85,font=\fontsize{7.5}{7.5}\selectfont]
+       at (50,38) {FIRST EDITION \quad$\cdot$\quad MIT LICENCE};
+  \coverband
+  \coverlogo{50}{9}}
+
 
 \end{document}

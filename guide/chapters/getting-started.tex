@@ -1,105 +1,80 @@
 % Chapter 1 - Getting Started.
 
 \guidechapter{GETTING STARTED}{%
-  \item What you need
-  \item Switching the command interface on
-  \item Your first program in BASIC
-  \item Your first program in C
-  \item Your first program in assembly
-  \item When nothing happens
+  \item What the SDK requires
+  \item Enabling the command interface
+  \item Choosing and checking a binding
+  \item Recovering from common failures
 }
 
-\section{What You Need}
+\section{What The SDK Requires}
 
-Three things, and you may have all of them already.
+The SDK runs on a C64 with Ultimate hardware whose command interface is mapped
+at \cmd{\$DF1B--\$DF1F}. It is supported on the 1541~Ultimate-II and later
+products.
 
-\textbf{An Ultimate.} Any of them: a 1541~Ultimate-II or II+ plugged into a
-Commodore~64, an Ultimate~64 or 64~Elite, or a Commodore~64 Ultimate. The SDK
-speaks to all of them through the same five addresses and asks each one what it
-can do rather than assuming.
+There is no blanket minimum firmware version. Targets were added over time, so
+programs call \cmd{ultimate\_detect()} and test the capability they need. The
+palette is newer than firmware 3.15; HTTP appears in 3.15.
 
-\textbf{Firmware 3.15 or later}, which is where the command interface settled
-into the shape this guide describes. Older firmware works for most of it; the
-guide flags the places where it does not.
+\evidence{\cmd{docs/compatibility.md}; \cmd{docs/uci.md};
+\cmd{include/ultimate.h}}
 
-\textbf{The command interface switched on.} This is the one that catches
-everybody, and it is the next section.
+\section{Enable The Command Interface}
 
-\section{Switching the Command Interface On}
+Open the Ultimate configuration menu and set \bas{command interface} to
+\bas{enabled}. The exact key used to open that menu depends on the product and
+its configuration, so the SDK does not prescribe one.
 
-The Ultimate ships with its command interface \textit{disabled}. A program that
-tries to use it on a machine where nobody has turned it on will find nothing
-there --- correctly, and quickly, but it will find nothing.
+With the interface disabled, the five registers are not mapped and
+\cmd{ultimate\_init()} returns \cmd{ULTIMATE\_ERR\_NO\_DEVICE}.
 
-Press \key{F5} to bring up the Ultimate menu, then find:
+REU transfers and Ultimate~64 turbo control use their own registers, not the
+command interface. Each still depends on its corresponding machine setting.
 
-\begin{screen}
-C64 AND CARTRIDGE SETTINGS\\
-\hspace*{2em}COMMAND INTERFACE: ENABLED
-\end{screen}
+\evidence{\cmd{docs/compatibility.md};
+\cmd{tests/hardware/hwtest.py}; \cmd{tools/test\_registers.py}}
 
-Set it to \bas{enabled}. That is the whole of the setup.
+\section{Choose A Binding}
 
-\begin{note}
-You do not have to do this for the RAM expansion or for turbo. Those two reach
-the hardware directly and work whether or not the command interface is on ---
-though they have settings of their own in the same menu.
-\end{note}
+\begin{reftable}{lp{0.63\linewidth}}
+BASIC V2 & \cmd{make wedge}; load \cmd{src/basic/uci.prg}, or mount
+  \cmd{src/basic/uci.crt} \\
+cc65 C & \cmd{make lib}; include \cmd{ultimate.h} and link
+  \cmd{bindings/cc65/build/ultimate.lib} \\
+ca65 assembly & link the same library and include
+  \cmd{bindings/asm/ultimate.inc} \\
+other toolchains & \cmd{make blob}; load the standalone binary described in
+  Chapter~5 \\
+\end{reftable}
 
-\section{Your First Program In BASIC}
+\evidence{\cmd{Makefile}; \cmd{src/basic/Makefile};
+\cmd{bindings/cc65/Makefile}; \cmd{bindings/blob/Makefile}}
 
-The BASIC route needs no compiler and no cross-development machine. Load the
-wedge, run it, and BASIC has twenty-three new keywords.
+\Needspace{18\baselineskip}
+\subsection*{BASIC check}
+
+Load and run the wedge, list the current directory, then print the command
+result:
 
 \begin{screen}
 LOAD"UCI",8\\
-RUN
+RUN\\
+UDIR\\
+PRINT UERR\\
+0
 \end{screen}
 
-The wedge installs itself and hands you back the \bas{ready.} prompt. Now type
-this, exactly as shown, and press \key{return}:
+This demonstrates wedge installation, a DOS command and the shared result
+model. A printed \bas{0} is \cmd{ULTIMATE\_OK}; \bas{1} is
+\cmd{ULTIMATE\_ERR\_NO\_DEVICE}.
 
-\begin{screen}
-PRINT UREU
-\end{screen}
+\evidence{\cmd{src/basic/loader.s}; \cmd{src/basic/dispatch.s};
+\cmd{include/uci\_protocol.h}}
 
-If you have a RAM expansion switched on, the machine answers with its size in
-64K banks --- \bas{32} for a two-megabyte expansion. If you have not, it
-answers \bas{0}. Either way, your Commodore~64 has just asked the cartridge a
-question and been told the truth.
+\subsection*{C check}
 
-Now something with a little more in it. Type:
-
-\begin{screen}
-UDIR
-\end{screen}
-
-and the directory of whatever the Ultimate has mounted scrolls up the screen.
-No disk drive was involved.
-
-\subsection*{A short program}
-
-Type \bas{new}, then this. Remember \key{return} at the end of every line.
-
-\begin{screen}
-10 IF UREU = 0 THEN PRINT "NO EXPANSION": END\\
-20 PRINT "EXPANSION IS"; UREU * 64; "K"\\
-30 PRINT "TURBO INDEX IS"; UTURBO
-\end{screen}
-
-Type \bas{run}. Three lines, and the program has interrogated two pieces of
-hardware that a stock Commodore~64 does not have.
-
-\section{Your First Program In C}
-
-You will need cc65, and you will build on a modern machine and copy the result
-across. From the SDK directory:
-
-\begin{listingbox}
-make lib
-\end{listingbox}
-
-That produces \cmd{bindings/cc65/build/ultimate.lib}. Now a program:
+This complete program demonstrates initialization and error reporting:
 
 \begin{listingbox}
 \#include <stdio.h>\\
@@ -107,95 +82,85 @@ That produces \cmd{bindings/cc65/build/ultimate.lib}. Now a program:
 \\
 int main(void)\\
 \{\\
-\hspace*{1em}uint16_t banks;\\
+\hspace*{1em}uint8\_t err = ultimate\_init();\\
 \\
-\hspace*{1em}if (ultimate\_init() != ULTIMATE\_OK) \{\\
-\hspace*{2em}printf("no ultimate here\\n");\\
-\hspace*{2em}return 1;\\
-\hspace*{1em}\}\\
-\\
-\hspace*{1em}banks = ultimate\_reu\_size();\\
-\hspace*{1em}printf("expansion: \%u banks\\n", banks);\\
-\hspace*{1em}return 0;\\
+\hspace*{1em}if (err != ULTIMATE\_OK)\\
+\hspace*{2em}printf("ultimate: \%s\textbackslash n", ultimate\_strerror(err));\\
+\hspace*{1em}return err != ULTIMATE\_OK;\\
 \}
 \end{listingbox}
 
-Build it, pointing the compiler at the SDK's headers and library:
+\begin{outputbox}
+No text on success. On failure, for example:\\
+ULTIMATE: NO ULTIMATE FOUND
+\end{outputbox}
+
+Build it from the repository root:
 
 \begin{listingbox}
 cl65 -t c64 -I include -o hello.prg hello.c \textbackslash\\
 \hspace*{2em}bindings/cc65/build/ultimate.lib
 \end{listingbox}
 
-Copy \cmd{hello.prg} to the Ultimate and run it.
+\begin{outputbox}
+hello.prg is created with no compiler errors.
+\end{outputbox}
 
-\begin{note}
-\cmd{ultimate\_init()} is worth calling first and worth checking. It verifies
-the interface is really there, clears anything a previous program left behind,
-and puts the transport into a known state. Every other call assumes it has run.
-\end{note}
+\evidence{\cmd{include/ultimate.h}; \cmd{examples/cc65/Makefile}}
 
-\section{Your First Program In Assembly}
+\Needspace{14\baselineskip}
+\subsection*{Assembly check}
 
-Assembly callers need no C runtime at all --- no software stack to set up, no
-start-up code to run. Include the SDK's declarations and call the entry points.
+This demonstrates the assembly return convention: the result code is in
+\cmd{A}, ready to compare and branch on.
 
 \begin{listingbox}
-\hspace*{2em}.include "ultimate.inc"\\
-\\
 \hspace*{2em}jsr ultimate\_init\\
 \hspace*{2em}cmp \#ULTIMATE\_OK\\
-\hspace*{2em}bne no\_ultimate\\
-\\
-\hspace*{2em}jsr ultimate\_reu\_size   ; A = low, X = high, in 64K banks\\
-\hspace*{2em}sta banks\\
-\hspace*{2em}stx banks + 1\\
-\hspace*{2em}rts
+\hspace*{2em}bne failed
 \end{listingbox}
 
-Assemble and link it against the same library the C route uses. The whole
-assembly contract --- which registers carry what, which variables an entry
-point reads, and which of them are bounded in time --- is Chapter~4.
+\begin{outputbox}
+A = ULTIMATE_OK; BNE is not taken.
+\end{outputbox}
 
-\section{When Nothing Happens}
+The \cmd{cmp} instruction leaves the processor flags ready for \cmd{bne}.
 
-Four things account for almost every "it did not work", in the order they are
-worth checking.
+\evidence{\cmd{docs/asm-abi.md}; \cmd{examples/asm/identify.s}}
 
-\subsection*{The command interface is off}
+\section{Recover From Common Failures}
 
-The commonest by far. \cmd{ultimate\_init()} returns
-\cmd{ULTIMATE\_ERR\_NO\_DEVICE} and every later call fails the same way. Go and
-turn it on: see the second section of this chapter.
+\subsection*{No device}
 
-\subsection*{Something crashed mid-command}
+\cmd{ULTIMATE\_ERR\_NO\_DEVICE} means the signature is absent. Check the
+Command Interface setting before assuming the hardware is missing.
 
-A program that stopped in the middle of talking to the Ultimate can leave the
-interface holding a half-finished exchange, and the next program to run finds
-it busy. This is what \cmd{uci\_abort()} is for, and \cmd{ultimate\_init()}
-calls it for you --- so simply running your program again usually clears it.
+\Needspace{12\baselineskip}
+\subsection*{An abandoned exchange}
 
-From BASIC, a bare \bas{uci} with no arguments does the same thing:
+A program can stop while the firmware is holding command or reply state.
+\cmd{uci\_abort()} releases it; \cmd{ultimate\_init()} performs that recovery
+during startup. From BASIC, a bare \bas{uci} calls the same abort path:
 
 \begin{screen}
-UCI
+UCI:PRINT UERR\\
+0\\
+READY.
 \end{screen}
 
-\subsection*{You asked for something this machine has not got}
+This example demonstrates recovery only; it does not send a command.
 
-Turbo needs an Ultimate~64 and the \bas{turbo control} setting; the RAM
-expansion needs to be enabled and given a size. The SDK will tell you rather
-than pretend: \cmd{ultimate\_turbo\_available()} answers plainly, and
-\cmd{ultimate\_reu\_size()} returns zero when there is nothing there.
+\subsection*{A missing feature}
 
-\subsection*{The reply did not fit}
+Use \cmd{ultimate\_detect()} for command-interface targets,
+\cmd{ultimate\_reu\_available()} for the REU, and
+\cmd{ultimate\_turbo\_available()} for turbo. Do not infer capabilities from a
+model name.
 
-If a call comes back \cmd{ULTIMATE\_ERR\_TRUNCATED}, the command worked and
-your buffer was too small. The count that comes back tells you how much was
-kept.
+\subsection*{A short buffer}
 
-\begin{note}
-Every entry point in the SDK returns a result code, and it is worth checking
-every one. The codes are a small fixed set --- Appendix~B lists them all --- and
-\cmd{ultimate\_strerror()} turns any of them into text you can print.
-\end{note}
+\cmd{ULTIMATE\_ERR\_TRUNCATED} means an exchange completed but not all reply
+bytes fitted. Output lengths report the bytes retained, not the bytes discarded.
+
+\evidence{\cmd{include/uci.h}; \cmd{include/ultimate.h};
+\cmd{src/basic/dispatch.s}; \cmd{tests/emulator/sdk.suite}}
