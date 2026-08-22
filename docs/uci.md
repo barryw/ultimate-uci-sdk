@@ -380,6 +380,92 @@ commands `$51`-`$54`; and on the network target, the TCP listener commands
 
 ---
 
+## Replies that are structures, not strings
+
+Three commands answer with a fixed layout rather than with text, and the SDK
+receives each one straight into a caller structure. The offsets are in
+[generated/protocol-constants.md](generated/protocol-constants.md); what they
+mean is here.
+
+### File information (`FILE_STAT` `$08`, `FILE_INFO` `$07`)
+
+Read from `t_dos_info` in `software/filemanager/dos.h`:
+
+| Offset | | |
+|---|---|---|
+| `+0` | size | 32-bit, little-endian |
+| `+4` | date | FAT's packed date: year-1980 in bits 15-9, month in 8-5, day in 4-0 |
+| `+6` | time | FAT's packed time: hour in 15-11, minute in 10-5, two-second units in 4-0 |
+| `+8` | extension | three bytes, space padded, no terminator |
+| `+11` | attributes | the `DOS_ATTR_*` bits |
+| `+12` | name | the rest of the reply, with no terminator |
+
+The name has no length of its own: it is the reply length less twelve. The
+firmware copies at most 63 bytes of it (`strncpy(dos_info.filename, ffi->lfname, 63)`),
+so a reply is at most 75 bytes.
+
+`FILE_STAT` takes a filename; `FILE_INFO` describes the file already open and
+answers `85,NO FILE OPEN` when there is none.
+
+### Drive information (`GET_DRVINFO` `$29`)
+
+A count, then one three-byte record per drive: the `CTRL_DRVTYPE_*` code, the
+IEC device number, and 1 while the drive is running. The argument byte selects
+which device number is reported — 1 for the effective one, 0 for the configured
+one — and the firmware defaults it to 1 when the command carries no argument.
+
+The type codes are the firmware's own drive kinds. `$0F` is SoftwareIEC and
+`$50` a printer, neither of which is a disk drive; the values in between are.
+
+### RAM disk information (`GET_RAMDISKINFO` `$40`)
+
+Eight bytes: four two-byte records of a GEOS MegaPatch drive type code and a
+size in 64K units. `$41`, `$71` and `$81` are 1541, 1571 and 1581; `$DD` is the
+native format, and is the only one whose size byte is meaningful. A type of
+zero is a slot with nothing in it.
+
+---
+
+## Naming a drive
+
+**The disk image commands and the drive power commands do not name drives the
+same way, and cannot be made to.**
+
+`MOUNT_DISK`, `UMOUNT_DISK` and `SWAP_DISK` take an IEC device number — 8, 9,
+and so on. `Dos::getDriveByID` in `software/filemanager/dos.cc` walks the two
+drives looking for one whose *effective* IEC address matches and whose power is
+on, so a drive that is switched off does not exist as far as these are
+concerned, and mounting into one answers `88,DRIVE NOT PRESENT`. A device number
+of `$00` is a special case: it means the drive that was mounted into last, and
+drive A when nothing has been.
+
+The control target has no device number at all. `ENABLE_DRIVE_A` (`$30`) through
+`GET_DRIVE_B_POWER` (`$35`) are six separate commands, one pair per drive, so
+which drive a command acts on is the command itself.
+
+`GET_DRVINFO` is what connects the two: its records carry the device number
+against the drive that answers as it.
+
+---
+
+## The clock reads back as text
+
+`GET_TIME` (`$26`) answers `"YYYY/MM/DD HH:MM:SS"` — nineteen ASCII bytes — or
+the same with the weekday in front of it, twenty-three bytes, when the format
+argument is 1. Any other format value is `21,UNKNOWN COMMAND`. Both strings come
+from `sprintf` in `dos.cc`; there is no binary form of the reply.
+
+`SET_TIME` (`$27`) takes six binary bytes and is checked on length rather than
+on content: `dos.cc` refuses a command that is not exactly eight bytes long —
+target, command, and the six numbers — and answers `21,UNKNOWN COMMAND` for
+anything else.
+
+**The year byte is the year less 1900.** The firmware subtracts 80 from it
+before storing, and prints 1980 plus the stored value on the way out, so 2026
+goes in as 126 and comes back as `2026`.
+
+---
+
 ## How big is the RAM expansion?
 
 **No command answers this.** The control target's hardware-info command reports

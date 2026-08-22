@@ -72,8 +72,9 @@ READY.
 \end{screen}
 
 The printed values are 1 through 6: the two DOS instances, network, control,
-SoftwareIEC and HTTP targets. Use these names as the first argument to
-\bas{uci}; do not copy their numeric values into programs.
+SoftwareIEC and HTTP targets. DOS here is the Ultimate's own disk operating
+system, which is what serves files from its storage. Use these names as the
+first argument to \bas{uci}; do not copy their numeric values into programs.
 
 \subsection*{Send a raw command with and without an optional argument}
 
@@ -94,6 +95,9 @@ normally contributes one byte; known wide arguments are widened automatically.
 
 \Needspace{30\baselineskip}
 \subsection*{Read SID addresses through deprecated HWINFO}
+
+The SID is the C64's Sound Interface Device, its sound chip. An Ultimate~64
+can present more than one, and this reports where each one is mapped.
 
 \begin{screen}
 5 REM LEGACY: HWINFO IS DEPRECATED\\
@@ -168,6 +172,9 @@ unavailable.
 
 \subsection*{Load a PRG with and without the optional address}
 
+A PRG is a Commodore program file: two bytes giving the address it loads at,
+then the bytes themselves.
+
 \begin{screen}
 10 ULOAD "GAME.PRG": IF UERR THEN END\\
 20 ULOAD "FONT.PRG",49152: IF UERR THEN END
@@ -208,10 +215,12 @@ reached.
 40 UFETCH 1024,0,1000:IF UERR THEN END
 \end{screen}
 
-\bas{ureu} returns the expansion size in 64K banks. \bas{ustash} copies the
-1000-byte C64 text screen to REU address zero; \bas{ufetch} copies it back. The
-REU address is 24 bits. Keep the address plus length within \bas{ureu} times
-65536; a DMA length of zero means 65536 bytes.
+\bas{ureu} returns the size of the RAM expansion in 64K banks. \bas{ustash}
+copies the 1000-byte C64 text screen to REU address zero; \bas{ufetch} copies
+it back. The expansion moves the bytes itself with the processor halted, which
+is called direct memory access, or DMA. The REU address is 24 bits. Keep the
+address plus length within \bas{ureu} times 65536; a DMA length of zero means
+65536 bytes.
 
 \evidence{\cmd{tools/gen\_keywords.py};
 \cmd{docs/generated/basic-keywords.md}; \cmd{src/basic/dispatch.s};

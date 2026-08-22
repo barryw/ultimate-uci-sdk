@@ -29,8 +29,15 @@
 ; On entry A/X holds statuslen; the C stack holds the status pointer at offset
 ; 0..1 and the target at offset 2.
 _uci_decode_status:
-        sta uci_dec_len         ; a status longer than 255 bytes cannot exist:
-                                ; the queue is 256 and only the prefix matters
+        ; The decoder counts in bytes. The status queue is 256 bytes, so a
+        ; length of exactly 256 is reachable and would arrive here as a low
+        ; byte of zero - which the decoder reads as an empty status, and an
+        ; empty status is success. Clamp instead: only the first four bytes
+        ; decide the encoding, so 255 decodes the same as 256 would.
+        cpx #$00
+        beq @fits
+        lda #$FF
+@fits:  sta uci_dec_len
         ldy #$00
         lda (sp),y
         sta uci_dec_ptr
@@ -655,5 +662,286 @@ cc_out_http:
         lda ult_httplen + 1
         sta (uci_ptr),y
 @none:  pla
+        ldx #$00
+        rts
+
+; ---------------------------------------------------------------------------
+; dosinfo.s, disk.s, clock.s and control.s. The same unpacking as everything
+; above: cc65's stacked arguments into the shared variable block, then the
+; entry point.
+; ---------------------------------------------------------------------------
+
+        .import ultimate_stat, ultimate_fstat
+        .import ultimate_rename, ultimate_copy
+        .import ultimate_mount, ultimate_get_time, ultimate_set_time
+        .import ultimate_drive_enable, ultimate_drive_power
+        .import ultimate_net_setip
+        .import ultimate_http_body, ultimate_http_body_int
+        .import ultimate_http_body_bool, ultimate_http_body_string
+        .import ultimate_http_body_object, ultimate_http_body_array
+        .import ultimate_http_body_binary
+        .import ult_arg2, ult_stage, ult_val
+
+        .export _ultimate_stat, _ultimate_fstat
+        .export _ultimate_rename, _ultimate_copy
+        .export _ultimate_mount, _ultimate_get_time, _ultimate_set_time
+        .export _ultimate_drive_enable, _ultimate_drive_power
+        .export _ultimate_net_setip
+        .export _ultimate_http_body, _ultimate_http_body_int
+        .export _ultimate_http_body_bool, _ultimate_http_body_string
+        .export _ultimate_http_body_object, _ultimate_http_body_array
+        .export _ultimate_http_body_binary
+
+; uint8_t ultimate_stat(const char *name, ultimate_fileinfo *info);
+;
+; A/X holds info; the C stack holds name at 0..1.
+_ultimate_stat:
+        sta ult_arg2
+        stx ult_arg2 + 1
+        ldy #$00
+        jsr cc_ptr_at_y
+        jsr incsp2
+        jsr ultimate_stat
+        ldx #$00
+        rts
+
+; uint8_t ultimate_fstat(ultimate_fileinfo *info);
+_ultimate_fstat:
+        sta ult_arg2
+        stx ult_arg2 + 1
+        jsr ultimate_fstat
+        ldx #$00
+        rts
+
+; uint8_t ultimate_rename(const char *from, const char *to);
+; uint8_t ultimate_copy  (const char *from, const char *to);
+;
+; A/X holds the second name; the C stack holds the first at 0..1.
+_ultimate_rename:
+        jsr cc_two_names
+        jsr ultimate_rename
+        ldx #$00
+        rts
+
+_ultimate_copy:
+        jsr cc_two_names
+        jsr ultimate_copy
+        ldx #$00
+        rts
+
+cc_two_names:
+        sta ult_arg2
+        stx ult_arg2 + 1
+        ldy #$00
+        jsr cc_ptr_at_y
+        jmp incsp2
+
+; uint8_t ultimate_mount(uint8_t device, const char *image);
+;
+; A/X holds the image name; the C stack holds the device number at 0.
+_ultimate_mount:
+        sta ult_buf
+        stx ult_buf + 1
+        ldy #$00
+        lda (sp),y
+        pha                             ; the device, past the stack adjustment
+        jsr incsp1
+        pla
+        jsr ultimate_mount
+        ldx #$00
+        rts
+
+; uint8_t ultimate_get_time(uint8_t format, char *buf, uint16_t buflen,
+;                           uint16_t *outlen);
+;
+; A/X holds outlen; the C stack holds buflen at 0..1, buf at 2..3, format at 4.
+_ultimate_get_time:
+        sta ult_outlen
+        stx ult_outlen + 1
+        ldy #$00
+        lda (sp),y
+        sta ult_buflen
+        iny
+        lda (sp),y
+        sta ult_buflen + 1
+        iny
+        jsr cc_ptr_at_y
+        iny
+        lda (sp),y
+        pha                             ; the format byte
+        jsr incsp5
+        pla
+        jsr ultimate_get_time
+        ldx #$00
+        rts
+
+; uint8_t ultimate_set_time(uint8_t year_1900, uint8_t month, uint8_t day,
+;                           uint8_t hour, uint8_t minute, uint8_t second);
+;
+; A holds second; cc65 pushes the other five as single bytes, so the C stack
+; holds minute at 0, hour at 1, day at 2, month at 3 and the year at 4. They go
+; into the staging buffer in the order the firmware reads them, which is the
+; reverse of the order they come off the stack.
+_ultimate_set_time:
+        sta ult_stage + 5               ; second
+        ldy #$00
+        lda (sp),y
+        sta ult_stage + 4               ; minute
+        iny
+        lda (sp),y
+        sta ult_stage + 3               ; hour
+        iny
+        lda (sp),y
+        sta ult_stage + 2               ; day
+        iny
+        lda (sp),y
+        sta ult_stage + 1               ; month
+        iny
+        lda (sp),y
+        sta ult_stage + 0               ; year, less 1900
+        jsr incsp5
+        jsr ultimate_set_time
+        ldx #$00
+        rts
+
+; uint8_t ultimate_drive_enable(uint8_t drive, uint8_t on);
+;
+; A holds on; the C stack holds the drive at 0. The entry point wants the drive
+; in A and the flag in X.
+_ultimate_drive_enable:
+        tax
+        ldy #$00
+        lda (sp),y
+        pha
+        jsr incsp1
+        pla
+        jsr ultimate_drive_enable
+        ldx #$00
+        rts
+
+; uint8_t ultimate_drive_power(uint8_t drive, uint8_t *on);
+;
+; A/X holds the out-pointer; the C stack holds the drive at 0. The answer waits
+; in ult_stage while uci_exec runs, as every other out-parameter here does.
+_ultimate_drive_power:
+        jsr cc_hold_out
+        ldy #$00
+        lda (sp),y
+        pha
+        jsr incsp1
+        pla
+        jsr ultimate_drive_power
+        ldx ult_stage
+        jmp cc_out_byte
+
+; uint8_t ultimate_net_setip(uint8_t iface, const uint8_t *ipconfig);
+_ultimate_net_setip:
+        jsr cc_iface_buf
+        jsr ultimate_net_setip
+        ldx #$00
+        rts
+
+; ---------------------------------------------------------------------------
+; httpbody.s.
+; ---------------------------------------------------------------------------
+
+; uint8_t ultimate_http_body(uint8_t format, uint8_t *handle);
+;
+; A/X holds handle; the C stack holds the format at 0.
+_ultimate_http_body:
+        jsr cc_hold_out
+        ldy #$00
+        lda (sp),y
+        pha                             ; the format
+        jsr incsp1
+        pla
+        jsr ultimate_http_body
+        ldx ult_body
+        jmp cc_out_byte
+
+; uint8_t ultimate_http_body_int(uint8_t handle, const char *key, int32_t value);
+;
+; A/X plus sreg holds the value - cc65 passes a long that way - and the C stack
+; holds the key at 0..1 and the handle at 2.
+_ultimate_http_body_int:
+        sta ult_val
+        stx ult_val + 1
+        lda sreg
+        sta ult_val + 2
+        lda sreg + 1
+        sta ult_val + 3
+        jsr cc_body_key
+        jsr ultimate_http_body_int
+        ldx #$00
+        rts
+
+; uint8_t ultimate_http_body_bool(uint8_t handle, const char *key, uint8_t value);
+_ultimate_http_body_bool:
+        sta ult_val
+        jsr cc_body_key
+        jsr ultimate_http_body_bool
+        ldx #$00
+        rts
+
+; uint8_t ultimate_http_body_string(uint8_t handle, const char *key,
+;                                   const char *value);
+;
+; A/X holds the value; the C stack holds the key at 0..1 and the handle at 2.
+_ultimate_http_body_string:
+        sta ult_buf
+        stx ult_buf + 1
+        jsr cc_body_key
+        jsr ultimate_http_body_string
+        ldx #$00
+        rts
+
+; The key at 0..1 and the handle at 2, which is the shape the three keyed
+; commands taking a value all have.
+cc_body_key:
+        ldy #$00
+        jsr cc_url_at_y                 ; key -> ult_url
+        iny
+        lda (sp),y
+        sta ult_body
+        jmp incsp3
+
+; uint8_t ultimate_http_body_object(uint8_t handle, const char *key);
+; uint8_t ultimate_http_body_array (uint8_t handle, const char *key);
+;
+; A/X holds the key; the C stack holds the handle at 0.
+_ultimate_http_body_object:
+        jsr cc_body_handle_key
+        jsr ultimate_http_body_object
+        ldx #$00
+        rts
+
+_ultimate_http_body_array:
+        jsr cc_body_handle_key
+        jsr ultimate_http_body_array
+        ldx #$00
+        rts
+
+cc_body_handle_key:
+        sta ult_url
+        stx ult_url + 1
+        ldy #$00
+        lda (sp),y
+        sta ult_body
+        jmp incsp1
+
+; uint8_t ultimate_http_body_binary(uint8_t handle, const uint8_t *data,
+;                                   uint16_t len);
+;
+; A/X holds len; the C stack holds data at 0..1 and the handle at 2.
+_ultimate_http_body_binary:
+        sta ult_buflen
+        stx ult_buflen + 1
+        ldy #$00
+        jsr cc_ptr_at_y                 ; data -> ult_buf
+        iny
+        lda (sp),y
+        sta ult_body
+        jsr incsp3
+        jsr ultimate_http_body_binary
         ldx #$00
         rts

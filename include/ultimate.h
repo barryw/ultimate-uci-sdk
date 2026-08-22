@@ -78,6 +78,11 @@ uint8_t ultimate_available(void);
  * result. Returns ULTIMATE_OK even when some targets are missing - that is the
  * normal case on older firmware. Returns ULTIMATE_ERR_NO_DEVICE if there is no
  * interface at all.
+ *
+ * Probing borrows the shared buffer variables the assembly interface uses -
+ * ult_buf, ult_buflen and ult_outlen - so an assembly caller has to set them
+ * again after this returns. A C caller passes its buffers per call and never
+ * sees them.
  */
 uint8_t ultimate_detect(ultimate_capabilities *caps);
 
@@ -300,6 +305,98 @@ uint8_t ultimate_seek(uint32_t pos);
 uint8_t ultimate_delete(const char *name);
 
 /*
+ * What a file is: its size, when it was last written, and its attributes.
+ *
+ * The reply has exactly this layout on the wire, so it is received straight
+ * into the structure; `name` is NUL-terminated afterwards by the SDK. `date`
+ * and `time` are FAT's own packed forms - date is year-1980 in bits 15-9, month
+ * in 8-5 and day in 4-0; time is hour in 15-11, minute in 10-5 and two-second
+ * units in 4-0 - and are passed through unconverted, because a C64 program that
+ * wants them formatted has a different idea of formatted than the next one.
+ * `extension` is three bytes, space padded, with no terminator.
+ *
+ * A reply shorter than the header is ULTIMATE_ERR_PROTOCOL: a size read out of
+ * half of its four bytes looks like a real answer.
+ */
+#define ULTIMATE_NAME_MAX DOS_INFO_NAME_MAX   /* 63, the longest name reported */
+
+typedef struct {
+    uint32_t size;
+    uint16_t date;
+    uint16_t time;
+    char     extension[3];
+    uint8_t  attrib;                      /* DOS_ATTR_* bits */
+    char     name[ULTIMATE_NAME_MAX + 1];
+} ultimate_fileinfo;
+
+/* By name, in the current directory or by path. */
+uint8_t ultimate_stat(const char *name, ultimate_fileinfo *info);
+
+/* The same, for the file ultimate_open() left open. */
+uint8_t ultimate_fstat(ultimate_fileinfo *info);
+
+/*
+ * Rename or copy, both names in the current directory unless they carry a path.
+ * The Ultimate does the copying, so no bytes pass through the C64.
+ */
+uint8_t ultimate_rename(const char *from, const char *to);
+uint8_t ultimate_copy(const char *from, const char *to);
+
+/* Make one directory, in the current one. */
+uint8_t ultimate_mkdir(const char *name);
+
+/*
+ * Change to the Ultimate's configured home directory. Firmware without one
+ * answers ULTIMATE_ERR_NOT_SUPPORTED.
+ */
+uint8_t ultimate_home(void);
+
+/*
+ * Disk images, in the emulated drives.
+ *
+ * **The drive is named by the IEC device number it answers as** - 8, 9, and so
+ * on - not by a slot. ULTIMATE_DRIVE_LAST asks for the drive that was mounted
+ * into last, or drive A when nothing has been, which is what lets a program
+ * work without knowing how its user configured the machine.
+ * ultimate_drive_info() reports the numbers in use.
+ *
+ * A drive that is switched off is not there as far as these are concerned:
+ * mounting into one answers ULTIMATE_ERR_DEVICE, and
+ * ultimate_drive_enable() is what switches it on.
+ *
+ * The image type comes from the extension - .D64, .D71, .D81, .G64, .G71 - and
+ * anything else is refused by the firmware.
+ */
+#define ULTIMATE_DRIVE_LAST 0
+
+uint8_t ultimate_mount(uint8_t device, const char *image);
+uint8_t ultimate_unmount(uint8_t device);
+
+/* The next image of a multi-image set, the way the Ultimate's menu steps. */
+uint8_t ultimate_swap(uint8_t device);
+
+/*
+ * The Ultimate's battery-backed clock.
+ *
+ * The time comes back as text, because that is what the firmware formats:
+ * "2026/08/22 14:30:00", or the same with the weekday in front of it.
+ * ULTIMATE_TIME_BUFFER is a buffer size that always fits. Nothing here parses
+ * it back into numbers.
+ *
+ * Setting it takes numbers, and **the year is the year less 1900** - 2026 is
+ * 126. That is the firmware's own encoding and the one field that is not what
+ * it looks like.
+ */
+#define ULTIMATE_TIME_PLAIN   0
+#define ULTIMATE_TIME_WEEKDAY 1
+#define ULTIMATE_TIME_BUFFER  24
+
+uint8_t ultimate_get_time(uint8_t format, char *buf, uint16_t buflen,
+                          uint16_t *outlen);
+uint8_t ultimate_set_time(uint8_t year_1900, uint8_t month, uint8_t day,
+                          uint8_t hour, uint8_t minute, uint8_t second);
+
+/*
  * Loading and saving, which is what most programs actually want from a
  * filesystem.
  *
@@ -389,6 +486,56 @@ uint8_t ultimate_reu_load(uint32_t reuaddr, uint32_t len);
 uint8_t ultimate_reu_save(uint32_t reuaddr, uint32_t len);
 
 /* ---------------------------------------------------------------------------
+ * The machine itself: reset, freeze, and the emulated drives.
+ *
+ * **ultimate_reboot() does not return.** It resets the C64, so the program that
+ * called it stops existing part way through the call. Nothing after that line
+ * runs.
+ *
+ * **ultimate_freeze() returns when a person lets it.** It is the freeze button:
+ * the C64 stops, the Ultimate's menu appears, and the call returns after
+ * whoever is at the keyboard leaves it. That can be minutes.
+ *
+ * The drive functions take ULTIMATE_DRIVE_A or ULTIMATE_DRIVE_B, which is a
+ * physical drive - unlike ultimate_mount(), which takes the IEC device number
+ * the drive answers as. The two are connected by ultimate_drive_info(), whose
+ * records carry both.
+ * ------------------------------------------------------------------------- */
+#define ULTIMATE_DRIVE_A 0
+#define ULTIMATE_DRIVE_B 1
+#define ULTIMATE_DRIVES_MAX CTRL_DRVINFO_MAX      /* 2 */
+
+typedef struct {
+    uint8_t type;      /* CTRL_DRVTYPE_*: 1541, 1571, 1581, SoftwareIEC... */
+    uint8_t device;    /* the IEC device number it answers as */
+    uint8_t power;     /* 1 while the drive is running */
+} ultimate_drive;
+
+typedef struct {
+    uint8_t        count;
+    ultimate_drive drive[ULTIMATE_DRIVES_MAX];
+} ultimate_drives;
+
+uint8_t ultimate_reboot(void);
+uint8_t ultimate_freeze(void);
+
+/* Switch a drive on (non-zero) or off (zero). */
+uint8_t ultimate_drive_enable(uint8_t drive, uint8_t on);
+
+/* 1 in *on when that drive is running. on may not be NULL. */
+uint8_t ultimate_drive_power(uint8_t drive, uint8_t *on);
+
+/* Every drive the machine has, with the device number to mount into. */
+uint8_t ultimate_drive_info(ultimate_drives *drives);
+
+/*
+ * The GEOS MegaPatch RAM disks: CTRL_RAMDISK_DRIVES records of a drive type
+ * code and a size in 64K units, so info must have room for CTRL_RAMDISK_BYTES.
+ * A type of zero is a slot with nothing in it.
+ */
+uint8_t ultimate_ramdisk_info(uint8_t *info);
+
+/* ---------------------------------------------------------------------------
  * Network: TCP and UDP sockets.
  *
  * Everything below was measured against firmware 3.15 on real hardware. Three
@@ -432,6 +579,17 @@ uint8_t ultimate_reu_save(uint32_t reuaddr, uint32_t len);
 uint8_t ultimate_net_ifcount(uint8_t *count);
 uint8_t ultimate_net_macaddr(uint8_t iface, uint8_t *mac);
 uint8_t ultimate_net_ipconfig(uint8_t iface, uint8_t *ipconfig);
+
+/*
+ * Write an interface's address, netmask and gateway: the same
+ * UCI_NET_IPCONFIG_BYTES block ultimate_net_ipconfig() hands back.
+ *
+ * This changes the running configuration only - nothing is written to the
+ * Ultimate's stored settings, and the machine is already on the network by the
+ * time a C64 program runs. Neither the firmware nor the SDK checks the address
+ * against anything else on the segment.
+ */
+uint8_t ultimate_net_setip(uint8_t iface, const uint8_t *ipconfig);
 uint8_t ultimate_net_connect(const char *host, uint16_t port, uint8_t *handle);
 uint8_t ultimate_net_udp(const char *host, uint16_t port, uint8_t *handle);
 uint8_t ultimate_net_close(uint8_t handle);
@@ -489,6 +647,71 @@ uint8_t ultimate_http_exchange(uint8_t handle, uint8_t body, uint8_t *buf,
                                uint16_t bufsize, uint16_t *got);
 uint8_t ultimate_http_close(uint8_t handle);
 uint8_t ultimate_http_free_all(void);
+
+/* ---------------------------------------------------------------------------
+ * HTTP request bodies: JSON, form encoding, or raw bytes.
+ *
+ * The body is built inside the Ultimate rather than in C64 memory. Create a
+ * slot, add to it one call at a time, and hand its handle to
+ * ultimate_http_exchange(); only one key and one value are ever in C64 memory
+ * at once, which is what makes a 38K machine able to post an object bigger than
+ * it could hold.
+ *
+ *     uint8_t body, req;
+ *     uint16_t got;
+ *
+ *     ultimate_http_body(HTTP_BODY_JSON_OBJECT, &body);
+ *     ultimate_http_body_string(body, key, value);
+ *     ultimate_http_body_int(body, count, 3);
+ *     ultimate_http_open(HTTP_VERB_POST, url, &req);
+ *     ultimate_http_exchange(req, body, buf, sizeof buf, &got);
+ *     ultimate_http_body_free(body);
+ *     ultimate_http_close(req);
+ *
+ * **The firmware has sixteen slots for the whole machine** and a crashed
+ * program returns none of them. Free what you create, or call
+ * ultimate_http_free_all(), which takes back headers and bodies together.
+ *
+ * **Adding an object or an array enters it**: keys added afterwards go inside,
+ * until ultimate_http_body_up() steps back out to the parent.
+ *
+ * **A key is copied through a staging buffer** and is limited to
+ * ULTIMATE_HTTP_KEY_MAX bytes; a longer one is ULTIMATE_ERR_INVALID_ARGUMENT
+ * and never reaches the wire. Values are not limited by it, only by the command
+ * queue. A string value is at most 255 bytes, which is the firmware's own
+ * length byte.
+ *
+ * **A HTTP_BODY_BINARY body takes ultimate_http_body_binary() and nothing
+ * else**, and the JSON and form formats take everything else. The firmware
+ * answers the wrong combination with ULTIMATE_ERR_DEVICE.
+ *
+ * **cc65 charmaps string literals**, so a key or value written as a plain C
+ * literal arrives with its case swapped, exactly as a URL does. Build them as
+ * bytes, or fold them at runtime.
+ * ------------------------------------------------------------------------- */
+#define ULTIMATE_HTTP_KEY_MAX 34
+
+uint8_t ultimate_http_body(uint8_t format, uint8_t *handle);
+uint8_t ultimate_http_body_free(uint8_t handle);
+
+/* Empty it, keeping the slot and its format. */
+uint8_t ultimate_http_body_clear(uint8_t handle);
+
+/* Leave the object or array being filled in, back to its parent. */
+uint8_t ultimate_http_body_up(uint8_t handle);
+
+uint8_t ultimate_http_body_int(uint8_t handle, const char *key, int32_t value);
+uint8_t ultimate_http_body_bool(uint8_t handle, const char *key, uint8_t value);
+uint8_t ultimate_http_body_string(uint8_t handle, const char *key,
+                                  const char *value);
+
+/* Add a container, and enter it. Inside an array the key is ignored. */
+uint8_t ultimate_http_body_object(uint8_t handle, const char *key);
+uint8_t ultimate_http_body_array(uint8_t handle, const char *key);
+
+/* Append to a HTTP_BODY_BINARY body. Successive calls add to the end. */
+uint8_t ultimate_http_body_binary(uint8_t handle, const uint8_t *data,
+                                  uint16_t len);
 
 /* A short, stable, English description of an ULTIMATE_* code. Never NULL. */
 const char *ultimate_strerror(uint8_t err);

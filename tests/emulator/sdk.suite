@@ -1784,5 +1784,492 @@ suites {
       jsr([t_close], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $00, "and the file closed")
     }
+
+    ; --- what a file is, and moving files about ---
+    ;
+    ; stat's reply is a twelve-byte header and then the name with no
+    ; terminator, so these assert on the size field and on the name landing
+    ; where DOS_INFO_NAME says it does. big.bin is 600 bytes, which is $0258 -
+    ; a number with a non-zero high byte, so a decoder that read only the low
+    ; one would pass the first assertion and fail the second.
+
+    test("sdk-stat-reports-the-size", "a file's size, without opening it") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $2f            ; "/Usb0"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $00
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "at the root")
+
+      [reply0] = $62            ; "big.bin"
+      [reply1] = $69
+      [reply2] = $67
+      [reply3] = $2e
+      [reply0] + $04 = $62
+      [reply0] + $05 = $69
+      [reply0] + $06 = $6e
+      [reply0] + $07 = $00
+      [result] = $ff
+      jsr([t_stat], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "FILE_STAT succeeded")
+      assert([finfo] == $58, "600 bytes, low")
+      assert(([finfo] + $01).b == $02, "600 bytes, high - not a byte-wide read")
+      assert(([finfo] + $02).b == $00, "and nothing above it")
+      assert(([finfo] + $03).b == $00, "...")
+      assert(([finfo] + $0c).b == $62, "'b' of big.bin, at DOS_INFO_NAME")
+      assert(([finfo] + $0d).b == $69, "'i'")
+      assert(([finfo] + $13).b == $00, "and the SDK's terminator after it")
+    }
+
+    test("sdk-stat-missing-file", "a file that is not there is a device error") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+
+      [reply0] = $6e            ; "nope.xyz"
+      [reply1] = $6f
+      [reply2] = $70
+      [reply3] = $65
+      [reply0] + $04 = $2e
+      [reply0] + $05 = $78
+      [reply0] + $06 = $79
+      [reply0] + $07 = $7a
+      [reply0] + $08 = $00
+      [result] = $00
+      jsr([t_stat], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE, not a protocol error")
+    }
+
+    test("sdk-fstat-describes-the-open-file", "the same, for the file already open") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $2f            ; "/Usb0"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $00
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "at the root")
+
+      [reply0] = $62            ; "big.bin"
+      [reply1] = $69
+      [reply2] = $67
+      [reply3] = $2e
+      [reply0] + $04 = $62
+      [reply0] + $05 = $69
+      [reply0] + $06 = $6e
+      [reply0] + $07 = $00
+      [result] = $ff
+      jsr([t_open], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the file is open")
+
+      [finfo] = $ff
+      [finfo] + $01 = $ff
+      [result] = $ff
+      jsr([t_fstat], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "FILE_INFO succeeded")
+      assert([finfo] == $58, "600 bytes, low")
+      assert(([finfo] + $01).b == $02, "600 bytes, high")
+
+      [result] = $ff
+      jsr([t_close], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and it closed")
+    }
+
+    ; --- copy, rename, and make directory ---
+    ;
+    ; These write, so they follow the same rule the write tests above do: what
+    ; is created here is deleted here, in the fixture's own subdirectory.
+    ;
+    ; The copy and the rename are what prove the <name> $00 <name> shape
+    ; reaches the firmware intact - the first name is sent with its own
+    ; terminator counted in the argument length, and getting that wrong makes
+    ; the firmware read the two names as one.
+
+    test("sdk-copy-and-rename", "a file is copied, renamed, and taken away again") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $2f            ; "/Usb0/data"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $2f
+      [reply0] + $06 = $64
+      [reply0] + $07 = $61
+      [reply0] + $08 = $74
+      [reply0] + $09 = $61
+      [reply0] + $0a = $00
+      [result] = $ff
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "in the fixture's subdirectory")
+
+      ; "cp1.tmp", with four bytes in it.
+      [reply0] = $63
+      [reply1] = $70
+      [reply2] = $31
+      [reply3] = $2e
+      [reply0] + $04 = $74
+      [reply0] + $05 = $6d
+      [reply0] + $06 = $70
+      [reply0] + $07 = $00
+      [buf_data] = $41
+      [buf_data] + $01 = $42
+      [buf_data] + $02 = $43
+      [buf_data] + $03 = $44
+      [wr_len] = $04
+      [wr_len] + $01 = $00
+      [result] = $ff
+      jsr([t_create], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the source file was created")
+      [result] = $ff
+      jsr([t_write], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and written")
+      [result] = $ff
+      jsr([t_close], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and closed")
+
+      ; "cp2.tmp" as the destination.
+      [name2] = $63
+      [name2] + $01 = $70
+      [name2] + $02 = $32
+      [name2] + $03 = $2e
+      [name2] + $04 = $74
+      [name2] + $05 = $6d
+      [name2] + $06 = $70
+      [name2] + $07 = $00
+      [result] = $ff
+      jsr([t_copy], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "COPY_FILE succeeded")
+
+      ; The copy has the source's four bytes, which is what says the second
+      ; name was read as a name and not as part of the first.
+      [reply0] = $63            ; "cp2.tmp"
+      [reply1] = $70
+      [reply2] = $32
+      [reply3] = $2e
+      [reply0] + $04 = $74
+      [reply0] + $05 = $6d
+      [reply0] + $06 = $70
+      [reply0] + $07 = $00
+      [result] = $ff
+      jsr([t_stat], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the copy is there")
+      assert([finfo] == $04, "with the four bytes the source had")
+
+      ; Rename it to "cp3.tmp", and stat that instead.
+      [name2] + $02 = $33
+      [result] = $ff
+      jsr([t_rename], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "RENAME_FILE succeeded")
+
+      [reply2] = $33            ; "cp3.tmp"
+      [result] = $ff
+      jsr([t_stat], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the new name is there")
+      assert([finfo] == $04, "still four bytes")
+
+      [reply2] = $32            ; and the old one is not
+      [result] = $00
+      jsr([t_stat], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "the old name is gone")
+
+      ; Clean up: the copy under its new name, and the source.
+      [reply2] = $33
+      [result] = $ff
+      jsr([t_delete], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the copy was deleted")
+      [reply2] = $31
+      [result] = $ff
+      jsr([t_delete], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and so was the source")
+    }
+
+    ; --- the services this firmware does not have ---
+    ;
+    ; The simulated Ultimate implements the Ultimate DOS file commands and
+    ; nothing else, so the disk, clock, machine, network and HTTP services all
+    ; answer here the way they answer on firmware too old to have them: the DOS
+    ; target says "99,FUNCTION NOT IMPLEMENTED" and the control target says
+    ; "21,UNKNOWN COMMAND", and the SDK turns both into
+    ; ULTIMATE_ERR_NOT_SUPPORTED.
+    ;
+    ; That is the case a program has to handle - call one and look at the
+    ; result - so it is pinned here, the same way the palette commands are.
+    ; What each command does on firmware that has it is covered by
+    ; tests/hardware.
+
+    test("sdk-home-on-firmware-without-it", "the home directory is optional") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [result] = $ff
+      jsr([t_home], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED")
+    }
+
+    test("sdk-mount-unmount-swap", "the disk image commands, on firmware without them") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+
+      [reply0] = $61            ; "a.d64"
+      [reply1] = $2e
+      [reply2] = $64
+      [reply3] = $36
+      [reply0] + $04 = $34
+      [reply0] + $05 = $00
+      [drive_arg] = $08         ; the drive answering as device 8
+      [result] = $ff
+      jsr([t_mount], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "MOUNT_DISK: ULTIMATE_ERR_NOT_SUPPORTED")
+
+      [result] = $ff
+      jsr([t_unmount], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "UMOUNT_DISK: ULTIMATE_ERR_NOT_SUPPORTED")
+
+      [result] = $ff
+      jsr([t_swap], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "SWAP_DISK: ULTIMATE_ERR_NOT_SUPPORTED")
+    }
+
+    test("sdk-mount-without-a-name", "an image with no name never reaches the wire") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [reply0] = $00
+      [drive_arg] = $08
+      [result] = $ff
+      jsr([t_mount], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    test("sdk-clock", "reading and setting the clock, on firmware without one") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $18      ; ULTIMATE_TIME_BUFFER
+      [ident_buflen] + $01 = $00
+      [flag_arg] = $00          ; ULTIMATE_TIME_PLAIN
+      [result] = $ff
+      jsr([t_get_time], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "GET_TIME: ULTIMATE_ERR_NOT_SUPPORTED")
+
+      ; 126 is 2026: the year byte is the year less 1900.
+      [time_arg] = $7e
+      [time_arg] + $01 = $08
+      [time_arg] + $02 = $16
+      [time_arg] + $03 = $0e
+      [time_arg] + $04 = $1e
+      [time_arg] + $05 = $00
+      [result] = $ff
+      jsr([t_set_time], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "SET_TIME: ULTIMATE_ERR_NOT_SUPPORTED")
+    }
+
+    test("sdk-machine-control", "reset and freeze reach the control target") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+
+      ; Reset is fire-and-forget, so it succeeds as soon as the interface is
+      ; idle again whether or not the target did anything with it. On a real
+      ; machine nothing after the call runs.
+      [result] = $ff
+      jsr([t_reboot], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "REBOOT: ULTIMATE_OK, and no data phase")
+
+      [result] = $ff
+      jsr([t_freeze], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "FREEZE: ULTIMATE_ERR_NOT_SUPPORTED")
+    }
+
+    test("sdk-drives", "the emulated drives, on firmware without the commands") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+
+      [drive_arg] = $00         ; ULTIMATE_DRIVE_A
+      [flag_arg] = $01
+      [result] = $ff
+      jsr([t_drive_enable], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ENABLE_DRIVE_A: ULTIMATE_ERR_NOT_SUPPORTED")
+
+      [flag_arg] = $ff
+      [result] = $ff
+      jsr([t_drive_power], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "DRIVE_A_POWER: ULTIMATE_ERR_NOT_SUPPORTED")
+      assert([flag_arg] == $00, "and it reports the drive as off, not as unknown")
+
+      [reply0] = $ff
+      [result] = $ff
+      jsr([t_drive_info], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "GET_DRVINFO: ULTIMATE_ERR_NOT_SUPPORTED")
+      assert([reply0] == $00, "and the count is cleared, so no records are read")
+
+      [result] = $ff
+      jsr([t_ramdisk_info], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "GET_RAMDISKINFO: ULTIMATE_ERR_NOT_SUPPORTED")
+    }
+
+    test("sdk-drives-reject-a-third-drive", "there are two, and the third never reaches the wire") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [drive_arg] = $02
+      [flag_arg] = $01
+      [result] = $ff
+      jsr([t_drive_enable], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+      [result] = $ff
+      jsr([t_drive_power], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    test("sdk-net-setip", "writing an interface configuration") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [net_iface] = $00
+      [reply0] = $c0            ; 192.168.1.64, and a mask and gateway behind it
+      [reply1] = $a8
+      [reply2] = $01
+      [reply3] = $40
+      [result] = $ff
+      jsr([t_net_setip], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "SET_IPADDR: ULTIMATE_ERR_NOT_SUPPORTED")
+    }
+
+    ; --- HTTP request bodies ---
+    ;
+    ; The simulated Ultimate has no HTTP target, so every one of these is the
+    ; older-firmware case. The two argument checks below never reach the wire
+    ; and mean the same thing on every machine.
+
+    test("sdk-http-body", "building a request body, on firmware without HTTP") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+
+      [body_arg] = $02          ; HTTP_BODY_JSON_OBJECT
+      [result] = $ff
+      jsr([t_body], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "BODY_CREATE: ULTIMATE_ERR_NOT_SUPPORTED")
+      assert([body_arg] == $ff, "and HTTP_BODY_NONE, which is not a handle")
+
+      ; The rest are driven with a handle of zero. Nothing on the far end has
+      ; one, so what is being pinned is the command going out and the refusal
+      ; coming back.
+      [body_arg] = $00
+      [reply0] = $6b            ; "key"
+      [reply1] = $65
+      [reply2] = $79
+      [reply3] = $00
+      [name2] = $76             ; "val"
+      [name2] + $01 = $61
+      [name2] + $02 = $6c
+      [name2] + $03 = $00
+      [val_arg] = $2a           ; 42
+      [val_arg] + $01 = $00
+      [val_arg] + $02 = $00
+      [val_arg] + $03 = $00
+      [flag_arg] = $01
+
+      [result] = $ff
+      jsr([t_body_string], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "BODY_ADD_STRING")
+      [result] = $ff
+      jsr([t_body_int], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "BODY_ADD_INT")
+      [result] = $ff
+      jsr([t_body_bool], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "BODY_ADD_BOOL")
+      [result] = $ff
+      jsr([t_body_object], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "BODY_ADD_OBJECT")
+      [result] = $ff
+      jsr([t_body_array], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "BODY_ADD_ARRAY")
+      [result] = $ff
+      jsr([t_body_up], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "BODY_UP")
+
+      [buf_data] = $01
+      [buf_data] + $01 = $02
+      [wr_len] = $02
+      [wr_len] + $01 = $00
+      [result] = $ff
+      jsr([t_body_binary], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "BODY_ADD_BINARY")
+
+      [result] = $ff
+      jsr([t_body_clear], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "BODY_CLEAR")
+      [result] = $ff
+      jsr([t_body_free], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "BODY_FREE")
+    }
+
+    test("sdk-http-body-rejects-a-bad-format", "a format outside 1 to 4 never reaches the wire") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [body_arg] = $00
+      [result] = $ff
+      jsr([t_body], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+      assert([body_arg] == $ff, "and no handle was invented")
+
+      [body_arg] = $05
+      [result] = $ff
+      jsr([t_body], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    test("sdk-mkdir", "a directory is created, seen, and taken away again") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+
+      [reply0] = $2f            ; "/Usb0/data"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $2f
+      [reply0] + $06 = $64
+      [reply0] + $07 = $61
+      [reply0] + $08 = $74
+      [reply0] + $09 = $61
+      [reply0] + $0a = $00
+      [result] = $ff
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "in the fixture's subdirectory")
+
+      [reply0] = $64            ; "dir.tmp"
+      [reply1] = $69
+      [reply2] = $72
+      [reply3] = $2e
+      [reply0] + $04 = $74
+      [reply0] + $05 = $6d
+      [reply0] + $06 = $70
+      [reply0] + $07 = $00
+      [result] = $ff
+      jsr([t_mkdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "CREATE_DIR succeeded")
+
+      [result] = $ff
+      jsr([t_stat], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and it is there")
+      assert(([finfo] + $0b).b == $10, "DOS_ATTR_DIR, so it is a directory")
+
+      [result] = $ff
+      jsr([t_delete], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "and it was taken away again")
+    }
   }
 }

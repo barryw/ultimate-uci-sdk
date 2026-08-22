@@ -208,7 +208,13 @@
 % ---------------------------------------------------------------------------
 \newcommand{\sdk}{\textbf{ULTIMATE SDK}}
 \newcommand{\ult}{\textbf{ULTIMATE 64}}
-\newcommand{\cmd}[1]{\texttt{#1}}
+% An identifier or a path, set in the monospace face. The SDK's names are long
+% - ultimate_http_body_binary is 26 characters - and several are wider than
+% what is left of a line on a six-inch page, which put them into the margin.
+% A break is allowed after each underscore and each slash, so a name that does
+% not fit can be split where a reader expects one to split. No hyphen is added:
+% a hyphen inside an identifier would look like part of the name.
+\newcommand{\cmd}[1]{{\ttfamily\def\_{\textunderscore\allowbreak}#1}}
 \newcommand{\bas}[1]{\texttt{\MakeUppercase{#1}}}
 
 % A two-column table of things and what they do, used for keyword and entry

@@ -27,31 +27,34 @@ commands as tested that no test has ever sent.
 | Ultimate DOS commands | `DOS_CMD_READ_DATA` | `$04` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_WRITE_DATA` | `$05` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_FILE_SEEK` | `$06` | tested | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_FILE_INFO` | `$07` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_FILE_STAT` | `$08` | no API yet | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_FILE_INFO` | `$07` | tested | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_FILE_STAT` | `$08` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_DELETE_FILE` | `$09` | tested | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_RENAME_FILE` | `$0A` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_COPY_FILE` | `$0B` | no API yet | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_RENAME_FILE` | `$0A` | tested | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_COPY_FILE` | `$0B` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_CHANGE_DIR` | `$11` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_GET_PATH` | `$12` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_OPEN_DIR` | `$13` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_READ_DIR` | `$14` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_COPY_UI_PATH` | `$15` | no API yet; deprecated | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_CREATE_DIR` | `$16` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_COPY_HOME_PATH` | `$17` | no API yet | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_CREATE_DIR` | `$16` | tested | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_COPY_HOME_PATH` | `$17` | tested | hardware only |
 | Ultimate DOS commands | `DOS_CMD_LOAD_REU` | `$21` | tested | simulator + hardware |
 | Ultimate DOS commands | `DOS_CMD_SAVE_REU` | `$22` | tested | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_MOUNT_DISK` | `$23` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_UMOUNT_DISK` | `$24` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_SWAP_DISK` | `$25` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_GET_TIME` | `$26` | no API yet | simulator + hardware |
-| Ultimate DOS commands | `DOS_CMD_SET_TIME` | `$27` | no API yet | simulator + hardware |
+| Ultimate DOS commands | `DOS_CMD_MOUNT_DISK` | `$23` | tested | hardware only |
+| Ultimate DOS commands | `DOS_CMD_UMOUNT_DISK` | `$24` | tested | hardware only |
+| Ultimate DOS commands | `DOS_CMD_SWAP_DISK` | `$25` | tested | hardware only |
+| Ultimate DOS commands | `DOS_CMD_GET_TIME` | `$26` | tested | hardware only |
+| Ultimate DOS commands | `DOS_CMD_SET_TIME` | `$27` | tested | hardware only |
+| Ultimate DOS commands | `DOS_CMD_LOAD_RAMDISK` | `$41` | no API yet | hardware only |
+| Ultimate DOS commands | `DOS_CMD_SAVE_RAMDISK` | `$42` | no API yet | hardware only |
 | Ultimate DOS commands | `DOS_CMD_ECHO` | `$F0` | tested | simulator + hardware |
 | Network commands | `NET_CMD_IDENTIFY` | `$01` | no API yet | hardware only |
 | Network commands | `NET_CMD_GET_INTERFACE_COUNT` | `$02` | tested | hardware only |
+| Network commands | `NET_CMD_SET_INTERFACE` | `$03` | no API yet | hardware only |
 | Network commands | `NET_CMD_GET_NETADDR` | `$04` | tested | hardware only |
 | Network commands | `NET_CMD_GET_IPADDR` | `$05` | tested | hardware only |
-| Network commands | `NET_CMD_SET_IPADDR` | `$06` | no API yet | hardware only |
+| Network commands | `NET_CMD_SET_IPADDR` | `$06` | tested | hardware only |
 | Network commands | `NET_CMD_OPEN_TCP` | `$07` | tested | hardware only |
 | Network commands | `NET_CMD_OPEN_UDP` | `$08` | tested | hardware only |
 | Network commands | `NET_CMD_CLOSE_SOCKET` | `$09` | tested | hardware only |
@@ -62,10 +65,10 @@ commands as tested that no test has ever sent.
 | Network commands | `NET_CMD_LISTEN_STATE` | `$14` | no API yet | hardware only |
 | Network commands | `NET_CMD_LISTEN_SOCKET` | `$15` | no API yet | hardware only |
 | Control commands | `CTRL_CMD_IDENTIFY` | `$01` | tested | simulator + hardware |
-| Control commands | `CTRL_CMD_READ_RTC` | `$02` | no API yet | simulator + hardware |
+| Control commands | `CTRL_CMD_READ_RTC` | `$02` | no API yet | hardware only |
 | Control commands | `CTRL_CMD_FINISH_CAPTURE` | `$03` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_FREEZE` | `$05` | tested | simulator + hardware |
-| Control commands | `CTRL_CMD_REBOOT` | `$06` | no API yet | simulator + hardware |
+| Control commands | `CTRL_CMD_FREEZE` | `$05` | tested | hardware only |
+| Control commands | `CTRL_CMD_REBOOT` | `$06` | tested | hardware only |
 | Control commands | `CTRL_CMD_LOAD_REU` | `$08` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_SAVE_REU` | `$09` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_U64_SAVEMEM` | `$0F` | no API yet | simulator + hardware |
@@ -73,14 +76,14 @@ commands as tested that no test has ever sent.
 | Control commands | `CTRL_CMD_ENCODE_TRACK` | `$12` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_EASYFLASH` | `$20` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_GET_HWINFO` | `$28` | tested; deprecated | simulator + hardware |
-| Control commands | `CTRL_CMD_GET_DRVINFO` | `$29` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_ENABLE_DRIVE_A` | `$30` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_DISABLE_DRIVE_A` | `$31` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_ENABLE_DRIVE_B` | `$32` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_DISABLE_DRIVE_B` | `$33` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_GET_DRIVE_A_POWER` | `$34` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_GET_DRIVE_B_POWER` | `$35` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_GET_RAMDISKINFO` | `$40` | no API yet | simulator + hardware |
+| Control commands | `CTRL_CMD_GET_DRVINFO` | `$29` | tested | hardware only |
+| Control commands | `CTRL_CMD_ENABLE_DRIVE_A` | `$30` | tested | hardware only |
+| Control commands | `CTRL_CMD_DISABLE_DRIVE_A` | `$31` | tested | hardware only |
+| Control commands | `CTRL_CMD_ENABLE_DRIVE_B` | `$32` | tested | hardware only |
+| Control commands | `CTRL_CMD_DISABLE_DRIVE_B` | `$33` | tested | hardware only |
+| Control commands | `CTRL_CMD_GET_DRIVE_A_POWER` | `$34` | tested | hardware only |
+| Control commands | `CTRL_CMD_GET_DRIVE_B_POWER` | `$35` | tested | hardware only |
+| Control commands | `CTRL_CMD_GET_RAMDISKINFO` | `$40` | tested | hardware only |
 | Control commands | `CTRL_CMD_LOAD_CONFIG` | `$50` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_GET_PALETTE` | `$51` | tested | hardware only |
 | Control commands | `CTRL_CMD_SET_PALETTE` | `$52` | tested | hardware only |
@@ -105,20 +108,20 @@ commands as tested that no test has ever sent.
 | HTTP commands | `HTTP_CMD_HEADER_ADD` | `$13` | tested | hardware only |
 | HTTP commands | `HTTP_CMD_HEADER_QUERY` | `$14` | no API yet | hardware only |
 | HTTP commands | `HTTP_CMD_HEADER_LIST` | `$15` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_BODY_CREATE` | `$21` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_BODY_FREE` | `$22` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_BODY_ADD_INT` | `$23` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_BODY_ADD_BOOL` | `$24` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_BODY_ADD_STRING` | `$25` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_BODY_ADD_OBJECT` | `$26` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_BODY_ADD_ARRAY` | `$27` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_BODY_UP` | `$28` | no API yet | hardware only |
+| HTTP commands | `HTTP_CMD_BODY_CREATE` | `$21` | tested | hardware only |
+| HTTP commands | `HTTP_CMD_BODY_FREE` | `$22` | tested | hardware only |
+| HTTP commands | `HTTP_CMD_BODY_ADD_INT` | `$23` | tested | hardware only |
+| HTTP commands | `HTTP_CMD_BODY_ADD_BOOL` | `$24` | tested | hardware only |
+| HTTP commands | `HTTP_CMD_BODY_ADD_STRING` | `$25` | tested | hardware only |
+| HTTP commands | `HTTP_CMD_BODY_ADD_OBJECT` | `$26` | tested | hardware only |
+| HTTP commands | `HTTP_CMD_BODY_ADD_ARRAY` | `$27` | tested | hardware only |
+| HTTP commands | `HTTP_CMD_BODY_UP` | `$28` | tested | hardware only |
 | HTTP commands | `HTTP_CMD_BODY_REMOVE` | `$29` | no API yet | hardware only |
 | HTTP commands | `HTTP_CMD_BODY_QUERY` | `$2A` | no API yet | hardware only |
 | HTTP commands | `HTTP_CMD_BODY_MOVE` | `$2B` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_BODY_ADD_BINARY` | `$2C` | no API yet | hardware only |
+| HTTP commands | `HTTP_CMD_BODY_ADD_BINARY` | `$2C` | tested | hardware only |
 | HTTP commands | `HTTP_CMD_BODY_ADD` | `$2D` | no API yet | hardware only |
-| HTTP commands | `HTTP_CMD_BODY_CLEAR` | `$2E` | no API yet | hardware only |
+| HTTP commands | `HTTP_CMD_BODY_CLEAR` | `$2E` | tested | hardware only |
 | HTTP commands | `HTTP_CMD_DO_EXCHANGE_OBJ` | `$31` | no API yet | hardware only |
 | HTTP commands | `HTTP_CMD_DO_EXCHANGE_RAW` | `$32` | tested | hardware only |
 
@@ -126,12 +129,14 @@ commands as tested that no test has ever sent.
 
 | | |
 | --- | --- |
-| commands defined | 101 |
-| exercised by a test | 37 (36%) |
+| commands defined | 104 |
+| exercised by a test | 68 (65%) |
 | wrapped but untested | 0 |
 
-The low figure is expected while the SDK is still a vertical slice:
-detection, identity, the palette and the file service are implemented;
-the network and HTTP services are not, and neither is most of what DOS
-can do. Coverage grows as each service lands, not before - writing
-tests against commands no API reaches would measure nothing.
+Commands with no API yet are the remainder. They are the ones a
+wrapper would misrepresent: EasyFlash sector erase, GCR track
+encoding and decoding, the control target's REU pair - which never
+returns on firmware 3.14d - the SoftwareIEC channel commands the
+hyperspeed kernal owns, and the four network listener commands whose
+numbers are not in the published specification. Every one of them is
+reachable through uci_exec(), which is what the generic form is for.
