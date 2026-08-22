@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.4.0](https://github.com/barryw/ultimate-uci-sdk/compare/9da60803bb258d70b18c8f15f49844737349b414..v0.4.0) - 2026-08-22
+#### Features
+- (**sid**) smooth six-voice visualizer - ([9da6080](https://github.com/barryw/ultimate-uci-sdk/commit/9da60803bb258d70b18c8f15f49844737349b414)) - Barry Walker
+
+- - -
+
 ## [v0.3.0](https://github.com/barryw/ultimate-uci-sdk/compare/aa94e49d9edd70c11888d080decfa1e84bc0e0d6..v0.3.0) - 2026-08-21
 #### Features
 - (**sid**) add discovery and visualizer - ([aa94e49](https://github.com/barryw/ultimate-uci-sdk/commit/aa94e49d9edd70c11888d080decfa1e84bc0e0d6)) - Barry Walker
