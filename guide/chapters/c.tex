@@ -2,7 +2,8 @@
 
 \guidechapter{PROGRAMMING IN C}{%
   \item Startup, discovery and diagnostics
-  \item Machine, file and REU services
+  \item Files, disk images, the clock and the REU
+  \item Machine and drive control
   \item Network and HTTP services
   \item The complete low-level UCI API
 }
@@ -27,12 +28,15 @@ INIT: TIMEOUT
 \end{outputbox}
 
 Output boxes show a representative successful run on an Ultimate 64 Elite.
-Model names, paths, directory entries, addresses and network replies naturally
-vary with the machine and the files or servers used.
+Model names, paths, directory entries, addresses and network replies vary with
+the machine and the files or servers used.
 
-cc65 maps lowercase source letters to the uppercase byte values shared by
-PETSCII and ASCII. For that reason, path, filename and header literals appear
-in lowercase source even though the firmware receives uppercase text.
+The C64 holds text in PETSCII, the PET Standard Code of Information
+Interchange. The Ultimate speaks ASCII. The two codes agree on the digits and
+on the uppercase letters and disagree on case, and cc65 maps lowercase source
+letters to the uppercase byte values the two share. Path, filename and header
+literals therefore appear in lowercase source even though the firmware receives
+uppercase text.
 
 Zero is success. Appendix~A lists the remaining results. Include
 \cmd{ultimate.h} for the service API; include \cmd{uci.h} only for the raw
@@ -108,6 +112,10 @@ control flow.
 
 \Needspace{32\baselineskip}
 \section{Read SID Addresses Through Deprecated HWINFO}
+
+The SID is the C64's sound chip, the Sound Interface Device. An Ultimate~64
+can present more than one of them, and this call reports where each one is
+mapped.
 
 \begin{listingbox}
 ultimate\_sid\_info info;\
@@ -267,6 +275,22 @@ name receives the entry; no attribute byte is stored.
 If a program stops the walk before \cmd{ULTIMATE\_END}, call
 \cmd{uci\_abort()} before issuing another command.
 
+\subsection*{Make a directory, and return to the configured one}
+
+\begin{listingbox}
+err = ultimate\_mkdir("saves");\
+err = ultimate\_home();
+\end{listingbox}
+
+\begin{outputbox}
+SAVES is created inside the current directory.
+\end{outputbox}
+
+\cmd{ultimate\_mkdir()} creates one directory in the current one.
+\cmd{ultimate\_home()} changes to the directory the machine's owner configured
+as its home. Firmware that has no configured home returns
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.
+
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/dos.s}}
 
 \section{Open, Read And Close A File}
@@ -307,8 +331,6 @@ err = ultimate\_read(buf, sizeof buf, NULL);
 buf receives bytes and the file advances; the count is discarded.
 \end{outputbox}
 
-That form still advances the open file but discards the count.
-
 \subsection*{Create, write and delete a file}
 
 \begin{listingbox}
@@ -333,6 +355,81 @@ The open flags create or replace the firmware-side file.
 \cmd{ultimate\_delete()} removes the named file after it is closed.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/dos.s}}
+
+\Needspace{24\baselineskip}
+\section{Ask What A File Is}
+
+\begin{listingbox}
+ultimate\_fileinfo info;\
+uint16\_t year;\
+\
+err = ultimate\_stat("readme.txt", \&info);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}year = 1980 + (info.date >> 9);\
+\hspace*{1em}printf("\%s: \%lu bytes, \%u\textbackslash n",\
+\hspace*{2em}info.name, info.size, year);\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+README.TXT: 1024 BYTES, 2026
+\end{outputbox}
+
+\cmd{ultimate\_stat()} takes a name in the current directory, or a path.
+\cmd{ultimate\_fstat()} answers the same question about the file
+\cmd{ultimate\_open()} left open, and takes no name:
+
+\begin{listingbox}
+err = ultimate\_open("readme.txt", DOS\_FA\_READ);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}err = ultimate\_fstat(\&info);\
+\hspace*{1em}ultimate\_close();\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+info describes the open file.
+\end{outputbox}
+
+The reply has this layout on the wire and is received straight into the
+structure:
+
+\begin{reftable}{lp{0.66\linewidth}}
+\cmd{size} & length in bytes \\
+\cmd{date} & year less 1980 in bits 15--9, month in 8--5, day in 4--0 \\
+\cmd{time} & hour in 15--11, minute in 10--5, two-second units in 4--0 \\
+\cmd{extension} & three bytes, space padded, with no terminator \\
+\cmd{attrib} & the \cmd{DOS\_ATTR\_*} bits, as \cmd{ultimate\_readdir()} reports \\
+\cmd{name} & the name, NUL-terminated by the SDK \\
+\end{reftable}
+
+\cmd{date} and \cmd{time} are the packed forms used by FAT, the File Allocation
+Table filesystem the Ultimate's storage uses, and they are passed through
+without conversion. The example above unpacks the year; the other fields come
+out the same way, with a shift and a mask.
+
+A reply shorter than the fixed header is \cmd{ULTIMATE\_ERR\_PROTOCOL}, because
+a size read out of half of its four bytes would look like a real answer.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/dosinfo.s};
+\cmd{include/uci\_protocol.h}}
+
+\section{Rename And Copy A File}
+
+\begin{listingbox}
+err = ultimate\_rename("old.txt", "new.txt");\
+err = ultimate\_copy("new.txt", "backup.txt");
+\end{listingbox}
+
+\begin{outputbox}
+OLD.TXT becomes NEW.TXT; BACKUP.TXT is a copy of it.
+\end{outputbox}
+
+Both names are in the current directory unless they carry a path. The Ultimate
+performs the copy itself, so no bytes pass through the C64 and a large file
+costs no more C64 time than a small one.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/dosinfo.s}}
 
 \section{Load And Save C64 Memory}
 
@@ -362,6 +459,170 @@ the explicit-address form. Both consume the header, and
 \cmd{ultimate\_save()} replaces a file with the named C64 memory range.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/file.s}}
+
+\section{Mount A Disk Image}
+
+The Ultimate emulates disk drives, and mounting puts a disk image file into
+one of them. The drive is named by the number it answers to on the serial bus,
+8 or 9, rather than by a slot. That bus is the IEC bus, after the
+International Electrotechnical Commission, and the number is the one a BASIC
+program gives in \bas{load"name",8}.
+
+\begin{listingbox}
+err = ultimate\_mount(8, "games/pitfall.d64");\
+err = ultimate\_swap(8);\
+err = ultimate\_unmount(8);\
+\
+err = ultimate\_mount(ULTIMATE\_DRIVE\_LAST, "demo.d64");
+\end{listingbox}
+
+\begin{outputbox}
+PITFALL.D64 is mounted in the drive answering as device 8.
+\end{outputbox}
+
+The firmware picks the image type from the extension. \cmd{.D64}, \cmd{.D71}
+and \cmd{.D81} hold the sectors of a 1541, 1571 and 1581 disk; \cmd{.G64} and
+\cmd{.G71} hold the raw track data that a copy-protected disk needs. Any other
+extension is refused.
+
+\cmd{ultimate\_swap()} steps to the next image of a multi-image set, the way
+the Ultimate's own menu does.
+
+\cmd{ULTIMATE\_DRIVE\_LAST} is zero, and asks for whichever drive was mounted
+into last, or drive~A when nothing has been. A program that uses it works
+without knowing how its user configured the machine, and
+\cmd{ultimate\_drive\_info()} reports the numbers actually in use.
+
+A drive that is switched off does not exist as far as these calls are
+concerned; mounting into one returns \cmd{ULTIMATE\_ERR\_DEVICE}. The next
+section switches drives on.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/disk.s}}
+
+\Needspace{26\baselineskip}
+\section{Control The Machine And Its Drives}
+
+\begin{listingbox}
+ultimate\_drives drives;\
+uint8\_t running;\
+uint8\_t i;\
+\
+err = ultimate\_drive\_info(\&drives);\
+if (err == ULTIMATE\_OK)\
+\hspace*{1em}for (i = 0; i < drives.count; ++i)\
+\hspace*{2em}printf("type \%u device \%u power \%u\textbackslash n",\
+\hspace*{3em}drives.drive[i].type, drives.drive[i].device,\
+\hspace*{3em}drives.drive[i].power);\
+\
+err = ultimate\_drive\_enable(ULTIMATE\_DRIVE\_A, 1);\
+err = ultimate\_drive\_power(ULTIMATE\_DRIVE\_A, \&running);
+\end{listingbox}
+
+\begin{outputbox}
+TYPE 0 DEVICE 8 POWER 1\\
+TYPE 2 DEVICE 9 POWER 0\\
+running = 1
+\end{outputbox}
+
+\cmd{ultimate\_drive\_info()} fills in every drive the machine has.
+\cmd{type} is a \cmd{CTRL\_DRVTYPE\_*} code: 0 for a 1541, 1 for a 1571, 2 for
+a 1581, and \cmd{\$0F} for SoftwareIEC. \cmd{device} is the number to give
+\cmd{ultimate\_mount()}. \cmd{power} is 1 while the drive is running.
+
+\cmd{ultimate\_drive\_enable()} switches a drive on with a non-zero second
+argument and off with zero. \cmd{ultimate\_drive\_power()} reports the same
+state through a pointer, which may not be \cmd{NULL}.
+
+\begin{note}
+Two numbering schemes meet here. \cmd{ultimate\_drive\_enable()} and
+\cmd{ultimate\_drive\_power()} take \cmd{ULTIMATE\_DRIVE\_A} or
+\cmd{ULTIMATE\_DRIVE\_B}, which name a physical drive.
+\cmd{ultimate\_mount()} takes the device number the drive answers to on the IEC
+bus. \cmd{ultimate\_drive\_info()} connects the two: each record carries both.
+\end{note}
+
+\subsection*{Reset the machine, or open its menu}
+
+\begin{listingbox}
+err = ultimate\_freeze();\
+err = ultimate\_reboot();\
+/* nothing after this line runs */
+\end{listingbox}
+
+\begin{warning}
+\cmd{ultimate\_reboot()} resets the C64. The program that called it stops
+existing part way through the call, so no line after it runs.
+\cmd{ultimate\_freeze()} stops the C64 and shows the Ultimate's menu. It
+returns when whoever is at the keyboard leaves that menu, which can be minutes.
+\end{warning}
+
+\subsection*{Read the RAM disk layout}
+
+\begin{listingbox}
+uint8\_t ramdisk[CTRL\_RAMDISK\_BYTES];\
+\
+err = ultimate\_ramdisk\_info(ramdisk);
+\end{listingbox}
+
+\begin{outputbox}
+ramdisk holds four two-byte records.
+\end{outputbox}
+
+The reply is \cmd{CTRL\_RAMDISK\_DRIVES} records of a drive type code and a
+size in 64K units, so the buffer must hold \cmd{CTRL\_RAMDISK\_BYTES}. A type
+of zero is a slot with nothing in it. These are the RAM disks GEOS MegaPatch
+uses.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/control.s};
+\cmd{include/uci\_protocol.h}}
+
+\section{Read And Set The Clock}
+
+The Ultimate has a battery-backed clock. It hands the time back as text,
+because text is what the firmware formats; nothing in the SDK parses it back
+into numbers.
+
+\begin{listingbox}
+char now[ULTIMATE\_TIME\_BUFFER];\
+uint16\_t length;\
+\
+err = ultimate\_get\_time(ULTIMATE\_TIME\_PLAIN,\
+\hspace*{2em}now, sizeof now, \&length);\
+if (err == ULTIMATE\_OK) puts(now);\
+\
+err = ultimate\_get\_time(ULTIMATE\_TIME\_WEEKDAY,\
+\hspace*{2em}now, sizeof now, NULL);\
+if (err == ULTIMATE\_OK) puts(now);
+\end{listingbox}
+
+\begin{outputbox}
+2026/08/22 14:30:00\\
+SAT 2026/08/22 14:30:00
+\end{outputbox}
+
+\cmd{ULTIMATE\_TIME\_PLAIN} asks for the date and time;
+\cmd{ULTIMATE\_TIME\_WEEKDAY} puts the weekday in front of it.
+\cmd{ULTIMATE\_TIME\_BUFFER} is a buffer size that fits either form. The final
+parameter is optional in the usual way. A buffer too small for the answer
+still returns \cmd{ULTIMATE\_OK}, with the part that fitted, as
+\cmd{ultimate\_getpath()} does.
+
+\subsection*{Set it}
+
+\begin{listingbox}
+err = ultimate\_set\_time(126, 8, 22, 14, 30, 0);
+\end{listingbox}
+
+\begin{outputbox}
+The clock is set to 2026/08/22 14:30:00.
+\end{outputbox}
+
+Setting takes numbers rather than text, in the order year, month, day, hour,
+minute, second. The year is the year less 1900, so 2026 is 126. That is the
+firmware's own encoding. The other five fields are the numbers they appear to
+be.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/clock.s}}
 
 \section{Move Bytes Through The REU}
 
@@ -446,10 +707,42 @@ mac = six bytes; ipconfig = twelve bytes
 \end{outputbox}
 
 The count call reports available interfaces. The next two calls read the
-six-byte MAC address and twelve-byte IPv4 configuration for interface zero into
-caller-owned buffers.
+six-byte MAC address and the twelve-byte IPv4 configuration for interface zero
+into caller-owned buffers. MAC stands for Media Access Control, and the address
+is the one built into the interface.
+
+\subsection*{Change an interface's address}
+
+\begin{listingbox}
+err = ultimate\_net\_ipconfig(0, ipconfig);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}ipconfig[3] = 60;\
+\hspace*{1em}err = ultimate\_net\_setip(0, ipconfig);\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+The interface keeps its netmask and gateway and answers on .60 instead.
+\end{outputbox}
+
+The block \cmd{ultimate\_net\_setip()} writes is the one
+\cmd{ultimate\_net\_ipconfig()} hands out: four bytes of address, then four of
+netmask, then four of gateway. Read the block, change the part you want and
+write it back.
+
+This changes the running configuration only. Nothing is written to the
+Ultimate's stored settings, and the machine is already on the network by the
+time a C64 program runs. Neither the firmware nor the SDK checks the address
+against anything else on the segment.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/net.s}}
 
 \section{Use TCP And UDP Sockets}
+
+TCP, the Transmission Control Protocol, carries an ordered stream over a
+connection. UDP, the User Datagram Protocol, sends separate messages with no
+connection and no ordering. Both are opened the same way here and both give
+back a handle.
 
 \begin{listingbox}
 uint8\_t handle;\
@@ -514,27 +807,18 @@ C64 character set. \cmd{got} is the body bytes retained; a larger body returns
 
 \section{Build A Multi-step HTTP Request}
 
-This example reuses \cmd{url}, \cmd{reply} and \cmd{got} from the preceding
-one.
+Opening the request yourself is what adding a header needs. This example
+reuses \cmd{url}, \cmd{reply} and \cmd{got} from the preceding one.
 
 \begin{listingbox}
 uint8\_t request;\
 uint8\_t close\_err;\
-uint8\_t body\_handle; /* returned by raw HTTP body commands */\
 \
 err = ultimate\_http\_open(HTTP\_VERB\_GET, url, \&request);\
 if (err == ULTIMATE\_OK) \{\
 \hspace*{1em}err = ultimate\_http\_header(request, "accept: text/plain");\
 \hspace*{1em}if (err == ULTIMATE\_OK)\
-\hspace*{1em}err = ultimate\_http\_exchange(request, HTTP\_BODY\_NONE,\
-\hspace*{3em}reply, sizeof reply, \&got);\
-\hspace*{1em}close\_err = ultimate\_http\_close(request);\
-\hspace*{1em}if (err == ULTIMATE\_OK) err = close\_err;\
-\}\
-\
-err = ultimate\_http\_open(HTTP\_VERB\_POST, url, \&request);\
-if (err == ULTIMATE\_OK) \{\
-\hspace*{1em}err = ultimate\_http\_exchange(request, body\_handle,\
+\hspace*{2em}err = ultimate\_http\_exchange(request, HTTP\_BODY\_NONE,\
 \hspace*{3em}reply, sizeof reply, \&got);\
 \hspace*{1em}close\_err = ultimate\_http\_close(request);\
 \hspace*{1em}if (err == ULTIMATE\_OK) err = close\_err;\
@@ -544,18 +828,138 @@ err = ultimate\_http\_free\_all();
 \end{listingbox}
 
 \begin{outputbox}
-GET WITHOUT BODY: RESPONSE STORED\\
-POST WITH BODY HANDLE: RESPONSE STORED\\
+GET WITH ONE HEADER: RESPONSE STORED\\
 ALL HTTP OBJECTS FREED
 \end{outputbox}
 
-Open returns the request handle used by header, exchange and close. The first
-exchange explicitly passes \cmd{HTTP\_BODY\_NONE}; the second shows the
-optional body-handle form. Body construction itself uses raw UCI commands.
-Always close a handle you own. \cmd{ultimate\_http\_free\_all()} is the recovery
-call for slots abandoned by an earlier program.
+\cmd{ultimate\_http\_open()} returns the request handle that header, exchange
+and close all use. \cmd{HTTP\_VERB\_GET} is one of the \cmd{HTTP\_VERB\_*}
+codes; \cmd{HTTP\_VERB\_POST}, \cmd{HTTP\_VERB\_PUT} and the rest are in
+\cmd{uci\_protocol.h}. The header line is one string in \cmd{key: value} form.
+
+This request sends no body, so the exchange is given
+\cmd{HTTP\_BODY\_NONE}. The next section builds a body and passes its handle
+there instead.
+
+Close every handle you open. \cmd{ultimate\_http\_free\_all()} recovers slots
+that an earlier program abandoned.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/http.s}}
+
+\Needspace{30\baselineskip}
+\section{Build A Request Body}
+
+A POST or a PUT needs a body. The body is built inside the Ultimate rather than
+in C64 memory: create a slot, add one field at a time, then give its handle to
+\cmd{ultimate\_http\_exchange()}. Only one key and one value are in C64 memory
+at any moment, which is what lets a 38K machine post an object larger than it
+could hold.
+
+\begin{reftable}{lp{0.54\linewidth}}
+\cmd{HTTP\_BODY\_JSON\_OBJECT} & a JSON object \\
+\cmd{HTTP\_BODY\_JSON\_ARRAY} & a JSON array \\
+\cmd{HTTP\_BODY\_URL\_ENCODED} & form encoding, as an HTML form sends it \\
+\cmd{HTTP\_BODY\_BINARY} & raw bytes \\
+\cmd{HTTP\_BODY\_NONE} & no body; pass this to the exchange \\
+\end{reftable}
+
+JSON is JavaScript Object Notation, the text format most web services take.
+
+\begin{listingbox}
+/* Explicit bytes, so cc65 does not change their case. */\
+static const char k\_name[] = \{0x6e,0x61,0x6d,0x65,0\};\
+static const char k\_score[] = \{0x73,0x63,0x6f,0x72,0x65,0\};\
+static const char v\_ada[] = \{0x41,0x44,0x41,0\};\
+uint8\_t body;\
+uint8\_t request;\
+\
+err = ultimate\_http\_body(HTTP\_BODY\_JSON\_OBJECT, \&body);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{1em}err = ultimate\_http\_body\_string(body, k\_name, v\_ada);\
+\hspace*{1em}err = ultimate\_http\_body\_int(body, k\_score, 4200);\
+\
+\hspace*{1em}err = ultimate\_http\_open(HTTP\_VERB\_POST, url, \&request);\
+\hspace*{1em}if (err == ULTIMATE\_OK) \{\
+\hspace*{2em}err = ultimate\_http\_exchange(request, body,\
+\hspace*{3em}reply, sizeof reply, \&got);\
+\hspace*{2em}ultimate\_http\_close(request);\
+\hspace*{1em}\}\
+\hspace*{1em}ultimate\_http\_body\_free(body);\
+\}
+\end{listingbox}
+
+\begin{outputbox}
+POSTED \{"name":"ADA","score":4200\}; the reply is in reply.
+\end{outputbox}
+
+Keys and string values go on the wire as given, and cc65 changes the case of a
+plain C literal exactly as it does for a URL. Build them as bytes, or fold the
+case back at run time.
+
+\subsection*{Add a boolean, and nest a container}
+
+\begin{listingbox}
+err = ultimate\_http\_body\_bool(body, k\_alive, 1);\
+\
+err = ultimate\_http\_body\_object(body, k\_stats);\
+err = ultimate\_http\_body\_int(body, k\_score, 4200);\
+err = ultimate\_http\_body\_up(body);\
+err = ultimate\_http\_body\_int(body, k\_lives, 3);\
+\
+err = ultimate\_http\_body\_array(body, k\_runs);\
+err = ultimate\_http\_body\_int(body, k\_score, 1);\
+err = ultimate\_http\_body\_up(body);
+\end{listingbox}
+
+\begin{outputbox}
+\{"alive":true,"stats":\{"score":4200\},"lives":3,"runs":[1]\}
+\end{outputbox}
+
+Adding an object or an array enters it. Every key added afterwards goes inside,
+until \cmd{ultimate\_http\_body\_up()} steps back out to the parent. Inside an
+array the key is ignored, so the value alone is what is added. Any non-zero
+value is true.
+
+\subsection*{Send raw bytes instead}
+
+\begin{listingbox}
+static const uint8\_t block[] = \{1,2,3,4\};\
+\
+err = ultimate\_http\_body(HTTP\_BODY\_BINARY, \&body);\
+err = ultimate\_http\_body\_binary(body, block, sizeof block);\
+err = ultimate\_http\_body\_binary(body, block, sizeof block);\
+\
+err = ultimate\_http\_body\_clear(body);\
+err = ultimate\_http\_body\_free(body);
+\end{listingbox}
+
+\begin{outputbox}
+The body holds eight bytes, then none; the slot is returned.
+\end{outputbox}
+
+Successive calls to \cmd{ultimate\_http\_body\_binary()} append.
+\cmd{ultimate\_http\_body\_clear()} empties a body and keeps the slot and its
+format; \cmd{ultimate\_http\_body\_free()} returns the slot.
+
+A \cmd{HTTP\_BODY\_BINARY} body takes \cmd{ultimate\_http\_body\_binary()} and
+nothing else, and the JSON and form formats take everything else. The firmware
+answers the wrong combination with \cmd{ULTIMATE\_ERR\_DEVICE}.
+
+A key is copied through a staging buffer, so it is limited to
+\cmd{ULTIMATE\_HTTP\_KEY\_MAX} bytes, which is 34. A longer key returns
+\cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT} and never reaches the wire. Values are
+not limited by that buffer, and a string value is at most 255 bytes, which is
+the firmware's own length byte.
+
+\begin{warning}
+The firmware has sixteen slots for the whole machine, and a program that
+crashes returns none of them. Free every body and every request you create.
+\cmd{ultimate\_http\_free\_all()} takes back headers and bodies together, and is
+how a program recovers slots an earlier one abandoned.
+\end{warning}
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/httpbody.s};
+\cmd{include/uci\_protocol.h}}
 
 \section{Probe And Configure The Raw Transport}
 
@@ -629,11 +1033,10 @@ GET_HWINFO: reply contains model name
 
 The identify request has no arguments: zero initialization leaves
 \cmd{args}, \cmd{payload} and their lengths empty. The time request supplies
-its optional format byte. The deprecated hardware-info request is first sent without its
-optional selector, then with \cmd{CTRL\_HWINFO\_MODEL}; both forms request the
-model. It is shown to make the optional wire form explicit, not as a
-recommendation for new commands. A payload is a second independent span; set
-it only when required.
+its optional format byte. The hardware-info request is sent first without its
+optional selector and then with \cmd{CTRL\_HWINFO\_MODEL}; both forms request
+the model, which is what an omitted optional argument means on the wire. A
+payload is a second independent span; set it only when required.
 
 To discard reply data or status deliberately, leave the corresponding pointer
 and capacity zero:
@@ -703,4 +1106,4 @@ empty DOS status = ULTIMATE_OK
 \end{outputbox}
 
 \evidence{\cmd{include/uci.h}; \cmd{src/uci/uci\_core.s};
-\cmd{src/uci/status.s}}
+\cmd{bindings/cc65/ultimate\_cc65.s}}

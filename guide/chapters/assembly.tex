@@ -59,8 +59,9 @@ therefore appear in lowercase source below but reach the firmware in uppercase.
 
 The SDK's zero-page block starts at \cmd{UCI\_ZP}, which defaults to
 \cmd{\$FB}. Its size is \cmd{UCI\_ZP\_SIZE}. The normal variable block occupies
-\cmd{UCI\_VARS\_SIZE} bytes in BSS. Define both bases when assembling every SDK
-source to choose fixed locations:
+\cmd{UCI\_VARS\_SIZE} bytes in the BSS segment, which is where the linker puts
+variables that have no starting value. Define both bases when assembling every
+SDK source to choose fixed locations instead:
 
 \begin{listingbox}
 ca65 -D UCI\_VARS=\$CF00 -D UCI\_ZP=\$A3 uci\_core.s
@@ -168,10 +169,10 @@ compatibility.
 \
 \hspace*{2em}lda sid\_info + ULTIMATE\_SID\_INFO\_COUNT\
 \hspace*{2em}; iterate this many ULTIMATE_SID_RECORD_SIZE-byte records\
-\hspace*{2em}ldx \#ULTIMATE\_SID\_INFO\_RECORDS + ULTIMATE\_SID\_PRIMARY\_ADDRESS\
-\hspace*{2em}lda sid\_info,x\
+\hspace*{2em}ldx \#ULTIMATE\_SID\_INFO\_RECORDS\
+\hspace*{2em}lda sid\_info + ULTIMATE\_SID\_PRIMARY\_ADDRESS,x\
 \hspace*{2em}sta first\_sid\_address\
-\hspace*{2em}lda sid\_info + 1,x\
+\hspace*{2em}lda sid\_info + ULTIMATE\_SID\_PRIMARY\_ADDRESS + 1,x\
 \hspace*{2em}sta first\_sid\_address + 1\
 \
 sid\_info:          .res ULTIMATE\_SID\_INFO\_SIZE\
@@ -348,6 +349,24 @@ Each readdir releases one reply block and writes attributes to
 \cmd{ult\_attrib}. Issue no other command inside the walk. Call
 \cmd{uci\_abort} if leaving before \cmd{ULTIMATE\_END}.
 
+\subsection*{Make a directory, and return to the configured one}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, dir\_name\
+\hspace*{2em}jsr ultimate\_mkdir\
+\
+\hspace*{2em}jsr ultimate\_home\
+\
+dir\_name: .byte "saves", 0
+\end{listingbox}
+
+\begin{outputbox}
+SAVES is created; A = ULTIMATE_OK from each call.
+\end{outputbox}
+
+\cmd{ultimate\_mkdir} takes the terminated name through \cmd{ult\_buf} and
+measures it itself. \cmd{ultimate\_home} takes nothing at all.
+
 \evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/dos.s}}
 
 \section{Open, Seek, Read, Write And Close Files}
@@ -432,6 +451,95 @@ name after the file is closed.
 
 \evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/dos.s}}
 
+\Needspace{28\baselineskip}
+\section{Ask What A File Is}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, stat\_name\
+\hspace*{2em}setptr ult\_arg2, file\_info\
+\hspace*{2em}jsr ultimate\_stat\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+\hspace*{2em}lda file\_info + DOS\_INFO\_SIZE\
+\hspace*{2em}sta file\_size\
+\hspace*{2em}lda file\_info + DOS\_INFO\_SIZE + 1\
+\hspace*{2em}sta file\_size + 1\
+\hspace*{2em}lda file\_info + DOS\_INFO\_ATTRIB\
+\hspace*{2em}and \#DOS\_ATTR\_DIR\
+\hspace*{2em}bne is\_a\_directory\
+\
+stat\_name: .byte "readme.txt", 0\
+file\_info: .res ULTIMATE\_FILEINFO\_SIZE\
+file\_size: .res 2
+\end{listingbox}
+
+\begin{outputbox}
+file_info holds the reply; the name inside it is NUL-terminated.
+\end{outputbox}
+
+\cmd{ult\_buf} is the name and \cmd{ult\_arg2} is the block the reply is
+received into. That block must be \cmd{ULTIMATE\_FILEINFO\_SIZE} bytes.
+\cmd{ult\_buflen} is not an input here: \cmd{ultimate\_stat} measures the name
+itself and overwrites \cmd{ult\_buflen} doing it.
+
+\cmd{ultimate\_fstat} asks the same question about the file
+\cmd{ultimate\_open} left open, so it takes only the block:
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_arg2, file\_info\
+\hspace*{2em}jsr ultimate\_fstat
+\end{listingbox}
+
+\begin{outputbox}
+file_info describes the open file; ult_buf is not read.
+\end{outputbox}
+
+The \cmd{DOS\_INFO\_*} equates in \cmd{uci\_protocol.inc} name the fields
+inside the block:
+
+\begin{reftable}{lp{0.60\linewidth}}
+\cmd{DOS\_INFO\_SIZE} & \cmd{+\$00}, size in bytes, 32-bit, low byte first \\
+\cmd{DOS\_INFO\_DATE} & \cmd{+\$04}, year less 1980 in bits 15--9, month 8--5, day 4--0 \\
+\cmd{DOS\_INFO\_TIME} & \cmd{+\$06}, hour 15--11, minute 10--5, two-second units 4--0 \\
+\cmd{DOS\_INFO\_EXTENSION} & \cmd{+\$08}, three bytes, space padded \\
+\cmd{DOS\_INFO\_ATTRIB} & \cmd{+\$0B}, the \cmd{DOS\_ATTR\_*} bits \\
+\cmd{DOS\_INFO\_NAME} & \cmd{+\$0C}, the name, terminated by the SDK \\
+\end{reftable}
+
+Date and time are the packed forms used by FAT, the File Allocation Table
+filesystem the Ultimate's storage uses, and they arrive unconverted.
+
+\evidence{\cmd{bindings/asm/ultimate.inc}; \cmd{src/uci/dosinfo.s};
+\cmd{bindings/asm/uci\_protocol.inc}}
+
+\section{Rename And Copy A File}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, old\_name\
+\hspace*{2em}setptr ult\_arg2, new\_name\
+\hspace*{2em}jsr ultimate\_rename\
+\
+\hspace*{2em}setptr ult\_buf, new\_name\
+\hspace*{2em}setptr ult\_arg2, copy\_name\
+\hspace*{2em}jsr ultimate\_copy\
+\
+old\_name:  .byte "old.txt", 0\
+new\_name:  .byte "new.txt", 0\
+copy\_name: .byte "backup.txt", 0
+\end{listingbox}
+
+\begin{outputbox}
+OLD.TXT becomes NEW.TXT; BACKUP.TXT is a copy of it.
+\end{outputbox}
+
+Both take the first name in \cmd{ult\_buf} and the second in \cmd{ult\_arg2}.
+The request block carries two spans and these commands put three runs of bytes
+on the wire, so the first name's own terminator separates it from the second.
+The Ultimate performs the copy, so no bytes pass through the C64.
+
+\evidence{\cmd{bindings/asm/ultimate.inc}; \cmd{src/uci/dosinfo.s}}
+
 \section{Load And Save C64 Memory}
 
 \begin{listingbox}
@@ -472,6 +580,198 @@ end in \cmd{A}/\cmd{X}. Bload consumes no header and obeys \cmd{ult\_max}; save
 uses \cmd{ult\_max} as its length.
 
 \evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/file.s}}
+
+\section{Mount A Disk Image}
+
+The drive is named by the number it answers to on the IEC serial bus, 8 or 9,
+rather than by a slot. \cmd{ULTIMATE\_DRIVE\_LAST} is zero and asks for
+whichever drive was mounted into last, or drive~A when nothing has been.
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, image\_name\
+\hspace*{2em}lda \#8\
+\hspace*{2em}jsr ultimate\_mount\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+\hspace*{2em}lda \#8\
+\hspace*{2em}jsr ultimate\_swap\
+\
+\hspace*{2em}lda \#8\
+\hspace*{2em}jsr ultimate\_unmount\
+\
+image\_name: .byte "games/pitfall.d64", 0
+\end{listingbox}
+
+\begin{outputbox}
+PITFALL.D64 is mounted, swapped and unmounted; A = ULTIMATE_OK each time.
+\end{outputbox}
+
+The device number goes in \cmd{A} and is reloaded before each call, because
+every entry point returns its result there. \cmd{ultimate\_mount} takes the
+image name through \cmd{ult\_buf} and measures it itself.
+
+The firmware picks the image type from the extension: \cmd{.D64}, \cmd{.D71}
+and \cmd{.D81} hold the sectors of a 1541, 1571 and 1581 disk, and \cmd{.G64}
+and \cmd{.G71} hold raw track data. Mounting into a drive that is switched off
+returns \cmd{ULTIMATE\_ERR\_DEVICE}.
+
+\evidence{\cmd{bindings/asm/ultimate.inc}; \cmd{src/uci/disk.s};
+\cmd{docs/uci.md}}
+
+\Needspace{30\baselineskip}
+\section{Control The Machine And Its Drives}
+
+\begin{listingbox}
+\hspace*{2em}lda \#<drives\
+\hspace*{2em}ldx \#>drives\
+\hspace*{2em}jsr ultimate\_drive\_info\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\hspace*{2em}lda drives + CTRL\_DRVINFO\_COUNT\
+\hspace*{2em}beq no\_drives\
+\hspace*{2em}lda drives + CTRL\_DRVINFO\_FIRST + 1\
+\hspace*{2em}sta first\_device\
+\
+\hspace*{2em}lda \#ULTIMATE\_DRIVE\_A\
+\hspace*{2em}ldx \#1\
+\hspace*{2em}jsr ultimate\_drive\_enable\
+\
+\hspace*{2em}lda \#ULTIMATE\_DRIVE\_A\
+\hspace*{2em}jsr ultimate\_drive\_power\
+\hspace*{2em}lda ult\_stage\
+\hspace*{2em}beq drive\_is\_off\
+\
+drives:       .res CTRL\_DRVINFO\_BYTES\
+first\_device: .res 1
+\end{listingbox}
+
+\begin{outputbox}
+drives holds a count and one record per drive; ult_stage = 1 when it runs.
+\end{outputbox}
+
+\cmd{ultimate\_drive\_info} takes the block pointer in \cmd{A}/\cmd{X}. The
+block is a count at \cmd{CTRL\_DRVINFO\_COUNT}, then
+\cmd{CTRL\_DRVINFO\_RECORD} bytes per drive from \cmd{CTRL\_DRVINFO\_FIRST}:
+type, then the IEC device number, then 1 while the drive is running. On any
+failure the count is set to zero, so a caller that skips the result check reads
+no records.
+
+\cmd{ultimate\_drive\_enable} takes the drive in \cmd{A} and the state in
+\cmd{X}: zero switches it off, and any non-zero value switches it on.
+\cmd{ultimate\_drive\_power} takes the drive in \cmd{A} and reports the state
+in \cmd{ult\_stage}, which is 1 while the drive runs.
+
+\begin{note}
+Two numbering schemes meet here. \cmd{ultimate\_drive\_enable} and
+\cmd{ultimate\_drive\_power} take \cmd{ULTIMATE\_DRIVE\_A} or
+\cmd{ULTIMATE\_DRIVE\_B}, which name a physical drive.
+\cmd{ultimate\_mount} takes the device number the drive answers to on the IEC
+bus. \cmd{ultimate\_drive\_info} connects the two: each record carries both.
+\end{note}
+
+\begin{warning}
+\cmd{ultimate\_drive\_power} writes the flag to \cmd{ult\_stage} and uses
+\cmd{ult\_stage + 1} to \cmd{ult\_stage + 3} as scratch. Read the flag before
+the next SDK call.
+\end{warning}
+
+\subsection*{Reset the machine, or open its menu}
+
+\begin{listingbox}
+\hspace*{2em}jsr ultimate\_freeze\
+\
+\hspace*{2em}jsr ultimate\_reboot\
+\hspace*{2em}; nothing here runs
+\end{listingbox}
+
+\begin{outputbox}
+freeze returns when the menu is left; reboot does not return.
+\end{outputbox}
+
+\cmd{ultimate\_reboot} resets the C64, so the program calling it stops existing
+part way through the call. \cmd{ultimate\_freeze} stops the C64 and shows the
+Ultimate's menu, and returns when whoever is at the keyboard leaves it.
+
+\subsection*{Read the RAM disk layout}
+
+\begin{listingbox}
+\hspace*{2em}lda \#<ramdisk\
+\hspace*{2em}ldx \#>ramdisk\
+\hspace*{2em}jsr ultimate\_ramdisk\_info\
+\
+ramdisk: .res CTRL\_RAMDISK\_BYTES
+\end{listingbox}
+
+\begin{outputbox}
+ramdisk holds CTRL_RAMDISK_DRIVES two-byte records.
+\end{outputbox}
+
+Each record is a drive type code and a size in 64K units. A type of zero is a
+slot with nothing in it. These are the RAM disks GEOS MegaPatch uses.
+
+\evidence{\cmd{bindings/asm/ultimate.inc}; \cmd{src/uci/control.s};
+\cmd{docs/uci.md}}
+
+\Needspace{30\baselineskip}
+\section{Read And Set The Clock}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_buf, time\_text\
+\hspace*{2em}setword ult\_buflen, ULTIMATE\_TIME\_BUFFER\
+\hspace*{2em}setword ult\_outlen, 0\
+\hspace*{2em}lda \#ULTIMATE\_TIME\_PLAIN\
+\hspace*{2em}jsr ultimate\_get\_time\
+\
+time\_text: .res ULTIMATE\_TIME\_BUFFER
+\end{listingbox}
+
+\begin{outputbox}
+time_text = "2026/08/22 14:30:00"
+\end{outputbox}
+
+\cmd{A} is the format. \cmd{ULTIMATE\_TIME\_PLAIN} asks for the date and time
+and \cmd{ULTIMATE\_TIME\_WEEKDAY} puts the weekday in front of it.
+\cmd{ULTIMATE\_TIME\_BUFFER} is a buffer size that fits either form. This is
+one of the few entry points that reads \cmd{ult\_buflen} as an input rather
+than computing it. A buffer too small still returns \cmd{ULTIMATE\_OK}, with
+the part that fitted.
+
+\subsection*{Set it}
+
+\begin{listingbox}
+\hspace*{2em}lda \#126\hspace{2em}; 2026, as the year less 1900\
+\hspace*{2em}sta ult\_stage + 0\
+\hspace*{2em}lda \#8\hspace{3em}; month\
+\hspace*{2em}sta ult\_stage + 1\
+\hspace*{2em}lda \#22\hspace{2em}; day\
+\hspace*{2em}sta ult\_stage + 2\
+\hspace*{2em}lda \#14\hspace{2em}; hour\
+\hspace*{2em}sta ult\_stage + 3\
+\hspace*{2em}lda \#30\hspace{2em}; minute\
+\hspace*{2em}sta ult\_stage + 4\
+\hspace*{2em}lda \#0\hspace{3em}; second\
+\hspace*{2em}sta ult\_stage + 5\
+\hspace*{2em}jsr ultimate\_set\_time
+\end{listingbox}
+
+\begin{outputbox}
+The clock is set to 2026/08/22 14:30:00; A = ULTIMATE_OK.
+\end{outputbox}
+
+The six bytes go in \cmd{ult\_stage} in that order. \cmd{ult\_stagelen} is not
+a caller input here; the command always sends six bytes.
+
+\begin{warning}
+\cmd{ult\_stage} is shared. \cmd{ultimate\_mount}, \cmd{ultimate\_unmount},
+\cmd{ultimate\_swap}, \cmd{ultimate\_get\_time},
+\cmd{ultimate\_drive\_info} and \cmd{ultimate\_http\_body} all overwrite
+\cmd{ult\_stage + 0}, and \cmd{ultimate\_drive\_power} and the keyed body calls
+overwrite more of it. Fill it immediately before \cmd{ultimate\_set\_time}.
+\end{warning}
+
+\evidence{\cmd{bindings/asm/ultimate.inc}; \cmd{src/uci/clock.s};
+\cmd{docs/uci.md}}
 
 \section{Move Bytes Through The REU}
 
@@ -609,6 +909,33 @@ ult_iface = interface count; mac receives 6 bytes; ipconfig receives 12.
 The count is returned in \cmd{ult\_iface}; the address calls take an interface
 index there and place fixed-size replies at \cmd{ult\_buf}.
 
+\subsection*{Change an interface's address}
+
+\begin{listingbox}
+\hspace*{2em}lda \#0\
+\hspace*{2em}sta ult\_iface\
+\hspace*{2em}setptr ult\_buf, ipconfig\
+\hspace*{2em}jsr ultimate\_net\_ipconfig\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+\hspace*{2em}lda \#60\
+\hspace*{2em}sta ipconfig + 3\
+\hspace*{2em}jsr ultimate\_net\_setip
+\end{listingbox}
+
+\begin{outputbox}
+The interface keeps its netmask and gateway and answers on .60 instead.
+\end{outputbox}
+
+\cmd{ultimate\_net\_setip} sends back the same twelve bytes
+\cmd{ultimate\_net\_ipconfig} returned: four of address, then four of netmask,
+then four of gateway. It reads \cmd{ult\_iface} and \cmd{ult\_buf}, and always
+sends twelve bytes, so \cmd{ult\_buflen} is not an input.
+
+This changes the running configuration only; nothing is written to the
+Ultimate's stored settings.
+
 \section{Use TCP And UDP Sockets}
 
 \begin{listingbox}
@@ -693,8 +1020,7 @@ do not close that ended handle.
 \
 url:           .byte "http://192.168.1.50/", 0\
 accept\_header: .byte "accept: text/plain", 0\
-http\_reply:    .res 512\
-body\_handle:   .res 1
+http\_reply:    .res 512
 \end{listingbox}
 
 \begin{outputbox}
@@ -727,7 +1053,60 @@ GET without a body stores response bytes; close returns ULTIMATE_OK.
 \end{outputbox}
 
 \Needspace{22\baselineskip}
-\subsection*{POST with a body handle}
+The one-call GET creates and releases its own slot. The multi-step form stores
+the request handle in \cmd{ult\_http}, and header, exchange and close all read
+it there. \cmd{ult\_body} holds the body handle, and
+\cmd{HTTP\_BODY\_NONE} in it means no body.
+\cmd{ultimate\_http\_free\_all} recovers slots abandoned by an earlier
+program.
+
+The next section creates a body and posts it.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/http.s}}
+
+\Needspace{32\baselineskip}
+\section{Build A Request Body}
+
+The body is built inside the Ultimate: create a slot, add to it one call at a
+time, then run the exchange. The handle lives in \cmd{ult\_body}, where
+\cmd{ultimate\_http\_exchange} already looks for it, so nothing has to carry it
+around.
+
+\begin{listingbox}
+\hspace*{2em}lda \#HTTP\_BODY\_JSON\_OBJECT\
+\hspace*{2em}jsr ultimate\_http\_body\
+\hspace*{2em}cmp \#ULTIMATE\_OK\
+\hspace*{2em}bne failed\
+\
+\hspace*{2em}setptr ult\_url, key\_name\
+\hspace*{2em}setptr ult\_buf, value\_ada\
+\hspace*{2em}jsr ultimate\_http\_body\_string\
+\
+\hspace*{2em}setptr ult\_url, key\_score\
+\hspace*{2em}setword ult\_val, 4200\
+\hspace*{2em}lda \#0\
+\hspace*{2em}sta ult\_val + 2\
+\hspace*{2em}sta ult\_val + 3\
+\hspace*{2em}jsr ultimate\_http\_body\_int\
+\
+key\_name:  .byte "name", 0\
+key\_score: .byte "score", 0\
+value\_ada: .byte "ada", 0
+\end{listingbox}
+
+\begin{outputbox}
+The body holds \{"NAME":"ADA","SCORE":4200\}.
+\end{outputbox}
+
+\cmd{ult\_url} is the key for every keyed call, and it is the same variable
+\cmd{ultimate\_http\_open} uses for a URL. \cmd{ult\_buf} is a string value.
+\cmd{ult\_val} is four bytes, low byte first, and all four are sent, because
+the firmware sign-extends from the last byte it receives.
+
+\cmd{ultimate\_http\_body\_bool} reads \cmd{ult\_val + 0} only, and any
+non-zero value is true.
+
+\subsection*{Send it}
 
 \begin{listingbox}
 \hspace*{2em}setptr ult\_url, url\
@@ -735,24 +1114,82 @@ GET without a body stores response bytes; close returns ULTIMATE_OK.
 \hspace*{2em}jsr ultimate\_http\_open\
 \hspace*{2em}cmp \#ULTIMATE\_OK\
 \hspace*{2em}bne failed\
-\hspace*{2em}lda body\_handle\
-\hspace*{2em}sta ult\_body\
+\
+\hspace*{2em}setptr ult\_buf, http\_reply\
+\hspace*{2em}setword ult\_buflen, 512\
 \hspace*{2em}jsr ultimate\_http\_exchange\
 \hspace*{2em}jsr ultimate\_http\_close\
-\
-\hspace*{2em}jsr ultimate\_http\_free\_all
+\hspace*{2em}jsr ultimate\_http\_body\_free
 \end{listingbox}
 
 \begin{outputbox}
-POST stores response bytes; close and free-all return ULTIMATE_OK.
+The response is in http_reply; ult_httplen is the number stored.
 \end{outputbox}
 
-The one-call GET creates and releases its own slot. The multi-step form stores
-the request handle in \cmd{ult\_http}; header, exchange and close use it there.
-The two exchange calls show the no-body and body-handle forms explicitly.
-\cmd{ultimate\_http\_free\_all} recovers slots abandoned by an earlier program.
+Set \cmd{ult\_buf} back to the reply buffer before the exchange. The keyed body
+calls used it for the last string value, and the exchange uses it for the
+reply.
 
-\evidence{\cmd{docs/asm-abi.md}; \cmd{src/uci/http.s}}
+\subsection*{Nest an object or an array}
+
+\begin{listingbox}
+\hspace*{2em}setptr ult\_url, key\_stats\
+\hspace*{2em}jsr ultimate\_http\_body\_object\
+\hspace*{2em}; keys added here go inside "stats"\
+\hspace*{2em}jsr ultimate\_http\_body\_up\
+\
+\hspace*{2em}setptr ult\_url, key\_runs\
+\hspace*{2em}jsr ultimate\_http\_body\_array\
+\hspace*{2em}; inside an array the key is ignored\
+\hspace*{2em}jsr ultimate\_http\_body\_up
+\end{listingbox}
+
+\begin{outputbox}
+\{"STATS":\{...\},"RUNS":[...]\}
+\end{outputbox}
+
+Adding an object or an array enters it. Every key added afterwards goes inside,
+until \cmd{ultimate\_http\_body\_up} steps back out to the parent.
+
+\subsection*{Send raw bytes instead}
+
+\begin{listingbox}
+\hspace*{2em}lda \#HTTP\_BODY\_BINARY\
+\hspace*{2em}jsr ultimate\_http\_body\
+\
+\hspace*{2em}setptr ult\_buf, block\
+\hspace*{2em}setword ult\_buflen, block\_end - block\
+\hspace*{2em}jsr ultimate\_http\_body\_binary\
+\
+\hspace*{2em}jsr ultimate\_http\_body\_clear\
+\hspace*{2em}jsr ultimate\_http\_body\_free\
+\
+block:     .byte 1, 2, 3, 4\
+block\_end:
+\end{listingbox}
+
+\begin{outputbox}
+The body holds four bytes, then none; the slot is returned.
+\end{outputbox}
+
+\cmd{ultimate\_http\_body\_binary} is the other entry that reads
+\cmd{ult\_buflen} as an input. Successive calls append.
+\cmd{ultimate\_http\_body\_clear} empties a body and keeps its slot and format;
+\cmd{ultimate\_http\_body\_free} returns the slot.
+
+A \cmd{HTTP\_BODY\_BINARY} body takes \cmd{ultimate\_http\_body\_binary} and
+nothing else; the JSON and form formats take everything else. A key is staged
+through \cmd{ult\_stage}, so it is limited to \cmd{ULTIMATE\_HTTP\_KEY\_MAX}
+bytes, which is 34. A longer key returns
+\cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT} and never reaches the wire.
+
+\begin{warning}
+The firmware has sixteen slots for the whole machine, and a program that
+crashes returns none of them. Free every body and every request.
+\cmd{ultimate\_http\_free\_all} takes back headers and bodies together.
+\end{warning}
+
+\evidence{\cmd{bindings/asm/ultimate.inc}; \cmd{src/uci/httpbody.s}}
 
 \section{Probe And Configure The Raw Transport}
 
@@ -830,9 +1267,9 @@ Both GET_HWINFO forms return the model name.
 \end{outputbox}
 
 Clearing the request leaves every optional span empty. The time command then
-supplies its optional format byte. Deprecated GET\_HWINFO is shown without and
-with its model selector only to demonstrate both wire forms. Set other spans
-only when needed.
+supplies its optional format byte. \cmd{GET\_HWINFO} is sent without and then
+with its model selector, which is what an omitted optional argument means on
+the wire. Set other spans only when needed.
 
 \subsection*{Use a caller-owned request block}
 
