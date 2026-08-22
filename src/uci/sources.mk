@@ -15,10 +15,15 @@ UCI_SRC := src/uci/uci_core.s \
            src/uci/ultimate.s \
            src/uci/palette.s \
            src/uci/dos.s \
+           src/uci/dosinfo.s \
+           src/uci/disk.s \
+           src/uci/clock.s \
+           src/uci/control.s \
            src/uci/file.s \
            src/uci/turbo.s \
            src/uci/reu.s \
            src/uci/net.s \
            src/uci/http.s \
+           src/uci/httpbody.s \
            src/uci/ultimate_strerror.s \
            bindings/asm/ultimate_asm.s

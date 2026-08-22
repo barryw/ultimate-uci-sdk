@@ -1,6 +1,6 @@
 ; relocharness.s - load the blob at one address, move it to another, call it.
 ;
-; The blob is built for $8000 and lives at $8000 in the test image. This moves
+; The blob is built for $7000 and lives at $7000 in the test image. This moves
 ; it to $6000 and exposes both t_reloc (the move) and t_call_init (a call
 ; through the moved jump table) to the suite. Completeness is proved there,
 ; not here: blob-relocated.suite compares the moved blob byte-for-byte against
@@ -23,7 +23,7 @@
         .export blob_table
         .export t_reloc, t_call_init, result
 
-BLOB_SRC = $8000
+BLOB_SRC = $7000
 BLOB_DST = $6000
 BLOB_PAGES = (BLOB_SIZE + $FF) / $100
 
@@ -33,13 +33,13 @@ result: .res 1
         .rodata
 ; Assembled from tests/emulator, so the path is relative to there.
 blob_table:
-        .incbin "../../bindings/blob/build/ultimate-8000.reloc"
+        .incbin "../../bindings/blob/build/ultimate-7000.reloc"
 
         .code
 
 _main:  rts
 
-; Copy the whole blob down to $8000, then fix up the addresses. One unrolled
+; Copy the whole blob down to $6000, then fix up the addresses. One unrolled
 ; page per page of the built binary, rounded up, so this cannot fall behind the
 ; SDK the way a fixed count did.
 ;
@@ -61,7 +61,7 @@ t_reloc:
 
         lda #<BLOB_DST
         ldx #>BLOB_DST
-        ldy #$E0                ; $60 - $80 = -$20 pages, as a byte add
+        ldy #$F0                ; $60 - $70 = -$10 pages, as a byte add
         jsr blob_relocate
         rts
 

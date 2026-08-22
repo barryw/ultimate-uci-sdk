@@ -65,3 +65,30 @@ UCI_STATIC_ASSERT(sid_record_size, sizeof(ultimate_sid), 5);
 UCI_STATIC_ASSERT(sid_count, offsetof(ultimate_sid_info, count), 0);
 UCI_STATIC_ASSERT(sid_records, offsetof(ultimate_sid_info, sid), 1);
 UCI_STATIC_ASSERT(sid_info_size, sizeof(ultimate_sid_info), 21);
+
+/*
+ * The file information reply is received directly into this structure, so its
+ * offsets are the firmware's own - DOS_INFO_* in uci_protocol.h, read out of
+ * t_dos_info in software/filemanager/dos.h.
+ */
+UCI_STATIC_ASSERT(info_size, offsetof(ultimate_fileinfo, size), DOS_INFO_SIZE);
+UCI_STATIC_ASSERT(info_date, offsetof(ultimate_fileinfo, date), DOS_INFO_DATE);
+UCI_STATIC_ASSERT(info_time, offsetof(ultimate_fileinfo, time), DOS_INFO_TIME);
+UCI_STATIC_ASSERT(info_ext, offsetof(ultimate_fileinfo, extension),
+                  DOS_INFO_EXTENSION);
+UCI_STATIC_ASSERT(info_attrib, offsetof(ultimate_fileinfo, attrib),
+                  DOS_INFO_ATTRIB);
+UCI_STATIC_ASSERT(info_name, offsetof(ultimate_fileinfo, name), DOS_INFO_NAME);
+UCI_STATIC_ASSERT(info_total, sizeof(ultimate_fileinfo),
+                  DOS_INFO_NAME + DOS_INFO_NAME_MAX + 1);
+
+/* The drive information reply is received the same way. */
+UCI_STATIC_ASSERT(drv_type, offsetof(ultimate_drive, type), 0);
+UCI_STATIC_ASSERT(drv_device, offsetof(ultimate_drive, device), 1);
+UCI_STATIC_ASSERT(drv_power, offsetof(ultimate_drive, power), 2);
+UCI_STATIC_ASSERT(drv_record, sizeof(ultimate_drive), CTRL_DRVINFO_RECORD);
+UCI_STATIC_ASSERT(drv_count, offsetof(ultimate_drives, count),
+                  CTRL_DRVINFO_COUNT);
+UCI_STATIC_ASSERT(drv_first, offsetof(ultimate_drives, drive),
+                  CTRL_DRVINFO_FIRST);
+UCI_STATIC_ASSERT(drv_total, sizeof(ultimate_drives), CTRL_DRVINFO_BYTES);

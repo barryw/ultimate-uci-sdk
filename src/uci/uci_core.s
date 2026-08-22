@@ -19,6 +19,7 @@
         .include "uci_protocol.inc"
         .include "uci_seg.inc"
         .include "uci_zp.inc"
+        .include "uci_vars.inc"
 
 ; ---------------------------------------------------------------------------
 
@@ -45,6 +46,7 @@
         .export ult_reu, ult_reulen
         .export ult_sock, ult_socklen, ult_iface, ult_port
         .export ult_url, ult_http, ult_body, ult_httplen
+        .export ult_arg2, ult_stage, ult_stagelen, ult_val
         .export uci_stat, uci_devcode
 
 ; ---------------------------------------------------------------------------
@@ -142,7 +144,15 @@ ult_http        = UCI_VARS + 95 + 2 * UCI_REQ_SIZE  ; verb in, header handle out
 ult_body        = UCI_VARS + 96 + 2 * UCI_REQ_SIZE  ; body handle, or HTTP_BODY_NONE
 ult_httplen     = UCI_VARS + 97 + 2 * UCI_REQ_SIZE  ; reply bytes stored
 
-.assert (99 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+; --- second string, and the staging buffer ---
+; Appended on the end, like everything before them, so that the offsets
+; bindings/blob/README.md publishes do not move.
+ult_arg2        = UCI_VARS + 99 + 2 * UCI_REQ_SIZE  ; a second caller string
+ult_stage       = UCI_VARS + 101 + 2 * UCI_REQ_SIZE ; ULT_STAGE_SIZE bytes
+ult_stagelen    = UCI_VARS + 101 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE
+ult_val         = UCI_VARS + 102 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE
+
+.assert (106 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
         .export uci_req
 
@@ -226,6 +236,16 @@ ult_url:        .res 2          ; URL, or a header line
 ult_http:       .res 1          ; verb in, header handle out
 ult_body:       .res 1          ; body handle, or HTTP_BODY_NONE
 ult_httplen:    .res 2          ; reply bytes stored
+
+; --- second string, and the staging buffer ---
+; The second string is what rename, copy and the HTTP body builder need and the
+; request block cannot hold: it has two spans, and those commands have three
+; runs of caller bytes.
+ult_arg2:       .res 2          ; a second caller string
+ult_stage:      .res ULT_STAGE_SIZE
+ult_stagelen:   .res 1          ; how much of it the command being built uses
+ult_val:        .res 4          ; a scalar argument: the HTTP body builder's
+                                ; integers and booleans
 
 .endif
 

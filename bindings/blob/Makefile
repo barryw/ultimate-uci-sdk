@@ -1,7 +1,7 @@
 # The SDK as a standalone binary with a jump table.
 #
-#   make                      -> ultimate-c000.bin at $C000
-#   make BASE=a000            -> ultimate-a000.bin at $A000
+#   make                      -> ultimate-7000.bin at $7000
+#   make BASE=6000            -> ultimate-6000.bin at $6000
 #   make VARS=53248 ZP=251    -> place the SDK's RAM elsewhere
 #
 # SPDX-License-Identifier: MIT
@@ -13,22 +13,24 @@ LD65   ?= ld65
 
 # Where the code goes, as four hex digits, and where its RAM goes, in decimal.
 #
-# **The default is the 8K at $8000, because the SDK no longer fits in 4K.**
-# It was $C000 until file.s landed and the code overflowed the block by 350
-# bytes; the link failed rather than overlapping the variables, which is what
-# blob.cfg.in is for.
+# **The default is $7000, because the SDK no longer fits in the 8K at $8000.**
+# It was $C000 until file.s landed and overflowed the 4K there by 350 bytes,
+# and $8000 until the DOS, disk, clock, machine and HTTP body services landed
+# and overflowed the 8K by 758. The link fails rather than overlapping the
+# variables, which is what blob.cfg.in is for.
 #
-# $8000-$9FFF is the right home for a blob: it is RAM with nothing mapped over
-# it, so a caller reaches every byte with the machine exactly as it found it.
-# That is the difference between the blob and the BASIC wedge, which put its
-# SDK at $A000 under BASIC ROM and pays a stub per call for it - the wedge can
-# bank, because the wedge is the only thing calling. A blob's caller cannot be
-# asked to.
+# The blob has to sit below $A000 and above the BASIC program area, because
+# $A000-$BFFF is BASIC ROM: a caller reaches every byte of a blob at $7000 with
+# the machine exactly as it found it, and would have to bank for one that ran
+# past $A000. That is the difference between the blob and the BASIC wedge,
+# which does put its SDK under BASIC ROM and pays a stub per call for it - the
+# wedge can bank, because the wedge is the only thing calling. A blob's caller
+# cannot be asked to.
 #
-# Everything here is still a link-time choice. Build it anywhere:
-#   make BASE=c000 VARS=53144      the old layout, which no longer fits
-#   make BASE=6000 VARS=32512      wherever suits the program using it
-BASE ?= 8000
+# Everything here is still a link-time choice. Build it anywhere there is room:
+#   make BASE=6000                 lower, for a program that wants $7000
+#   make BASE=6000 VARS=36864      wherever suits the program using it
+BASE ?= 7000
 VARS ?= 40704
 ZP   ?= 251
 
