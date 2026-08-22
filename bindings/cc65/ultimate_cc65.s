@@ -29,8 +29,15 @@
 ; On entry A/X holds statuslen; the C stack holds the status pointer at offset
 ; 0..1 and the target at offset 2.
 _uci_decode_status:
-        sta uci_dec_len         ; a status longer than 255 bytes cannot exist:
-                                ; the queue is 256 and only the prefix matters
+        ; The decoder counts in bytes. The status queue is 256 bytes, so a
+        ; length of exactly 256 is reachable and would arrive here as a low
+        ; byte of zero - which the decoder reads as an empty status, and an
+        ; empty status is success. Clamp instead: only the first four bytes
+        ; decide the encoding, so 255 decodes the same as 256 would.
+        cpx #$00
+        beq @fits
+        lda #$FF
+@fits:  sta uci_dec_len
         ldy #$00
         lda (sp),y
         sta uci_dec_ptr

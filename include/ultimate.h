@@ -78,6 +78,11 @@ uint8_t ultimate_available(void);
  * result. Returns ULTIMATE_OK even when some targets are missing - that is the
  * normal case on older firmware. Returns ULTIMATE_ERR_NO_DEVICE if there is no
  * interface at all.
+ *
+ * Probing borrows the shared buffer variables the assembly interface uses -
+ * ult_buf, ult_buflen and ult_outlen - so an assembly caller has to set them
+ * again after this returns. A C caller passes its buffers per call and never
+ * sees them.
  */
 uint8_t ultimate_detect(ultimate_capabilities *caps);
 
