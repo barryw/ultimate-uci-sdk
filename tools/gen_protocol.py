@@ -140,6 +140,8 @@ GROUPS = [
         ("DOS_CMD_SWAP_DISK",      0x25, ""),
         ("DOS_CMD_GET_TIME",       0x26, "fmt may be omitted; the target defaults it to $00"),
         ("DOS_CMD_SET_TIME",       0x27, "year is the year minus 1900"),
+        ("DOS_CMD_LOAD_RAMDISK",   0x41, "GEOS MegaPatch RAM disk; the firmware header spells it CTRL_CMD_LOAD_INTO_RAMDISK and puts it on this target"),
+        ("DOS_CMD_SAVE_RAMDISK",   0x42, "GEOS MegaPatch RAM disk; the firmware header spells it CTRL_CMD_SAVE_RAMDISK and puts it on this target"),
         ("DOS_CMD_ECHO",           0xF0, "Echo the command back as data"),
     ]),
 
@@ -148,6 +150,20 @@ GROUPS = [
         ("DOS_FA_WRITE",         0x02, "Open for writing, do not truncate"),
         ("DOS_FA_CREATE_NEW",    0x04, "Create/truncate to zero bytes"),
         ("DOS_FA_CREATE_ALWAYS", 0x08, "May overwrite an existing file"),
+    ]),
+
+    ("DOS file information reply", "Byte offsets into the reply of DOS_CMD_FILE_STAT "
+                                  "and DOS_CMD_FILE_INFO. The name is last, has no "
+                                  "terminator, and its length is the reply length "
+                                  "less DOS_INFO_NAME. Read from t_dos_info in "
+                                  "software/filemanager/dos.h.", [
+        ("DOS_INFO_SIZE",      0,  "file size, 32-bit little-endian"),
+        ("DOS_INFO_DATE",      4,  "FAT date, 16-bit little-endian"),
+        ("DOS_INFO_TIME",      6,  "FAT time, 16-bit little-endian"),
+        ("DOS_INFO_EXTENSION", 8,  "three bytes, space padded, not terminated"),
+        ("DOS_INFO_ATTRIB",   11,  "DOS_ATTR_* bits"),
+        ("DOS_INFO_NAME",     12,  "the name begins here"),
+        ("DOS_INFO_NAME_MAX", 63,  "longest name the firmware copies"),
     ]),
 
     ("DOS directory entry attributes", "First byte of each DOS_CMD_READ_DIR entry (FAT semantics).", [
@@ -162,6 +178,7 @@ GROUPS = [
     ("Network commands (target $03)", "", [
         ("NET_CMD_IDENTIFY",            0x01, ""),
         ("NET_CMD_GET_INTERFACE_COUNT", 0x02, ""),
+        ("NET_CMD_SET_INTERFACE",       0x03, "select the interface later commands act on"),
         ("NET_CMD_GET_NETADDR",         0x04, "replies with UCI_NET_MACADDR_BYTES"),
         ("NET_CMD_GET_IPADDR",          0x05, "replies with UCI_NET_IPCONFIG_BYTES, ip/mask/gw"),
         ("NET_CMD_SET_IPADDR",          0x06, "ipconfig must be exactly UCI_NET_IPCONFIG_BYTES"),
@@ -233,6 +250,28 @@ GROUPS = [
         ("CTRL_DRVTYPE_UNDECIDED", 0x03, ""),
         ("CTRL_DRVTYPE_SOFTIEC",  0x0F, ""),
         ("CTRL_DRVTYPE_PRINTER",  0x50, ""),
+    ]),
+
+    ("Control: drive information reply", "Layout of the CTRL_CMD_GET_DRVINFO reply: a "
+                                         "count, then one record per drive the machine "
+                                         "has. Read from control_target.cc.", [
+        ("CTRL_DRVINFO_COUNT",   0, "offset of the drive count"),
+        ("CTRL_DRVINFO_FIRST",   1, "offset of the first record"),
+        ("CTRL_DRVINFO_RECORD",  3, "bytes per record: type, IEC address, power"),
+        ("CTRL_DRVINFO_MAX",     2, "records the firmware can report"),
+        ("CTRL_DRVINFO_BYTES",   7, "longest reply: the count and two records"),
+    ]),
+
+    ("Control: RAM disk information reply", "Layout of the CTRL_CMD_GET_RAMDISKINFO "
+                                            "reply: four two-byte records, each a drive "
+                                            "type code and the size in 64K units.", [
+        ("CTRL_RAMDISK_DRIVES", 4, "records in the reply"),
+        ("CTRL_RAMDISK_BYTES",  8, "bytes in the reply"),
+    ]),
+
+    ("Control: drive power reply", "CTRL_CMD_GET_DRIVE_A_POWER and its B counterpart "
+                                   "answer with three ASCII bytes rather than a flag.", [
+        ("CTRL_POWER_BYTES", 3, "bytes in the reply: 'on ' or 'off'"),
     ]),
 
     ("SoftwareIEC commands (target $05)", "", [
@@ -417,7 +456,7 @@ GROUPS = [
     ("SDK memory footprint", "How much RAM the core needs, and where. All of it "
                              "is placeable: see UCI_ZP and UCI_VARS in docs/asm-abi.md.", [
         ("UCI_ZP_SIZE",   4,  "zero page bytes the core needs"),
-        ("UCI_VARS_SIZE", 143, "non-zero-page bytes the whole SDK needs"),
+        ("UCI_VARS_SIZE", 190, "non-zero-page bytes the whole SDK needs"),
     ]),
 
     ("ASCII literals", "Bytes that come off the wire are always written "
@@ -510,9 +549,14 @@ ARGS = {
     "DOS_CMD_SET_TIME":      [("byte", "year_1900"), ("byte", "month"),
                               ("byte", "day"), ("byte", "hour"),
                               ("byte", "minute"), ("byte", "second")],
+    # <drive> is 0..3; bit $80 on LOAD_RAMDISK asks the firmware to check the
+    # image and report without writing anything.
+    "DOS_CMD_LOAD_RAMDISK":  [("byte", "drive"), ("str", "filename")],
+    "DOS_CMD_SAVE_RAMDISK":  [("byte", "drive"), ("str", "filename")],
     "DOS_CMD_ECHO":          [("data", "data")],
 
     # Network (target $03) -- software/io/network/network_target.cc
+    "NET_CMD_SET_INTERFACE": [("byte", "iface")],
     "NET_CMD_GET_NETADDR":   [("byte", "iface")],
     "NET_CMD_GET_IPADDR":    [("byte", "iface")],
     "NET_CMD_SET_IPADDR":    [("byte", "iface"), ("data", "ipconfig")],

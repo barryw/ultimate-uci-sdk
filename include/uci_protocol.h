@@ -112,6 +112,8 @@
 #define DOS_CMD_SWAP_DISK      0x25  /* <id> */
 #define DOS_CMD_GET_TIME       0x26  /* <fmt> - fmt may be omitted; the target defaults it to $00 */
 #define DOS_CMD_SET_TIME       0x27  /* <year_1900> <month> <day> <hour> <minute> <second> - year is the year minus 1900 */
+#define DOS_CMD_LOAD_RAMDISK   0x41  /* <drive> <filename> - GEOS MegaPatch RAM disk; the firmware header spells it CTRL_CMD_LOAD_INTO_RAMDISK and puts it on this target */
+#define DOS_CMD_SAVE_RAMDISK   0x42  /* <drive> <filename> - GEOS MegaPatch RAM disk; the firmware header spells it CTRL_CMD_SAVE_RAMDISK and puts it on this target */
 #define DOS_CMD_ECHO           0xF0  /* <data...> - Echo the command back as data */
 
 /* ---- DOS file open attributes ---- */
@@ -120,6 +122,18 @@
 #define DOS_FA_WRITE         0x02  /* Open for writing, do not truncate */
 #define DOS_FA_CREATE_NEW    0x04  /* Create/truncate to zero bytes */
 #define DOS_FA_CREATE_ALWAYS 0x08  /* May overwrite an existing file */
+
+/* ---- DOS file information reply ---- */
+/* Byte offsets into the reply of DOS_CMD_FILE_STAT and DOS_CMD_FILE_INFO. */
+/* The name is last, has no terminator, and its length is the reply length */
+/* less DOS_INFO_NAME. Read from t_dos_info in software/filemanager/dos.h. */
+#define DOS_INFO_SIZE      0x00  /* file size, 32-bit little-endian */
+#define DOS_INFO_DATE      0x04  /* FAT date, 16-bit little-endian */
+#define DOS_INFO_TIME      0x06  /* FAT time, 16-bit little-endian */
+#define DOS_INFO_EXTENSION 0x08  /* three bytes, space padded, not terminated */
+#define DOS_INFO_ATTRIB    0x0B  /* DOS_ATTR_* bits */
+#define DOS_INFO_NAME      0x0C  /* the name begins here */
+#define DOS_INFO_NAME_MAX  0x3F  /* longest name the firmware copies */
 
 /* ---- DOS directory entry attributes ---- */
 /* First byte of each DOS_CMD_READ_DIR entry (FAT semantics). */
@@ -133,6 +147,7 @@
 /* ---- Network commands (target $03) ---- */
 #define NET_CMD_IDENTIFY            0x01
 #define NET_CMD_GET_INTERFACE_COUNT 0x02
+#define NET_CMD_SET_INTERFACE       0x03  /* <iface> - select the interface later commands act on */
 #define NET_CMD_GET_NETADDR         0x04  /* <iface> - replies with UCI_NET_MACADDR_BYTES */
 #define NET_CMD_GET_IPADDR          0x05  /* <iface> - replies with UCI_NET_IPCONFIG_BYTES, ip/mask/gw */
 #define NET_CMD_SET_IPADDR          0x06  /* <iface> <ipconfig...> - ipconfig must be exactly UCI_NET_IPCONFIG_BYTES */
@@ -202,6 +217,26 @@
 #define CTRL_DRVTYPE_UNDECIDED 0x03
 #define CTRL_DRVTYPE_SOFTIEC   0x0F
 #define CTRL_DRVTYPE_PRINTER   0x50
+
+/* ---- Control: drive information reply ---- */
+/* Layout of the CTRL_CMD_GET_DRVINFO reply: a count, then one record per */
+/* drive the machine has. Read from control_target.cc. */
+#define CTRL_DRVINFO_COUNT  0x00  /* offset of the drive count */
+#define CTRL_DRVINFO_FIRST  0x01  /* offset of the first record */
+#define CTRL_DRVINFO_RECORD 0x03  /* bytes per record: type, IEC address, power */
+#define CTRL_DRVINFO_MAX    0x02  /* records the firmware can report */
+#define CTRL_DRVINFO_BYTES  0x07  /* longest reply: the count and two records */
+
+/* ---- Control: RAM disk information reply ---- */
+/* Layout of the CTRL_CMD_GET_RAMDISKINFO reply: four two-byte records, */
+/* each a drive type code and the size in 64K units. */
+#define CTRL_RAMDISK_DRIVES 0x04  /* records in the reply */
+#define CTRL_RAMDISK_BYTES  0x08  /* bytes in the reply */
+
+/* ---- Control: drive power reply ---- */
+/* CTRL_CMD_GET_DRIVE_A_POWER and its B counterpart answer with three ASCII */
+/* bytes rather than a flag. */
+#define CTRL_POWER_BYTES 0x03  /* bytes in the reply: 'on ' or 'off' */
 
 /* ---- SoftwareIEC commands (target $05) ---- */
 #define SOFTIEC_CMD_IDENTIFY      0x01  /* answers in ASCII; every other command on this target answers in binary */
@@ -382,7 +417,7 @@
 /* How much RAM the core needs, and where. All of it is placeable: see */
 /* UCI_ZP and UCI_VARS in docs/asm-abi.md. */
 #define UCI_ZP_SIZE   4  /* zero page bytes the core needs */
-#define UCI_VARS_SIZE 143  /* non-zero-page bytes the whole SDK needs */
+#define UCI_VARS_SIZE 190  /* non-zero-page bytes the whole SDK needs */
 
 /* ---- ASCII literals ---- */
 /* Bytes that come off the wire are always written numerically. An */
