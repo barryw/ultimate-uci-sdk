@@ -12,6 +12,14 @@ work to be useful: the palette, and turbo. The BASIC wedge is complete.
 **Verify with `git log` rather than trusting this file's counts.** As of writing:
 15 commits, `main`, clean tree, HEAD `3e2bd71`.
 
+**Section 1 is that snapshot and has not been updated since.** The network and
+HTTP services it lists as not started shipped in v0.1.0, and the rest of the
+Ultimate DOS command set, the disk image commands, the clock, the machine
+control commands and the HTTP body builder have landed since. For what exists
+now, read [generated/command-coverage.md](generated/command-coverage.md), which
+is regenerated from the protocol definition on every build. Sections 2 onward
+are the traps and the decisions behind them, and those are still current.
+
 ---
 
 ## 1. Where things stand
