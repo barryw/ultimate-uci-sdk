@@ -13,6 +13,11 @@ exercising it. `tools/gen_coverage.py --check` fails the build on those.
 `hardware only` marks commands the simulated Ultimate in sim6502 does not
 implement, so they can only ever be covered by `tests/hardware`.
 
+`reserved; not in firmware` marks a command number the firmware header
+defines but the firmware does not dispatch. Those commands answer
+`21,UNKNOWN COMMAND`, so they are left out of the totals below rather
+than counted as untested work.
+
 A command byte is only credited to the target it was actually sent to.
 The codes repeat across targets - `$05` is `WRITE_DATA` on Ultimate DOS
 and `FREEZE` on the control target - so counting bytes alone would report
@@ -51,7 +56,7 @@ commands as tested that no test has ever sent.
 | Ultimate DOS commands | `DOS_CMD_ECHO` | `$F0` | tested | simulator + hardware |
 | Network commands | `NET_CMD_IDENTIFY` | `$01` | no API yet | hardware only |
 | Network commands | `NET_CMD_GET_INTERFACE_COUNT` | `$02` | tested | hardware only |
-| Network commands | `NET_CMD_SET_INTERFACE` | `$03` | no API yet | hardware only |
+| Network commands | `NET_CMD_SET_INTERFACE` | `$03` | reserved; not in firmware | not reachable |
 | Network commands | `NET_CMD_GET_NETADDR` | `$04` | tested | hardware only |
 | Network commands | `NET_CMD_GET_IPADDR` | `$05` | tested | hardware only |
 | Network commands | `NET_CMD_SET_IPADDR` | `$06` | tested | hardware only |
@@ -129,8 +134,8 @@ commands as tested that no test has ever sent.
 
 | | |
 | --- | --- |
-| commands defined | 104 |
-| exercised by a test | 68 (65%) |
+| commands defined | 103 |
+| exercised by a test | 68 (66%) |
 | wrapped but untested | 0 |
 
 Commands with no API yet are the remainder. They are the ones a

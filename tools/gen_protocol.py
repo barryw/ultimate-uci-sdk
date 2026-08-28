@@ -178,7 +178,8 @@ GROUPS = [
     ("Network commands (target $03)", "", [
         ("NET_CMD_IDENTIFY",            0x01, ""),
         ("NET_CMD_GET_INTERFACE_COUNT", 0x02, ""),
-        ("NET_CMD_SET_INTERFACE",       0x03, "select the interface later commands act on"),
+        ("NET_CMD_SET_INTERFACE",       0x03, "RESERVED: the firmware's case is commented out, "
+                                              "so this answers 21,UNKNOWN COMMAND"),
         ("NET_CMD_GET_NETADDR",         0x04, "replies with UCI_NET_MACADDR_BYTES"),
         ("NET_CMD_GET_IPADDR",          0x05, "replies with UCI_NET_IPCONFIG_BYTES, ip/mask/gw"),
         ("NET_CMD_SET_IPADDR",          0x06, "ipconfig must be exactly UCI_NET_IPCONFIG_BYTES"),
@@ -568,7 +569,6 @@ ARGS = {
     "DOS_CMD_ECHO":          [("data", "data")],
 
     # Network (target $03) -- software/io/network/network_target.cc
-    "NET_CMD_SET_INTERFACE": [("byte", "iface")],
     "NET_CMD_GET_NETADDR":   [("byte", "iface")],
     "NET_CMD_GET_IPADDR":    [("byte", "iface")],
     "NET_CMD_SET_IPADDR":    [("byte", "iface"), ("data", "ipconfig")],

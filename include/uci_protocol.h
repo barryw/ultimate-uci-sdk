@@ -147,7 +147,7 @@
 /* ---- Network commands (target $03) ---- */
 #define NET_CMD_IDENTIFY            0x01
 #define NET_CMD_GET_INTERFACE_COUNT 0x02
-#define NET_CMD_SET_INTERFACE       0x03  /* <iface> - select the interface later commands act on */
+#define NET_CMD_SET_INTERFACE       0x03  /* RESERVED: the firmware's case is commented out, so this answers 21,UNKNOWN COMMAND */
 #define NET_CMD_GET_NETADDR         0x04  /* <iface> - replies with UCI_NET_MACADDR_BYTES */
 #define NET_CMD_GET_IPADDR          0x05  /* <iface> - replies with UCI_NET_IPCONFIG_BYTES, ip/mask/gw */
 #define NET_CMD_SET_IPADDR          0x06  /* <iface> <ipconfig...> - ipconfig must be exactly UCI_NET_IPCONFIG_BYTES */

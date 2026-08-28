@@ -337,6 +337,14 @@ def main():
         family = title.split("(")[0].strip()
         targets = group_targets(title)
         for name, value, comment in items:
+            # A RESERVED command is one the firmware defines a number for but
+            # does not dispatch. It is neither coverage nor a gap, so counting
+            # it either way would misreport the total. The row stays, because
+            # the byte is allocated and a UCI trace will show it.
+            if comment.startswith("RESERVED:"):
+                rows.append((family, name, value, "reserved; not in firmware",
+                             "not reachable"))
+                continue
             covered = name in sent_names or any(
                 cmd == value and (not targets or tgt is None or tgt in targets)
                 for tgt, cmd in sent_pairs) or any(
@@ -373,6 +381,11 @@ def main():
         "",
         "`hardware only` marks commands the simulated Ultimate in sim6502 does not",
         "implement, so they can only ever be covered by `tests/hardware`.",
+        "",
+        "`reserved; not in firmware` marks a command number the firmware header",
+        "defines but the firmware does not dispatch. Those commands answer",
+        "`21,UNKNOWN COMMAND`, so they are left out of the totals below rather",
+        "than counted as untested work.",
         "",
         "A command byte is only credited to the target it was actually sent to.",
         "The codes repeat across targets - `$05` is `WRITE_DATA` on Ultimate DOS",

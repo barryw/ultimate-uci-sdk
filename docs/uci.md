@@ -655,6 +655,16 @@ Two consequences for anyone building on this:
   any of this. The interface count, the addresses and the argument checks all
   run without one, and they are what the harness asserts on.
 
+### `SET_INTERFACE` (`$03`) is reserved, not implemented
+
+`network_target.h` defines the number, but the `case` for it in
+`network_target.cc` is commented out, so the target falls through to its default
+and answers `21,UNKNOWN COMMAND`. There is nothing for it to do: every command
+that acts on an interface — `GET_NETADDR`, `GET_IPADDR`, `SET_IPADDR` — takes
+the interface number as its own first argument. The constant is kept, marked
+`RESERVED`, because the byte is allocated and a UCI trace will show it; it is
+left out of the coverage totals rather than counted as an unwrapped command.
+
 ### The listener commands stay unwrapped
 
 `$12`-`$15` are marked `INFERRED`: their numbers are not in the published

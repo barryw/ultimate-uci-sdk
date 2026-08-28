@@ -209,7 +209,7 @@ First byte of each DOS_CMD_READ_DIR entry (FAT semantics).
 | --- | --- | --- | --- |
 | `NET_CMD_IDENTIFY` | `$01` |  |  |
 | `NET_CMD_GET_INTERFACE_COUNT` | `$02` |  |  |
-| `NET_CMD_SET_INTERFACE` | `$03` | `<iface>` | select the interface later commands act on |
+| `NET_CMD_SET_INTERFACE` | `$03` |  | RESERVED: the firmware's case is commented out, so this answers 21,UNKNOWN COMMAND |
 | `NET_CMD_GET_NETADDR` | `$04` | `<iface>` | replies with UCI_NET_MACADDR_BYTES |
 | `NET_CMD_GET_IPADDR` | `$05` | `<iface>` | replies with UCI_NET_IPCONFIG_BYTES, ip/mask/gw |
 | `NET_CMD_SET_IPADDR` | `$06` | `<iface> <ipconfig...>` | ipconfig must be exactly UCI_NET_IPCONFIG_BYTES |

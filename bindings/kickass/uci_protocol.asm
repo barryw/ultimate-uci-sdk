@@ -155,7 +155,7 @@
 // ---- Network commands (target $03) ----
 .label NET_CMD_IDENTIFY           = $01
 .label NET_CMD_GET_INTERFACE_COUNT = $02
-.label NET_CMD_SET_INTERFACE      = $03  // <iface> - select the interface later commands act on
+.label NET_CMD_SET_INTERFACE      = $03  // RESERVED: the firmware's case is commented out, so this answers 21,UNKNOWN COMMAND
 .label NET_CMD_GET_NETADDR        = $04  // <iface> - replies with UCI_NET_MACADDR_BYTES
 .label NET_CMD_GET_IPADDR         = $05  // <iface> - replies with UCI_NET_IPCONFIG_BYTES, ip/mask/gw
 .label NET_CMD_SET_IPADDR         = $06  // <iface> <ipconfig...> - ipconfig must be exactly UCI_NET_IPCONFIG_BYTES
