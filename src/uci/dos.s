@@ -45,6 +45,10 @@
         .export ultimate_read
         .export ultimate_write
         .export ultimate_seek
+        ; The other DOS-target modules build on these five rather than
+        ; repeating them: src/uci/dosinfo.s, src/uci/disk.s, src/uci/clock.s.
+        .export ult_dos_target, ult_dos_exec, ult_str_cmd
+        .export ult_strlen, ult_report_len
 
         uci_code
 

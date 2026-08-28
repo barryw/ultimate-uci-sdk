@@ -227,6 +227,53 @@ static const char scratch_path[] = {
     0x77, 0x72, 0x2E, 0x74, 0x6D, 0x70, 0x00    /* wr.tmp */
 };
 
+
+/*
+ * The files and the directory the DOS tests below make, use, and take away
+ * again. All on /Temp, for the reason scratch_path is, and all written out as
+ * bytes because cc65 charmaps a string literal into PETSCII on its way to the
+ * wire.
+ */
+static const char stat_src[] = {
+    0x2F, 0x54, 0x65, 0x6D, 0x70, 0x2F,         /* /Temp/ */
+    0x73, 0x74, 0x31, 0x2E, 0x74, 0x6D, 0x70, 0x00      /* st1.tmp */
+};
+static const char stat_dst[] = {
+    0x2F, 0x54, 0x65, 0x6D, 0x70, 0x2F,
+    0x73, 0x74, 0x32, 0x2E, 0x74, 0x6D, 0x70, 0x00      /* st2.tmp */
+};
+static const char stat_ren[] = {
+    0x2F, 0x54, 0x65, 0x6D, 0x70, 0x2F,
+    0x73, 0x74, 0x33, 0x2E, 0x74, 0x6D, 0x70, 0x00      /* st3.tmp */
+};
+static const char temp_subdir[] = {
+    0x2F, 0x54, 0x65, 0x6D, 0x70, 0x2F,
+    0x73, 0x75, 0x62, 0x2E, 0x74, 0x6D, 0x70, 0x00      /* sub.tmp */
+};
+
+static ultimate_fileinfo finfo;
+static ultimate_drives drives;
+static uint8_t ramdisks[CTRL_RAMDISK_BYTES];
+static char timebuf[ULTIMATE_TIME_BUFFER];
+static char timebuf2[ULTIMATE_TIME_BUFFER];
+
+/*
+ * An IEC device number no drive answers as. The disk image commands are
+ * checked against it on purpose: the firmware looks the drive up, finds
+ * nothing, and answers "88,DRIVE NOT PRESENT", which proves the command and
+ * its argument reached the target without mounting, unmounting or swapping
+ * anything on the machine running the test.
+ */
+#define NO_SUCH_DRIVE 3
+
+/* Two digits at a fixed offset, as a number, or -1 when they are not digits. */
+static int two_digits(const char *at)
+{
+    if (at[0] < 0x30 || at[0] > 0x39 || at[1] < 0x30 || at[1] > 0x39)
+        return -1;
+    return (at[0] - 0x30) * 10 + (at[1] - 0x30);
+}
+
 /* What was in the expansion before the REU tests, and what they put there. */
 static uint8_t reu_before[32];
 static uint8_t reu_work[32];
@@ -830,6 +877,219 @@ after_write:
      * socket round trip needs a peer and skips without one. The fixtures at the
      * top of this file say why that split exists - it was not free.
      * ------------------------------------------------------------------ */
+
+    /* ------------------------------------------------------------------
+     * What a file is, and moving files about.
+     *
+     * The same rule as the write tests above: everything here is created on
+     * /Temp, used, and deleted. big.bin-style fixtures are not needed - the
+     * file this stats is one it wrote a moment earlier, so the size it checks
+     * is a size it knows.
+     * ------------------------------------------------------------------ */
+    err = ultimate_open(stat_src,
+                        DOS_FA_CREATE_ALWAYS | DOS_FA_WRITE | DOS_FA_READ);
+    if (err != ULTIMATE_OK) {
+        skip("stat", "no writable scratch area on this machine");
+    } else {
+        static const uint8_t four[] = { 0x01, 0x02, 0x03, 0x04 };
+
+        ultimate_write(four, sizeof(four));
+        ultimate_close();
+
+        finfo.size = 0xFFFFFFFFUL;
+        err = ultimate_stat(stat_src, &finfo);
+        check("stat", ULTIMATE_OK, err);
+        check("stat-reports-the-size", 4, (int)finfo.size);
+        check("stat-is-not-a-directory", 0, finfo.attrib & DOS_ATTR_DIR);
+        check("stat-terminated-the-name", 0x73, (int)finfo.name[0]);   /* 's' */
+
+        check("fstat-opens", ULTIMATE_OK, ultimate_open(stat_src, DOS_FA_READ));
+        finfo.size = 0xFFFFFFFFUL;
+        check("fstat", ULTIMATE_OK, ultimate_fstat(&finfo));
+        check("fstat-reports-the-size", 4, (int)finfo.size);
+        ultimate_close();
+
+        /*
+         * The copy and the rename are what prove the <name> $00 <name> shape
+         * survives the trip: the first name goes out with its own terminator
+         * counted in the argument length, and a length one byte short makes
+         * the firmware read the two names as one.
+         */
+        check("copy", ULTIMATE_OK, ultimate_copy(stat_src, stat_dst));
+        finfo.size = 0xFFFFFFFFUL;
+        check("copy-made-a-copy", ULTIMATE_OK, ultimate_stat(stat_dst, &finfo));
+        check("copy-copied-the-bytes", 4, (int)finfo.size);
+
+        check("rename", ULTIMATE_OK, ultimate_rename(stat_dst, stat_ren));
+        check("rename-moved-it", ULTIMATE_OK, ultimate_stat(stat_ren, &finfo));
+        check("rename-left-nothing-behind", ULTIMATE_ERR_DEVICE,
+              ultimate_stat(stat_dst, &finfo));
+
+        check("delete-the-copy", ULTIMATE_OK, ultimate_delete(stat_ren));
+        check("delete-the-source", ULTIMATE_OK, ultimate_delete(stat_src));
+
+        err = ultimate_mkdir(temp_subdir);
+        check("mkdir", ULTIMATE_OK, err);
+        if (err != ULTIMATE_OK) {
+            skip("mkdir-made-a-directory", "the directory was not created");
+            skip("mkdir-cleanup", "the directory was not created");
+        } else {
+            check("mkdir-made-a-directory", DOS_ATTR_DIR,
+                  ultimate_stat(temp_subdir, &finfo) == ULTIMATE_OK
+                      ? (finfo.attrib & DOS_ATTR_DIR) : 0);
+            check("mkdir-cleanup", ULTIMATE_OK, ultimate_delete(temp_subdir));
+        }
+    }
+
+    /*
+     * The home directory is optional: firmware without one answers
+     * "99,FUNCTION NOT IMPLEMENTED". Both results are correct, so the check is
+     * that one of the two came back.
+     */
+    err = ultimate_home();
+    if (err == ULTIMATE_OK || err == ULTIMATE_ERR_NOT_SUPPORTED)
+        ok("home");
+    else
+        not_ok("home", ULTIMATE_OK, err);
+
+    /* ------------------------------------------------------------------
+     * Disk images.
+     *
+     * Against a device number no drive answers as, so the firmware answers
+     * "88,DRIVE NOT PRESENT" and nothing on the machine is mounted, unmounted
+     * or swapped. What is being checked is the command and its argument
+     * reaching the target; what a successful mount does is not something a
+     * test should do to somebody's running machine.
+     * ------------------------------------------------------------------ */
+    err = ultimate_mount(NO_SUCH_DRIVE, stat_src);
+    if (err == ULTIMATE_ERR_NOT_SUPPORTED) {
+        skip("mount-refuses-a-drive-that-is-not-there",
+             "no disk image commands on this firmware");
+        skip("unmount-refuses-a-drive-that-is-not-there",
+             "no disk image commands on this firmware");
+        skip("swap-refuses-a-drive-that-is-not-there",
+             "no disk image commands on this firmware");
+    } else {
+        check("mount-refuses-a-drive-that-is-not-there",
+              ULTIMATE_ERR_DEVICE, err);
+        check("unmount-refuses-a-drive-that-is-not-there",
+              ULTIMATE_ERR_DEVICE, ultimate_unmount(NO_SUCH_DRIVE));
+        check("swap-refuses-a-drive-that-is-not-there",
+              ULTIMATE_ERR_DEVICE, ultimate_swap(NO_SUCH_DRIVE));
+    }
+
+    /* ------------------------------------------------------------------
+     * The clock.
+     *
+     * Read it, write back what was read, and read it again. The clock is the
+     * machine owner's, so this puts back the time it found rather than a time
+     * of its own; at most it loses the seconds that passed in between, and the
+     * date is what the second read is checked against.
+     * ------------------------------------------------------------------ */
+    err = ultimate_get_time(ULTIMATE_TIME_PLAIN, timebuf, sizeof(timebuf), &len);
+    if (err == ULTIMATE_ERR_NOT_SUPPORTED) {
+        skip("get-time", "no clock commands on this firmware");
+        skip("get-time-has-the-shape-of-a-date", "no clock commands");
+        skip("set-time", "no clock commands");
+        skip("set-time-kept-the-date", "no clock commands");
+    } else {
+        int year, month, day, hour, minute, second;
+
+        check("get-time", ULTIMATE_OK, err);
+        printf("# time=%s\n", timebuf);
+
+        /* "YYYY/MM/DD HH:MM:SS" - nineteen bytes, and the separators are what
+           say the fields are where the parse below expects them. */
+        year   = two_digits(timebuf + 2);
+        month  = two_digits(timebuf + 5);
+        day    = two_digits(timebuf + 8);
+        hour   = two_digits(timebuf + 11);
+        minute = two_digits(timebuf + 14);
+        second = two_digits(timebuf + 17);
+        check("get-time-has-the-shape-of-a-date", 1,
+              (len == 19 && timebuf[4] == 0x2F && timebuf[7] == 0x2F &&
+               timebuf[10] == 0x20 && timebuf[13] == 0x3A &&
+               timebuf[16] == 0x3A && year >= 0 && month >= 1 && month <= 12 &&
+               day >= 1 && day <= 31 && hour >= 0 && minute >= 0 &&
+               second >= 0) ? 1 : 0);
+
+        if (year < 0 || month < 0 || day < 0 ||
+            hour < 0 || minute < 0 || second < 0) {
+            skip("set-time", "the clock did not read back as a date");
+            skip("set-time-kept-the-date", "the clock did not read back as a date");
+        } else {
+            /* The year byte is the year less 1900, and timebuf holds the last
+               two digits of a year the firmware prints as 19xx or 20xx. */
+            uint8_t y1900 = (uint8_t)(timebuf[2] == 0x31 ? year : year + 100);
+
+            check("set-time", ULTIMATE_OK,
+                  ultimate_set_time(y1900, (uint8_t)month, (uint8_t)day,
+                                    (uint8_t)hour, (uint8_t)minute,
+                                    (uint8_t)second));
+            check("set-time-kept-the-date", ULTIMATE_OK,
+                  ultimate_get_time(ULTIMATE_TIME_PLAIN, timebuf2,
+                                    sizeof(timebuf2), NULL));
+            check("set-time-kept-the-day", 0,
+                  memcmp(timebuf, timebuf2, 10));
+        }
+    }
+
+    /* ------------------------------------------------------------------
+     * The emulated drives.
+     *
+     * Reading is free. The one write is ultimate_drive_enable() setting a
+     * drive to the power state ultimate_drive_power() just reported, so the
+     * command goes on the wire and the machine is left as it was found.
+     *
+     * ultimate_reboot() and ultimate_freeze() are never called here: the first
+     * resets the machine part way through the run and the second stops it
+     * until somebody leaves the Ultimate's menu. Both are exercised against
+     * the simulated Ultimate in tests/emulator/sdk.suite instead.
+     * ------------------------------------------------------------------ */
+    skip("reboot", "it would reset the machine this test is running on");
+    skip("freeze", "it would stop the machine until a person resumed it");
+
+    drives.count = 0xFF;
+    err = ultimate_drive_info(&drives);
+    if (err == ULTIMATE_ERR_NOT_SUPPORTED) {
+        skip("drive-info", "no drive commands on this firmware");
+        skip("drive-info-counts-the-drives", "no drive commands");
+        skip("drive-power", "no drive commands");
+        skip("drive-enable", "no drive commands");
+        skip("ramdisk-info", "no drive commands");
+    } else {
+        uint8_t on = 0xFF;
+
+        uint8_t rec;
+
+        check("drive-info", ULTIMATE_OK, err);
+
+        /* The count includes the occupied IEC bus slots, not only drives A
+         * and B, so this is up to ULTIMATE_DRIVES_MAX and not 2. Every record
+         * is printed, because a machine running SoftwareIEC or an IEC printer
+         * is where the count and the reply length disagree, and the run log is
+         * where that shows. */
+        check("drive-info-counts-the-drives", 1,
+              drives.count <= ULTIMATE_DRIVES_MAX ? 1 : 0);
+        for (rec = 0; rec < drives.count; rec++)
+            printf("# record %u: drive=%u type=$%02x power=%u\n",
+                   rec, drives.drive[rec].device, drives.drive[rec].type,
+                   drives.drive[rec].power);
+
+        check("drive-power", ULTIMATE_OK,
+              ultimate_drive_power(ULTIMATE_DRIVE_A, &on));
+        check("drive-power-is-a-flag", 1, on <= 1 ? 1 : 0);
+
+        /* Back to the state it was already in, so nothing changes. */
+        check("drive-enable", ULTIMATE_OK,
+              ultimate_drive_enable(ULTIMATE_DRIVE_A, on));
+
+        check("ramdisk-info", ULTIMATE_OK, ultimate_ramdisk_info(ramdisks));
+    }
+
+    check("drive-enable-rejects-a-third-drive", ULTIMATE_ERR_INVALID_ARGUMENT,
+          ultimate_drive_enable(2, 1));
+
     if (!ultimate_has_network(&caps)) {
         skip("net-interfaces", "no network target on this firmware");
     } else {
@@ -872,6 +1132,19 @@ after_write:
                "82,PARAMETER(S) OUT OF RANGE", not something invented here. */
             check("net-bad-interface-is-refused", ULTIMATE_ERR_DEVICE,
                   ultimate_net_ipconfig(ifcount + 5, net_ip));
+
+            /*
+             * ultimate_net_setip() is checked on its argument and no further.
+             * Writing an address to a live interface can take the machine off
+             * the network - see docs/uci.md, "The network stack is fragile" -
+             * and this test runs on somebody's machine over that network. The
+             * command itself is covered against the simulated Ultimate in
+             * tests/emulator/sdk.suite.
+             */
+            check("net-setip-rejects-a-null-block",
+                  ULTIMATE_ERR_INVALID_ARGUMENT,
+                  ultimate_net_setip(live, NULL));
+            skip("net-setip", "it would reconfigure the interface this run uses");
         }
 
         /* Neither of these reaches the wire, so they run whatever the machine
@@ -1048,6 +1321,90 @@ after_write:
 #else
         skip("http-get", "no peer: build with http_peer=<dotted-quad>:<port>");
 #endif
+
+        /*
+         * Request bodies need no server: the body is built inside the
+         * Ultimate, and only the exchange that sends it would reach the
+         * network. So these run whenever the HTTP target is present.
+         *
+         * Keys and values are written as ordinary literals. cc65 charmaps
+         * lowercase source into the uppercase ASCII range, which makes them
+         * uppercase on the wire and leaves them perfectly good JSON.
+         */
+        {
+            uint8_t body = HTTP_BODY_NONE;
+            static const uint8_t blob[] = { 0x01, 0x02, 0x03 };
+            static char longkey[ULTIMATE_HTTP_KEY_MAX + 2];
+
+            err = ultimate_http_body(HTTP_BODY_JSON_OBJECT, &body);
+            check("http-body-create", ULTIMATE_OK, err);
+            if (err != ULTIMATE_OK) {
+                skip("http-body-string", "no body was created");
+                skip("http-body-int", "no body was created");
+                skip("http-body-bool", "no body was created");
+                skip("http-body-object", "no body was created");
+                skip("http-body-up", "no body was created");
+                skip("http-body-array", "no body was created");
+                skip("http-body-clear", "no body was created");
+                skip("http-body-free", "no body was created");
+            } else {
+                check("http-body-gave-a-handle", 1,
+                      body != HTTP_BODY_NONE ? 1 : 0);
+                check("http-body-string", ULTIMATE_OK,
+                      ultimate_http_body_string(body, "name", "c64"));
+                check("http-body-int", ULTIMATE_OK,
+                      ultimate_http_body_int(body, "count", 42));
+                check("http-body-bool", ULTIMATE_OK,
+                      ultimate_http_body_bool(body, "ready", 1));
+
+                /* Into an object, then back out of it, then an array beside
+                   it - which is what proves the current container moves. */
+                check("http-body-object", ULTIMATE_OK,
+                      ultimate_http_body_object(body, "inner"));
+                check("http-body-int-inside-the-object", ULTIMATE_OK,
+                      ultimate_http_body_int(body, "deep", 1));
+                check("http-body-up", ULTIMATE_OK,
+                      ultimate_http_body_up(body));
+                check("http-body-array", ULTIMATE_OK,
+                      ultimate_http_body_array(body, "list"));
+
+                check("http-body-clear", ULTIMATE_OK,
+                      ultimate_http_body_clear(body));
+                check("http-body-free", ULTIMATE_OK,
+                      ultimate_http_body_free(body));
+            }
+
+            /* A binary body takes bytes and no keys. */
+            body = HTTP_BODY_NONE;
+            err = ultimate_http_body(HTTP_BODY_BINARY, &body);
+            check("http-body-binary-create", ULTIMATE_OK, err);
+            if (err != ULTIMATE_OK) {
+                skip("http-body-binary", "no body was created");
+                skip("http-body-binary-free", "no body was created");
+            } else {
+                check("http-body-binary", ULTIMATE_OK,
+                      ultimate_http_body_binary(body, blob, sizeof(blob)));
+                check("http-body-binary-free", ULTIMATE_OK,
+                      ultimate_http_body_free(body));
+            }
+
+            /* The two argument checks, which never reach the wire. */
+            body = 0x00;
+            check("http-body-rejects-a-bad-format",
+                  ULTIMATE_ERR_INVALID_ARGUMENT,
+                  ultimate_http_body(0, &body));
+            check("http-body-bad-format-invents-no-handle", HTTP_BODY_NONE,
+                  (int)body);
+
+            memset(longkey, 0x41, sizeof(longkey) - 1);
+            longkey[sizeof(longkey) - 1] = 0x00;
+            check("http-body-rejects-a-key-that-does-not-fit",
+                  ULTIMATE_ERR_INVALID_ARGUMENT,
+                  ultimate_http_body_int(0, longkey, 1));
+
+            check("http-free-all-after-the-bodies", ULTIMATE_OK,
+                  ultimate_http_free_all());
+        }
     }
 
     printf("1..%u\n", test_no);

@@ -120,6 +120,8 @@
 .label DOS_CMD_SWAP_DISK          = $25  // <id>
 .label DOS_CMD_GET_TIME           = $26  // <fmt> - fmt may be omitted; the target defaults it to $00
 .label DOS_CMD_SET_TIME           = $27  // <year_1900> <month> <day> <hour> <minute> <second> - year is the year minus 1900
+.label DOS_CMD_LOAD_RAMDISK       = $41  // <drive> <filename> - GEOS MegaPatch RAM disk; the firmware header spells it CTRL_CMD_LOAD_INTO_RAMDISK and puts it on this target
+.label DOS_CMD_SAVE_RAMDISK       = $42  // <drive> <filename> - GEOS MegaPatch RAM disk; the firmware header spells it CTRL_CMD_SAVE_RAMDISK and puts it on this target
 .label DOS_CMD_ECHO               = $F0  // <data...> - Echo the command back as data
 
 // ---- DOS file open attributes ----
@@ -128,6 +130,18 @@
 .label DOS_FA_WRITE               = $02  // Open for writing, do not truncate
 .label DOS_FA_CREATE_NEW          = $04  // Create/truncate to zero bytes
 .label DOS_FA_CREATE_ALWAYS       = $08  // May overwrite an existing file
+
+// ---- DOS file information reply ----
+// Byte offsets into the reply of DOS_CMD_FILE_STAT and DOS_CMD_FILE_INFO.
+// The name is last, has no terminator, and its length is the reply length
+// less DOS_INFO_NAME. Read from t_dos_info in software/filemanager/dos.h.
+.label DOS_INFO_SIZE              = $00  // file size, 32-bit little-endian
+.label DOS_INFO_DATE              = $04  // FAT date, 16-bit little-endian
+.label DOS_INFO_TIME              = $06  // FAT time, 16-bit little-endian
+.label DOS_INFO_EXTENSION         = $08  // three bytes, space padded, not terminated
+.label DOS_INFO_ATTRIB            = $0B  // DOS_ATTR_* bits
+.label DOS_INFO_NAME              = $0C  // the name begins here
+.label DOS_INFO_NAME_MAX          = $3F  // longest name the firmware copies
 
 // ---- DOS directory entry attributes ----
 // First byte of each DOS_CMD_READ_DIR entry (FAT semantics).
@@ -141,6 +155,7 @@
 // ---- Network commands (target $03) ----
 .label NET_CMD_IDENTIFY           = $01
 .label NET_CMD_GET_INTERFACE_COUNT = $02
+.label NET_CMD_SET_INTERFACE      = $03  // RESERVED: the firmware's case is commented out, so this answers 21,UNKNOWN COMMAND
 .label NET_CMD_GET_NETADDR        = $04  // <iface> - replies with UCI_NET_MACADDR_BYTES
 .label NET_CMD_GET_IPADDR         = $05  // <iface> - replies with UCI_NET_IPCONFIG_BYTES, ip/mask/gw
 .label NET_CMD_SET_IPADDR         = $06  // <iface> <ipconfig...> - ipconfig must be exactly UCI_NET_IPCONFIG_BYTES
@@ -210,6 +225,36 @@
 .label CTRL_DRVTYPE_UNDECIDED     = $03
 .label CTRL_DRVTYPE_SOFTIEC       = $0F
 .label CTRL_DRVTYPE_PRINTER       = $50
+
+// ---- Control: the physical drives ----
+// Drives A and B. CTRL_CMD_ENABLE_DRIVE_A through
+// CTRL_CMD_GET_DRIVE_B_POWER are one command per drive, so this is how
+// many drives those commands can name. It is not how many records
+// CTRL_CMD_GET_DRVINFO can return - see CTRL_DRVINFO_MAX.
+.label CTRL_DRIVE_SLOTS           = $02  // drives the enable and power commands address
+
+// ---- Control: drive information reply ----
+// Layout of the CTRL_CMD_GET_DRVINFO reply: a count, then one record per
+// drive the machine has. control_target.cc emits drives A and B, then
+// IecInterface::info in iec_interface.cc adds one record per occupied IEC
+// bus slot.
+.label CTRL_DRVINFO_COUNT         = $00  // offset of the drive count
+.label CTRL_DRVINFO_FIRST         = $01  // offset of the first record
+.label CTRL_DRVINFO_RECORD        = $03  // bytes per record: type, IEC address, power
+.label CTRL_DRVINFO_SLAVES        = $04  // IEC bus slots, MAX_SLOTS in iec_interface.h
+.label CTRL_DRVINFO_MAX           = $06  // records the count can reach: two drives and four slots
+.label CTRL_DRVINFO_BYTES         = $13  // longest reply: the count and six records
+
+// ---- Control: RAM disk information reply ----
+// Layout of the CTRL_CMD_GET_RAMDISKINFO reply: four two-byte records,
+// each a drive type code and the size in 64K units.
+.label CTRL_RAMDISK_DRIVES        = $04  // records in the reply
+.label CTRL_RAMDISK_BYTES         = $08  // bytes in the reply
+
+// ---- Control: drive power reply ----
+// CTRL_CMD_GET_DRIVE_A_POWER and its B counterpart answer with three ASCII
+// bytes rather than a flag.
+.label CTRL_POWER_BYTES           = $03  // bytes in the reply: 'on ' or 'off'
 
 // ---- SoftwareIEC commands (target $05) ----
 .label SOFTIEC_CMD_IDENTIFY       = $01  // answers in ASCII; every other command on this target answers in binary
@@ -390,7 +435,7 @@
 // How much RAM the core needs, and where. All of it is placeable: see
 // UCI_ZP and UCI_VARS in docs/asm-abi.md.
 .label UCI_ZP_SIZE                = $04  // zero page bytes the core needs
-.label UCI_VARS_SIZE              = $8F  // non-zero-page bytes the whole SDK needs
+.label UCI_VARS_SIZE              = $BE  // non-zero-page bytes the whole SDK needs
 
 // ---- ASCII literals ----
 // Bytes that come off the wire are always written numerically. An

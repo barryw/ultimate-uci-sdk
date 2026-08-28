@@ -18,9 +18,9 @@ FS_ROOT       := /code/tests/emulator/fixtures/usb0
 
 LIB := $(ROOT)/bindings/cc65/build/ultimate.lib
 
-# The standalone blob (Task 6): the same core, linked with a jump table at a
-# fixed base address, and no symbol file - what blob.suite drives.
-BLOB := $(ROOT)/bindings/blob/build/ultimate-8000.bin
+# The standalone blob: the same core, linked with a jump table at a fixed base
+# address, and no symbol file - what blob.suite drives.
+BLOB := $(ROOT)/bindings/blob/build/ultimate-7000.bin
 
 $(BLOB): FORCE
 	$(MAKE) -C $(ROOT)/bindings/blob
@@ -64,6 +64,14 @@ HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_available \
                 t_chdir t_getpath t_opendir t_readdir \
                 t_open t_close t_read dir_attrib \
                 t_create t_write t_seek t_delete wr_len seek_pos \
+                t_stat t_fstat t_rename t_copy t_mkdir t_home name2 finfo \
+                t_mount t_unmount t_swap t_get_time t_set_time \
+                t_reboot t_freeze t_drive_enable t_drive_power \
+                t_drive_info t_ramdisk_info t_drvinfo_reply drvinfo_len \
+                t_net_setip \
+                t_body t_body_free t_body_clear t_body_up t_body_int \
+                t_body_bool t_body_string t_body_object t_body_array \
+                t_body_binary drive_arg flag_arg body_arg time_arg val_arg \
                 t_load t_bload t_save load_addr load_max load_end \
                 t_reu_avail t_reu_stash t_reu_fetch t_reu_load t_reu_save \
                 reu_at reu_len \
@@ -110,9 +118,9 @@ sdk-placed.suite: sdk.suite
 	sed -e 's|harness\.|harness-placed.|g' \
 	    -e 's|ultimate sdk on 6502|ultimate sdk on 6502, memory relocated|' $< > $@
 
-# The relocator test harness (Task 9): loads the blob at $C000, moves it to
-# $8000 with bindings/blob/reloc.s, and calls through the moved jump table -
-# the only way to prove the relocation table has no missing entries.
+# The relocator test harness: loads the blob at $7000, moves it to $6000 with
+# bindings/blob/reloc.s, and calls through the moved jump table - the only way
+# to prove the relocation table has no missing entries.
 RELOCHARNESS_SYMS := t_reloc t_call_init result
 
 # How big the blob actually is, in two places that both used to guess. The

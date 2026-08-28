@@ -47,6 +47,21 @@
         .import ultimate_opendir, ultimate_readdir
         .import ultimate_open, ultimate_close, ultimate_read
         .import ultimate_write, ultimate_seek, ultimate_delete
+        .import ultimate_stat, ultimate_fstat, ultimate_rename
+        .import ultimate_copy, ultimate_mkdir, ultimate_home
+        .import ultimate_mount, ultimate_unmount, ultimate_swap
+        .import ultimate_get_time, ultimate_set_time
+        .import ultimate_reboot, ultimate_freeze
+        .import ultimate_drive_enable, ultimate_drive_power
+        .import ultimate_drive_info, ultimate_ramdisk_info
+        .import ctrl_drvinfo_reply, ult_req
+        .import ultimate_net_setip
+        .import ultimate_http_body, ultimate_http_body_free
+        .import ultimate_http_body_clear, ultimate_http_body_up
+        .import ultimate_http_body_int, ultimate_http_body_bool
+        .import ultimate_http_body_string, ultimate_http_body_object
+        .import ultimate_http_body_array, ultimate_http_body_binary
+        .import ult_arg2, ult_stage, ult_val, ult_body
         .import ult_attrib, ult_addr, ult_max, ult_end, ult_num
         .import ultimate_load, ultimate_bload, ultimate_save
         .import ultimate_reu_available, ultimate_reu_stash, ultimate_reu_fetch
@@ -78,6 +93,18 @@
         .export t_chdir, t_getpath, t_opendir, t_readdir
         .export t_open, t_close, t_read
         .export t_create, t_write, t_seek, t_delete
+        .export t_stat, t_fstat, t_rename, t_copy, t_mkdir, t_home
+        .export t_mount, t_unmount, t_swap
+        .export t_get_time, t_set_time
+        .export t_reboot, t_freeze
+        .export t_drive_enable, t_drive_power
+        .export t_drive_info, t_ramdisk_info, t_drvinfo_reply, drvinfo_len
+        .export t_net_setip
+        .export t_body, t_body_free, t_body_clear, t_body_up
+        .export t_body_int, t_body_bool, t_body_string
+        .export t_body_object, t_body_array, t_body_binary
+        .export name2, finfo, drive_arg, flag_arg, body_arg
+        .export time_arg, val_arg
         .export wr_len, seek_pos
         .export t_load, t_bload, t_save, load_addr, load_max, load_end
         .export t_reu_avail, t_reu_stash, t_reu_fetch
@@ -171,6 +198,19 @@ wr_len:       .res 2      ; how many bytes t_write sends from buf_data
 seek_pos:     .res 4      ; t_seek's 32-bit position, little endian
 reu_at:       .res 4      ; the REU address a transfer uses
 reu_len:      .res 4      ; and how many bytes it moves
+
+; The second name rename and copy take, and the block a stat reply is received
+; into. `reply` holds the first name, as it does for every other DOS entry
+; point, so these two are what the pair of them needs beyond it.
+name2:        .res REPLY_MAX
+finfo:        .res ULTIMATE_FILEINFO_SIZE
+
+drive_arg:    .res 1      ; an IEC device number, or drive A or B
+drvinfo_len:  .res 1      ; the reply length t_drvinfo_reply hands the parser
+flag_arg:     .res 1      ; on or off, in and out
+body_arg:     .res 1      ; an HTTP body format going in, its handle coming out
+time_arg:     .res 6      ; year less 1900, month, day, hour, minute, second
+val_arg:      .res 4      ; the 32-bit value an HTTP body integer carries
 
 req:         .res UCI_REQ_SIZE
 buf_args:    .res ARGS_MAX
@@ -506,6 +546,287 @@ t_delete:
         sta ult_buf + 1
         jsr ultimate_delete
         sta result
+        rts
+
+; --- stat, rename, copy, and make directory ---
+;
+; The name goes in `reply` like every other DOS name; the second name goes in
+; `name2` and the stat reply lands in `finfo`, whose layout is DOS_INFO_* -
+; the suite asserts on the size field there, which is the one a program
+; actually reads.
+
+t_stat:
+        jsr set_name_and_info
+        jsr ultimate_stat
+        sta result
+        rts
+
+t_fstat:
+        jsr set_info
+        jsr ultimate_fstat
+        sta result
+        rts
+
+t_rename:
+        jsr set_two_names
+        jsr ultimate_rename
+        sta result
+        rts
+
+t_copy: jsr set_two_names
+        jsr ultimate_copy
+        sta result
+        rts
+
+t_mkdir:
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        jsr ultimate_mkdir
+        sta result
+        rts
+
+set_info:
+        lda #<finfo
+        sta ult_arg2
+        lda #>finfo
+        sta ult_arg2 + 1
+        rts
+
+set_name_and_info:
+        jsr set_info
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        rts
+
+set_two_names:
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda #<name2
+        sta ult_arg2
+        lda #>name2
+        sta ult_arg2 + 1
+        rts
+
+; --- disk images, the clock, and the machine ---
+;
+; Every one of these answers ULTIMATE_ERR_NOT_SUPPORTED against the simulated
+; Ultimate, which does not implement them: the DOS ones answer "99,FUNCTION NOT
+; IMPLEMENTED" and the control ones "21,UNKNOWN COMMAND". That is the case a
+; program meets on older firmware, and the suite pins it here for the same
+; reason it pins the palette commands.
+
+t_home: jsr ultimate_home
+        sta result
+        rts
+
+t_mount:
+        lda #<reply             ; the image name, put in `reply` by the suite
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda drive_arg
+        jsr ultimate_mount
+        sta result
+        rts
+
+t_unmount:
+        lda drive_arg
+        jsr ultimate_unmount
+        sta result
+        rts
+
+t_swap: lda drive_arg
+        jsr ultimate_swap
+        sta result
+        rts
+
+t_get_time:
+        jsr set_ult_buf
+        lda flag_arg            ; the format byte
+        jsr ultimate_get_time
+        sta result
+        rts
+
+; The six numbers reach the SDK through its staging buffer, which is where an
+; assembly caller puts them.
+t_set_time:
+        ldx #$05
+@copy:  lda time_arg,x
+        sta ult_stage,x
+        dex
+        bpl @copy
+        jsr ultimate_set_time
+        sta result
+        rts
+
+t_reboot:
+        jsr ultimate_reboot
+        sta result
+        rts
+
+t_freeze:
+        jsr ultimate_freeze
+        sta result
+        rts
+
+t_drive_enable:
+        ldx flag_arg
+        lda drive_arg
+        jsr ultimate_drive_enable
+        sta result
+        rts
+
+t_drive_power:
+        lda drive_arg
+        jsr ultimate_drive_power
+        sta result
+        lda ult_stage
+        sta flag_arg
+        rts
+
+t_drive_info:
+        lda #<reply
+        ldx #>reply
+        jsr ultimate_drive_info
+        sta result
+        rts
+
+t_ramdisk_info:
+        lda #<reply
+        ldx #>reply
+        jsr ultimate_ramdisk_info
+        sta result
+        rts
+
+; The GET_DRVINFO reply parser on its own, with a reply the suite wrote into
+; `reply` and a length in `drvinfo_len`. u64sim does not implement GET_DRVINFO,
+; so this is the only way to run the parser against the reply a machine with an
+; IEC bus slot in use really sends. It calls the shipping routine rather than
+; repeating what it does, so a change to the parser changes what is asserted.
+t_drvinfo_reply:
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda drvinfo_len
+        sta ult_req + UCI_REQ_DATALEN
+        lda #$00
+        sta ult_req + UCI_REQ_DATALEN + 1
+        jsr ctrl_drvinfo_reply
+        sta result
+        rts
+
+t_net_setip:
+        lda #<reply             ; the twelve bytes, put in `reply` by the suite
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        jsr ultimate_net_setip
+        sta result
+        rts
+
+; --- HTTP request bodies ---
+;
+; The key goes in `reply` and a string value in `name2`, which is how the two
+; caller strings reach every other entry point that takes a pair of them.
+
+t_body: lda body_arg            ; the format going in
+        jsr ultimate_http_body
+        sta result
+        lda ult_body            ; and the handle coming back
+        sta body_arg
+        rts
+
+t_body_free:
+        jsr set_body
+        jsr ultimate_http_body_free
+        sta result
+        rts
+
+t_body_clear:
+        jsr set_body
+        jsr ultimate_http_body_clear
+        sta result
+        rts
+
+t_body_up:
+        jsr set_body
+        jsr ultimate_http_body_up
+        sta result
+        rts
+
+t_body_int:
+        jsr set_body_key
+        ldx #$03
+@copy:  lda val_arg,x
+        sta ult_val,x
+        dex
+        bpl @copy
+        jsr ultimate_http_body_int
+        sta result
+        rts
+
+t_body_bool:
+        jsr set_body_key
+        lda flag_arg
+        sta ult_val
+        jsr ultimate_http_body_bool
+        sta result
+        rts
+
+t_body_string:
+        jsr set_body_key
+        lda #<name2
+        sta ult_buf
+        lda #>name2
+        sta ult_buf + 1
+        jsr ultimate_http_body_string
+        sta result
+        rts
+
+t_body_object:
+        jsr set_body_key
+        jsr ultimate_http_body_object
+        sta result
+        rts
+
+t_body_array:
+        jsr set_body_key
+        jsr ultimate_http_body_array
+        sta result
+        rts
+
+t_body_binary:
+        jsr set_body
+        lda #<buf_data
+        sta ult_buf
+        lda #>buf_data
+        sta ult_buf + 1
+        lda wr_len
+        sta ult_buflen
+        lda wr_len + 1
+        sta ult_buflen + 1
+        jsr ultimate_http_body_binary
+        sta result
+        rts
+
+set_body:
+        lda body_arg
+        sta ult_body
+        rts
+
+set_body_key:
+        jsr set_body
+        lda #<reply
+        sta ult_url
+        lda #>reply
+        sta ult_url + 1
         rts
 
 ; --- load and save ---

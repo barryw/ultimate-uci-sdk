@@ -112,6 +112,62 @@ ULTIMATE_SID_TYPE               = 4
 .global ult_attrib           ; open's DOS_FA_* mask in, readdir's attributes out
 .global ult_num              ; seek's 32-bit position
 
+; --- dosinfo.s -------------------------------------------------------------
+; stat's reply has the layout below and is received straight into the caller's
+; block; the name is NUL-terminated afterwards. Rename and copy take the second
+; name in ult_arg2 - the request block has two spans and those commands have
+; three runs of bytes, so the first name's own terminator is what separates
+; them on the wire.
+.global ultimate_stat        ; ult_buf = name, ult_arg2 = the block -> A
+.global ultimate_fstat       ; ult_arg2 = the block, for the open file -> A
+.global ultimate_rename      ; ult_buf = old, ult_arg2 = new -> A
+.global ultimate_copy        ; ult_buf = source, ult_arg2 = destination -> A
+.global ultimate_mkdir       ; ult_buf = name -> A
+.global ultimate_home        ; -> A
+.global ult_arg2             ; the second caller string
+
+ULTIMATE_FILEINFO_SIZE = DOS_INFO_NAME + DOS_INFO_NAME_MAX + 1
+
+; --- disk.s ----------------------------------------------------------------
+; The drive is named by the IEC device number it answers as, not by a slot.
+; ULTIMATE_DRIVE_LAST asks for whichever was mounted into last.
+ULTIMATE_DRIVE_LAST = 0
+.global ultimate_mount       ; A = device, ult_buf = image name -> A
+.global ultimate_unmount     ; A = device -> A
+.global ultimate_swap        ; A = device -> A
+
+; --- clock.s ---------------------------------------------------------------
+; The clock reads back as text and is set with numbers, and the year byte is
+; the year less 1900.
+ULTIMATE_TIME_PLAIN   = 0
+ULTIMATE_TIME_WEEKDAY = 1
+ULTIMATE_TIME_BUFFER  = 24
+.global ultimate_get_time    ; A = format, ult_buf/ult_buflen/ult_outlen -> A
+.global ultimate_set_time    ; ult_stage = year-1900, month, day, hour, min, sec
+.global ult_stage            ; the staging buffer, ULT_STAGE_SIZE bytes
+.global ult_stagelen         ; how much of it the command being built uses
+.global ult_val              ; a scalar argument, four bytes
+
+; --- control.s -------------------------------------------------------------
+; ultimate_reboot does not return: the C64 is reset part way through it.
+; ultimate_freeze returns when whoever is at the keyboard leaves the menu.
+;
+; ultimate_drive_enable and ultimate_drive_power name a drive with
+; ULTIMATE_DRIVE_A or ULTIMATE_DRIVE_B, and there are no others: the firmware
+; has one command per drive and it has commands for those two only.
+; ultimate_drive_info is not bounded by that. Its reply also carries the
+; occupied IEC bus slots, so its block is CTRL_DRVINFO_BYTES - the count and
+; CTRL_DRVINFO_MAX records - and its count is what arrived, not what the reply
+; claimed.
+ULTIMATE_DRIVE_A = 0
+ULTIMATE_DRIVE_B = 1
+.global ultimate_reboot      ; -> nothing after this line runs
+.global ultimate_freeze      ; -> A, when the machine is let go again
+.global ultimate_drive_enable ; A = drive, X = 0 to switch it off -> A
+.global ultimate_drive_power ; A = drive -> A, ult_stage = 1 when it is running
+.global ultimate_drive_info  ; A/X = a CTRL_DRVINFO_BYTES block -> A
+.global ultimate_ramdisk_info ; A/X = a CTRL_RAMDISK_BYTES block -> A
+
 .global ultimate_load, ultimate_bload, ultimate_save, ultimate_last_end
 .global ult_addr             ; where a load puts it, or a save takes it from
 .global ult_max              ; bload's limit, save's length
@@ -135,6 +191,7 @@ ULTIMATE_SID_TYPE               = 4
 .global ultimate_net_ipconfig ; ult_iface, ult_buf = 12 bytes -> A = result
 .global ultimate_net_connect ; ult_port, ult_buf = host -> A, ult_sock = handle
 .global ultimate_net_udp     ; the same, for UDP
+.global ultimate_net_setip   ; ult_iface, ult_buf = 12 bytes -> A = result
 .global ultimate_net_close   ; ult_sock -> A = result
 .global ultimate_net_read    ; ult_sock, ult_buf, ult_socklen = buffer size
                              ; -> A = result, ult_socklen = bytes stored
@@ -163,6 +220,23 @@ ULTIMATE_SID_TYPE               = 4
 .global ult_body               ; body handle, or HTTP_BODY_NONE; follows ult_http
                                ; because an exchange sends the pair
 .global ult_httplen            ; reply bytes stored
+
+; --- httpbody.s ------------------------------------------------------------
+; The body is built inside the Ultimate: create a slot, add to it a call at a
+; time, and hand the handle to ultimate_http_exchange. Adding an object or an
+; array enters it; ultimate_http_body_up steps back out. A key is copied through
+; ult_stage, so it is limited to ULTIMATE_HTTP_KEY_MAX bytes; values are not.
+ULTIMATE_HTTP_KEY_MAX = 34
+.global ultimate_http_body        ; A = HTTP_BODY_* format -> A, ult_body
+.global ultimate_http_body_free   ; ult_body -> A
+.global ultimate_http_body_clear  ; ult_body -> A
+.global ultimate_http_body_up     ; ult_body -> A
+.global ultimate_http_body_int    ; ult_body, ult_url = key, ult_val = value
+.global ultimate_http_body_bool   ; ult_body, ult_url = key, ult_val = 0 or not
+.global ultimate_http_body_string ; ult_body, ult_url = key, ult_buf = value
+.global ultimate_http_body_object ; ult_body, ult_url = key -> A
+.global ultimate_http_body_array  ; ult_body, ult_url = key -> A
+.global ultimate_http_body_binary ; ult_body, ult_buf, ult_buflen -> A
 
 ; Reading a directory is one live exchange, one entry per call, and these are
 ; the two halves of it for a caller driving the transport itself:

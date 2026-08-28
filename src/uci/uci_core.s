@@ -19,6 +19,7 @@
         .include "uci_protocol.inc"
         .include "uci_seg.inc"
         .include "uci_zp.inc"
+        .include "uci_vars.inc"
 
 ; ---------------------------------------------------------------------------
 
@@ -45,6 +46,7 @@
         .export ult_reu, ult_reulen
         .export ult_sock, ult_socklen, ult_iface, ult_port
         .export ult_url, ult_http, ult_body, ult_httplen
+        .export ult_arg2, ult_stage, ult_stagelen, ult_val
         .export uci_stat, uci_devcode
 
 ; ---------------------------------------------------------------------------
@@ -142,7 +144,15 @@ ult_http        = UCI_VARS + 95 + 2 * UCI_REQ_SIZE  ; verb in, header handle out
 ult_body        = UCI_VARS + 96 + 2 * UCI_REQ_SIZE  ; body handle, or HTTP_BODY_NONE
 ult_httplen     = UCI_VARS + 97 + 2 * UCI_REQ_SIZE  ; reply bytes stored
 
-.assert (99 + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+; --- second string, and the staging buffer ---
+; Appended on the end, like everything before them, so that the offsets
+; bindings/blob/README.md publishes do not move.
+ult_arg2        = UCI_VARS + 99 + 2 * UCI_REQ_SIZE  ; a second caller string
+ult_stage       = UCI_VARS + 101 + 2 * UCI_REQ_SIZE ; ULT_STAGE_SIZE bytes
+ult_stagelen    = UCI_VARS + 101 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE
+ult_val         = UCI_VARS + 102 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE
+
+.assert (106 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
         .export uci_req
 
@@ -226,6 +236,16 @@ ult_url:        .res 2          ; URL, or a header line
 ult_http:       .res 1          ; verb in, header handle out
 ult_body:       .res 1          ; body handle, or HTTP_BODY_NONE
 ult_httplen:    .res 2          ; reply bytes stored
+
+; --- second string, and the staging buffer ---
+; The second string is what rename, copy and the HTTP body builder need and the
+; request block cannot hold: it has two spans, and those commands have three
+; runs of caller bytes.
+ult_arg2:       .res 2          ; a second caller string
+ult_stage:      .res ULT_STAGE_SIZE
+ult_stagelen:   .res 1          ; how much of it the command being built uses
+ult_val:        .res 4          ; a scalar argument: the HTTP body builder's
+                                ; integers and booleans
 
 .endif
 
@@ -857,6 +877,15 @@ uci_translate:
 ; outright. Reading at most one queue's worth is both correct and terminating.
 ; ---------------------------------------------------------------------------
 uci_read_block:
+        ; How many bytes this block stored. It is counted here and added to the
+        ; caller's datalen once, at @data_done, rather than being incremented
+        ; through the request block on every byte: (uci_rq),y arithmetic on a
+        ; 16-bit field costs about 30 cycles, which was a third of the whole
+        ; per-byte cost of a read. Nothing reads datalen while the loop runs.
+        lda #$00
+        sta uci_tmp
+        sta uci_tmp + 1
+
         ; uci_ptr = data buffer, advanced past whatever is already stored
         ldy #UCI_REQ_DATA
         jsr uci_get_ptr
@@ -885,10 +914,15 @@ uci_read_block:
         lda (uci_rq),y
         sbc uci_tmp + 1
         sta uci_cnt + 1
-        bcs @store_loop         ; datalen > datamax cannot happen, but be safe
+        bcs @room_known         ; datalen > datamax cannot happen, but be safe
         lda #$00
         sta uci_cnt
         sta uci_cnt + 1
+
+@room_known:
+        lda #$00                ; uci_tmp is free again: it held datalen, and
+        sta uci_tmp             ; that has been folded into uci_ptr and uci_cnt
+        sta uci_tmp + 1
 
         ; --- fast path: room remains, so store ---
 @store_loop:
@@ -903,16 +937,10 @@ uci_read_block:
         inc uci_ptr
         bne @no_hi
         inc uci_ptr + 1
-@no_hi: ldy #UCI_REQ_DATALEN    ; datalen += 1
-        lda (uci_rq),y
-        clc
-        adc #$01
-        sta (uci_rq),y
-        iny
-        lda (uci_rq),y
-        adc #$00
-        sta (uci_rq),y
-        lda uci_cnt
+@no_hi: inc uci_tmp             ; one more byte stored
+        bne @dec
+        inc uci_tmp + 1
+@dec:   lda uci_cnt
         bne @dec_lo
         dec uci_cnt + 1
 @dec_lo:
@@ -948,6 +976,19 @@ uci_read_block:
         jmp @discard_loop
 
 @data_done:
+        ; The block's stored bytes, added to the caller's count in one go. Both
+        ; ways out of the loops above arrive here, and the discard loop leaves
+        ; uci_tmp alone, so this runs once per block whichever path was taken.
+        clc
+        ldy #UCI_REQ_DATALEN
+        lda (uci_rq),y
+        adc uci_tmp
+        sta (uci_rq),y
+        iny
+        lda (uci_rq),y
+        adc uci_tmp + 1
+        sta (uci_rq),y
+
         ; --- status queue ---
         lda #<UCI_MAX_STATUS
         sta uci_cnt

@@ -11,7 +11,10 @@ static char text[64];
 static uint8_t byte_value;
 static uint16_t word_value;
 static uint32_t long_value;
+static int32_t signed_value;
 static const char *message;
+static ultimate_fileinfo fileinfo;
+static ultimate_drives drives;
 
 /* Compile every public call form printed in the C chapter. */
 void guide_c_calls(void)
@@ -55,9 +58,32 @@ void guide_c_calls(void)
     byte_value = ultimate_reu_fetch(word_value, long_value, word_value);
     byte_value = ultimate_reu_load(long_value, long_value);
     byte_value = ultimate_reu_save(long_value, long_value);
+    byte_value = ultimate_stat(text, &fileinfo);
+    byte_value = ultimate_fstat(&fileinfo);
+    byte_value = ultimate_rename(text, text);
+    byte_value = ultimate_copy(text, text);
+    byte_value = ultimate_mkdir(text);
+    byte_value = ultimate_home();
+    byte_value = ultimate_mount(8, text);
+    byte_value = ultimate_mount(ULTIMATE_DRIVE_LAST, text);
+    byte_value = ultimate_unmount(8);
+    byte_value = ultimate_swap(8);
+    byte_value = ultimate_get_time(ULTIMATE_TIME_PLAIN, text,
+                                   sizeof text, &word_value);
+    byte_value = ultimate_get_time(ULTIMATE_TIME_WEEKDAY, text,
+                                   sizeof text, NULL);
+    byte_value = ultimate_set_time(126, 8, 22, 14, 30, 0);
+    byte_value = ultimate_drive_info(&drives);
+    byte_value = ultimate_drive_enable(ULTIMATE_DRIVE_A, 1);
+    byte_value = ultimate_drive_enable(ULTIMATE_DRIVE_B, 0);
+    byte_value = ultimate_drive_power(ULTIMATE_DRIVE_A, &byte_value);
+    byte_value = ultimate_ramdisk_info(bytes);
+    byte_value = ultimate_freeze();
+    byte_value = ultimate_reboot();
     byte_value = ultimate_net_ifcount(&byte_value);
     byte_value = ultimate_net_macaddr(0, bytes);
     byte_value = ultimate_net_ipconfig(0, bytes);
+    byte_value = ultimate_net_setip(0, bytes);
     byte_value = ultimate_net_connect(text, word_value, &byte_value);
     byte_value = ultimate_net_udp(text, word_value, &byte_value);
     byte_value = ultimate_net_close(byte_value);
@@ -69,6 +95,17 @@ void guide_c_calls(void)
     byte_value = ultimate_http_exchange(byte_value, HTTP_BODY_NONE,
                                         bytes, sizeof bytes, &word_value);
     byte_value = ultimate_http_close(byte_value);
+    byte_value = ultimate_http_body(HTTP_BODY_JSON_OBJECT, &byte_value);
+    byte_value = ultimate_http_body(HTTP_BODY_BINARY, &byte_value);
+    byte_value = ultimate_http_body_string(byte_value, text, text);
+    byte_value = ultimate_http_body_int(byte_value, text, signed_value);
+    byte_value = ultimate_http_body_bool(byte_value, text, 1);
+    byte_value = ultimate_http_body_object(byte_value, text);
+    byte_value = ultimate_http_body_array(byte_value, text);
+    byte_value = ultimate_http_body_up(byte_value);
+    byte_value = ultimate_http_body_binary(byte_value, bytes, sizeof bytes);
+    byte_value = ultimate_http_body_clear(byte_value);
+    byte_value = ultimate_http_body_free(byte_value);
     byte_value = ultimate_http_free_all();
     message = ultimate_strerror(byte_value);
     word_value = ultimate_device_code();

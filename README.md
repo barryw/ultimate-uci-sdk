@@ -39,7 +39,10 @@ it under an emulator and on real hardware, and exposes it to assembly and C.
 complete and tested — under a simulated Ultimate, and on a real Ultimate 64
 Elite running firmware 3.15. So are the palette, turbo, file, REU, network and
 HTTP services: directories, open/read/write/seek, load and save, both directions
-of the RAM expansion, TCP and UDP sockets, and fetching a URL.
+of the RAM expansion, TCP and UDP sockets, and fetching a URL. The rest of the
+Ultimate DOS command set is there too — file information, rename, copy, make
+directory — along with mounting disk images, the battery-backed clock, the
+emulated drives, and JSON and form request bodies for the HTTP client.
 
 ## What hardware does it support?
 
@@ -69,25 +72,33 @@ enable it in the ultimate settings menu.
 | | |
 |---|---|
 | find the Ultimate, and ask what it can do | `ultimate_init`, `ultimate_detect` |
-| files and directories | `chdir`, `getpath`, `opendir`, `readdir`, `open`, `close`, `read`, `write`, `seek`, `delete` |
+| files and directories | `chdir`, `getpath`, `opendir`, `readdir`, `open`, `close`, `read`, `write`, `seek`, `delete`, `mkdir`, `home` |
+| what a file is, and moving files about | `stat` and `fstat` for size, date and attributes; `rename`; `copy`, done by the Ultimate with nothing passing through the C64 |
 | load and save | `load`, `bload`, `save` — the load takes the firmware's fast path when there is one |
+| disk images in the emulated drives | `mount`, `unmount`, `swap` — the drive named by the IEC device number it answers as |
+| the battery-backed clock | `get_time`, `set_time` |
+| the machine and its drives | `reboot`, `freeze`, `drive_enable`, `drive_power`, `drive_info`, `ramdisk_info` |
 | the RAM expansion | `reu_stash`, `reu_fetch`, file-to-expansion without the C64 in between, and `reu_size` to find out how much there is |
 | configured SID addresses | `ultimate_legacy_get_sid_info` uses deprecated HWINFO and returns every primary and optional secondary mapping |
 | the running palette | `palette_get`, `palette_set`, `palette_set_color`, `palette_reset` |
 | CPU speed on an Ultimate 64 | `turbo_set`, `turbo_get`, `turbo_badlines` |
 | TCP and UDP sockets | `net_connect`, `net_udp`, `net_read`, `net_write`, `net_close`, and the machine's own address from `net_ipconfig` |
 | fetching a URL | `http_get` in one call, or `http_open`/`http_header`/`http_exchange` when a request needs headers |
+| posting JSON, a form, or raw bytes | `http_body` and the nine calls that fill it, built inside the Ultimate so a 38K machine can send more than it could hold |
 | anything else the firmware offers | the generic form: any command, on any target, with framing, timeouts and error translation handled |
 
 The Ultimate-only [Machine Yearning SID visualizer](demos/sid-visualizer/)
 drives six 24-bit palette colours from six live SID voices. Its bundled music
 has a separate CC BY-NC 4.0 licence; the SDK remains MIT-licensed.
 
-The JSON body builder has no wrapper — thirteen commands for a machine with 38K
-of BASIC — and neither do the four TCP listener commands, whose numbers are not
-in the published specification. Both are reachable through the generic form,
-which is the whole reason it exists, and a body built that way can still be sent
-with `http_exchange`.
+Some commands stay unwrapped on purpose: EasyFlash sector erase, GCR track
+encoding and decoding, the control target's REU pair — which never returns on
+firmware 3.14d — the SoftwareIEC channel commands the hyperspeed kernal owns,
+and the four TCP listener commands, whose numbers are not in the published
+specification. All of them are reachable through the generic form, which is the
+whole reason it exists.
+[docs/generated/command-coverage.md](docs/generated/command-coverage.md) is the
+per-command list.
 
 ## Getting started
 
@@ -191,14 +202,14 @@ Through the standalone blob, which needs no linking at all. It is the same SDK
 at its first bytes and a page-aligned parameter block behind it.
 
 ```asm
-        // KickAssembler, with the blob loaded at $8000. The name goes in the
+        // KickAssembler, with the blob loaded at $7000. The name goes in the
         // parameter block, NUL terminated, and so does everything else.
-        jsr $8004               // +$04  uci_init
+        jsr $7004               // +$04  uci_init
         lda #$00                // +$103 bp_addr: 0 takes the address from the
-        sta $8103               //       file's own first two bytes
-        sta $8104
-        jsr $806d               // +$6D  load
-        lda $8100               // +$100 bp_result: 0 is ULTIMATE_OK
+        sta $7103               //       file's own first two bytes
+        sta $7104
+        jsr $706d               // +$6D  load
+        lda $7100               // +$100 bp_result: 0 is ULTIMATE_OK
 ```
 
 Every offset is in [bindings/blob/README.md](bindings/blob/README.md), and the
@@ -258,7 +269,7 @@ public model does not expose them.
 Built for a machine with 38 kilobytes.
 
 - No heap, no hidden buffers. Every byte lands in a buffer you own.
-- 143 bytes of static RAM in total, request block included. No allocation, ever.
+- 190 bytes of static RAM in total, request block included. No allocation, ever.
 - Four bytes of zero page, at an address you choose.
 - No interrupts required, and no interrupt handler installed.
 - Every entry point is bounded: it completes or returns `ULTIMATE_ERR_TIMEOUT`.
@@ -276,10 +287,11 @@ make test         # sim6502 in Docker: the assembled SDK, against a simulated Ul
 make -C tests/hardware && copy ucitest.prg to your Ultimate    # the real thing, TAP output
 ```
 
-Current results: **114 host unit tests, 213 emulator tests and 6/6 hardware
-scenarios, all passing** — the last of those on an Ultimate 64 Elite running
-firmware 3.15, where the BASIC wedge is also typed at the machine line by line
-and checked on the screen.
+Current results: **115 host unit tests and 244 emulator tests across eight
+suites, all passing.** The hardware suite last ran 6/6 scenarios on an Ultimate
+64 Elite running firmware 3.15, where the BASIC wedge is also typed at the
+machine line by line and checked on the screen; the checks added for the disk
+image, clock, drive and HTTP body services have not been run on a machine yet.
 
 Every mutating hardware test writes to `/Temp`, the FAT filesystem the firmware
 formats in RAM at boot, so running them cannot fill a medium, wear flash, or

@@ -1,7 +1,8 @@
 ; http.s - Layer 2: fetching things over HTTP, on the HTTP target.
 ;
-; Six entry points out of twenty-three commands, and the ones left out are left
-; out deliberately - see the end of this comment.
+; Six entry points out of twenty-three commands. src/uci/httpbody.s has ten
+; more, for the JSON and form bodies; the ones neither file wraps are listed at
+; the end of this comment.
 ;
 ; **The status channel is why this file exists.** Measured on firmware 3.15,
 ; not read out of the protocol document:
@@ -44,17 +45,15 @@
 ;
 ; What is not wrapped, and why:
 ;
-;   the thirteen BODY_* commands   a JSON builder is a large surface for a
-;                                  machine with 38K of BASIC, and the generic
-;                                  form drives it perfectly well. A body built
-;                                  that way is still usable here: pass its
-;                                  handle to ultimate_http_exchange.
 ;   HTTP_CMD_DO_EXCHANGE_OBJ       it parses the *response* as JSON, not the
 ;                                  request, and answers "400 NO VALID JSON" for
 ;                                  anything else. That is a decoder this file
 ;                                  would have to surface typed values from, and
 ;                                  it is a service of its own if it is ever
 ;                                  wanted.
+;   HTTP_CMD_BODY_QUERY            reading typed values back out of a body the
+;   HTTP_CMD_BODY_MOVE             program just built, for the same reason.
+;   HTTP_CMD_BODY_REMOVE
 ;   HEADER_QUERY / HEADER_LIST     reading back headers that were just set.
 ;
 ; SPDX-License-Identifier: MIT

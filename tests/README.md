@@ -34,7 +34,7 @@ container so CI and a laptop use the identical tool:
 | `timeout.suite` | `u64sim`, latency raised past the budget | that a device which stops answering is given up on |
 | `absent.suite` | `sim` — nothing at `$DF1B-$DF1F` | that a machine with no Ultimate fails fast instead of hanging |
 | `blob.suite` | `u64sim` | the standalone binary through its jump table and parameter block, with no symbols at all |
-| `blob-relocated.suite` | `u64sim` | the blob moved to another address, then called with the original erased |
+| `blob-relocated.suite` | `u64sim` | the blob moved to another address, then compared byte for byte against a blob the linker built for that address |
 | `basic.suite` | `u64sim`, real BASIC and KERNAL ROMs | the wedge: tokenising, `LIST`, and every keyword's dispatch |
 
 `basic.suite` is ROM-gated. Commodore's ROM images cannot be committed, so it

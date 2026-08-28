@@ -1,6 +1,6 @@
 ; net.s - Layer 2: TCP and UDP sockets, on the network target.
 ;
-; Nine commands of the fifteen. Built entirely out of uci_exec, like every
+; Ten commands of the sixteen. Built entirely out of uci_exec, like every
 ; service except turbo.s and reu.s; nothing here touches a hardware register.
 ;
 ; **Everything in this file was measured against firmware 3.15 on real
@@ -63,6 +63,7 @@
         .export ultimate_net_ifcount
         .export ultimate_net_macaddr
         .export ultimate_net_ipconfig
+        .export ultimate_net_setip
         .export ultimate_net_connect
         .export ultimate_net_udp
         .export ultimate_net_close, _ultimate_net_close
@@ -181,6 +182,55 @@ net_getaddr:
 @short: lda #ULTIMATE_ERR_PROTOCOL
         ldx #$00
         rts
+
+; ---------------------------------------------------------------------------
+; ultimate_net_setip   ult_iface, ult_buf = UCI_NET_IPCONFIG_BYTES bytes
+;                   -> A = ULTIMATE_* result
+;
+; Address, netmask and gateway, four bytes each, in that order - the same block
+; ultimate_net_ipconfig hands back, so reading one interface's configuration and
+; writing it to another needs no repacking.
+;
+; **This is not how a machine gets on the network.** The Ultimate's own DHCP
+; client already did that, and whatever is set here lasts until the interface is
+; reconfigured or the machine is restarted; nothing is written to the Ultimate's
+; stored settings. Setting an address that collides with another host on the
+; segment is not detected here or by the firmware.
+;
+; The length is fixed and is not taken from the caller, because the firmware
+; reads twelve bytes whatever it is sent and a short block would leave it
+; reading whatever followed.
+; ---------------------------------------------------------------------------
+ultimate_net_setip:
+        lda ult_buf
+        ora ult_buf + 1
+        beq @invalid
+
+        jsr ult_req_clear
+        jsr net_target
+        lda #NET_CMD_SET_IPADDR
+        sta ult_req + UCI_REQ_COMMAND
+
+        lda #<ult_iface
+        sta ult_req + UCI_REQ_ARGS
+        lda #>ult_iface
+        sta ult_req + UCI_REQ_ARGS + 1
+        lda #$01
+        sta ult_req + UCI_REQ_ARGLEN
+
+        lda ult_buf
+        sta ult_req + UCI_REQ_PAYLOAD
+        lda ult_buf + 1
+        sta ult_req + UCI_REQ_PAYLOAD + 1
+        lda #UCI_NET_IPCONFIG_BYTES
+        sta ult_req + UCI_REQ_PAYLOADLEN
+
+        jsr net_exec
+        ldx #$00
+        rts
+
+@invalid:
+        jmp ult_invalid
 
 ; ---------------------------------------------------------------------------
 ; ultimate_net_connect   ult_port, ult_buf = host  ->  A = result

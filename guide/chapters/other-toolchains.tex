@@ -10,23 +10,45 @@
 
 \section{Build And Identify The Blob}
 
-\cmd{make blob} produces \cmd{bindings/blob/build/ultimate-8000.bin}. Load it
-at \cmd{\$8000}. The first three bytes are the PETSCII signature \cmd{UCI}; the
-fourth is the blob ABI version.
+The blob is the SDK linked as one binary with a table of jump instructions at
+a fixed address. Any assembler or compiler can call it, because calling it
+needs no linker and no object format: you load the binary and \cmd{jsr} into
+the table.
 
-This example demonstrates checking the default build before calling it:
+\cmd{make blob} produces \cmd{bindings/blob/build/ultimate-7000.bin}. Load it
+at \cmd{\$7000}. The first three bytes are the PETSCII signature \cmd{UCI};
+the fourth is the version of the ABI, the calling interface.
+
+\begin{note}
+The blob has to sit below \cmd{\$A000}, because \cmd{\$A000--\$BFFF} is BASIC
+ROM. A program can reach every byte of a blob at \cmd{\$7000} with the machine
+exactly as it found it. One that ran past \cmd{\$A000} would have to switch
+BASIC ROM out and back around every call.
+\end{note}
+
+\begin{warning}
+\cmd{\$7000} is inside BASIC's memory, not above it. BASIC owns
+\cmd{\$0801--\$9FFF}: the program area grows up from \cmd{\$0801} and strings
+and arrays grow down from \cmd{\$9FFF}. A program that has replaced BASIC owns
+that memory instead and needs to do nothing. A program that leaves BASIC running
+must lower the top of BASIC memory to the base address before it loads the blob,
+or BASIC will write over it. \emph{Call The Blob From BASIC}, later in this
+chapter, shows the two \bas{poke}s and the \bas{clr} that do it.
+\end{warning}
+
+This example checks the default build before calling it:
 
 \begin{listingbox}
-\hspace*{2em}lda \$8000\\
+\hspace*{2em}lda \$7000\\
 \hspace*{2em}cmp \#\$D5\hspace{2em}; PETSCII 'U'\\
 \hspace*{2em}bne no\_sdk\\
-\hspace*{2em}lda \$8001\\
+\hspace*{2em}lda \$7001\\
 \hspace*{2em}cmp \#\$C3\hspace{2em}; PETSCII 'C'\\
 \hspace*{2em}bne no\_sdk\\
-\hspace*{2em}lda \$8002\\
+\hspace*{2em}lda \$7002\\
 \hspace*{2em}cmp \#\$C9\hspace{2em}; PETSCII 'I'\\
 \hspace*{2em}bne no\_sdk\\
-\hspace*{2em}lda \$8003\\
+\hspace*{2em}lda \$7003\\
 \hspace*{2em}cmp \#1\hspace{3em}; ABI version\\
 \hspace*{2em}bne wrong\_version
 \end{listingbox}
@@ -34,6 +56,10 @@ This example demonstrates checking the default build before calling it:
 \begin{outputbox}
 All four comparisons match; execution continues with ABI version 1.
 \end{outputbox}
+
+The version byte changes only when an existing entry changes meaning. New
+entries are appended, so a program written against version~1 keeps working
+when the table grows.
 
 \evidence{\cmd{bindings/blob/Makefile}; \cmd{bindings/blob/blob.s};
 \cmd{tests/emulator/blob.suite}}
@@ -44,19 +70,38 @@ Entries begin at base plus \cmd{\$04}. Each entry is a three-byte \cmd{jmp};
 new entries are appended so published offsets do not move.
 
 \begin{listingbox}
-\hspace*{2em}jsr \$8004\hspace{2em}; +\$04  uci\_init\\
-\hspace*{2em}jsr \$801C\hspace{2em}; +\$1C  ultimate\_init
+\hspace*{2em}jsr \$7004\hspace{2em}; +\$04  uci\_init\\
+\hspace*{2em}jsr \$701C\hspace{2em}; +\$1C  ultimate\_init
 \end{listingbox}
 
 \begin{outputbox}
 A = ULTIMATE_OK after each initialization call.
 \end{outputbox}
 
-This demonstrates the two initialization entries. Use
-\cmd{ultimate\_init} for application code; the lower-level \cmd{uci\_init}
-entry is exposed for transport users. Both return a result in \cmd{A}.
+These are the two initialization entries. Use \cmd{ultimate\_init} for
+application code; the lower-level \cmd{uci\_init} entry is exposed for
+transport users. Both return a result in \cmd{A}.
 
-The complete offset table is in \cmd{bindings/blob/README.md}.
+\subsection*{The two kinds of entry}
+
+The table has two halves, and the difference decides how you read a result.
+
+Entries from \cmd{+\$04} to \cmd{+\$4C} pass their arguments in registers, the
+way the assembly chapter's entry points do, and return the result in \cmd{A}
+and nowhere else.
+
+Entries from \cmd{+\$4F} upwards take their arguments from the parameter block
+described in the next section, because a caller cannot pass a filename in
+\cmd{A} and \cmd{X}. Each of these also stores its result in \cmd{bp\_result}
+before returning it in \cmd{A}.
+
+That second group is what a BASIC program can drive, because \bas{sys} can
+neither pass a register nor read one back.
+
+The complete offset table is in \cmd{bindings/blob/README.md}. Read the
+offsets there rather than counting entries: the table gained the file
+information, disk image, clock, machine and HTTP body services after the
+offsets printed in this chapter were published.
 
 \evidence{\cmd{bindings/blob/blob.s}; \cmd{bindings/blob/README.md};
 \cmd{tests/emulator/blob.suite}}
@@ -65,7 +110,7 @@ The complete offset table is in \cmd{bindings/blob/README.md}.
 \section{Use The Parameter Block}
 
 Service entries that need several arguments use a 512-byte block at
-base plus \cmd{\$100}. These are the fields needed by the example below:
+base plus \cmd{\$100}. These are the first four fields:
 
 \begin{reftable}{llp{0.48\linewidth}}
 Offset & Field & Purpose \\
@@ -85,31 +130,76 @@ an address from this subset.
 
 \section{Call The Blob From BASIC}
 
-The page-aligned block also gives BASIC a calling convention it can express
-with \bas{poke}, \bas{peek} and \bas{sys}:
+The page-aligned block gives BASIC a calling convention it can express with
+\bas{poke}, \bas{peek} and \bas{sys}. Before any of that, BASIC has to be told
+to stay out of the memory the blob occupies. Type this first, then load the
+blob:
 
 \begin{screen}
-10 B = 32768 : P = B + 256\\
-20 IF PEEK(B)<>213 OR PEEK(B+1)<>195 THEN PRINT "NO SDK":END\\
-25 IF PEEK(B+2)<>201 THEN PRINT "NO SDK":END\\
-30 SYS B + 28 : IF PEEK(P) THEN PRINT "INIT FAILED": END\\
-40 SYS B + 175\\
-50 PRINT "REU BANKS:"; PEEK(P+5) + PEEK(P+6)*256
+POKE 56,112 : POKE 55,0 : CLR
 \end{screen}
 
-Line~30 calls \cmd{ultimate\_init} at offset \cmd{\$1C} and reads
-\cmd{bp\_result}. Line~40 calls \cmd{reu\_size} at offset \cmd{\$AF}; that
-entry returns the 16-bit bank count in \cmd{bp\_len}. This demonstrates using
-the blob without installing the BASIC wedge.
+112 is \cmd{\$70}, the high byte of the base address, and 55 and 56 are the low
+and high bytes of BASIC's top-of-memory pointer at \cmd{\$37--\$38}. \bas{clr}
+is what makes it take effect, because it resets the string pointer from the new
+top. BASIC then keeps \cmd{\$0801--\$6FFF}, and the blob's code at \cmd{\$7000}
+and its variables at \cmd{\$9F00} are both out of its reach. Loading the blob
+without this leaves it where BASIC's strings and arrays will eventually be
+written.
 
-\evidence{\cmd{bindings/blob/blob.s}; \cmd{tests/emulator/blob.suite}}
+This program then checks the signature, brings the SDK up, confirms that an
+Ultimate answered, and prints the size of the RAM expansion:
+
+\begin{screen}
+10 B = 28672 : P = B + 256\\
+20 IF PEEK(B)<>213 OR PEEK(B+1)<>195 THEN PRINT "NO SDK":END\\
+25 IF PEEK(B+2)<>201 THEN PRINT "NO SDK":END\\
+30 SYS B + 28\\
+40 SYS B + 82 : IF PEEK(P) THEN PRINT "NO ULTIMATE":END\\
+50 SYS B + 175\\
+60 PRINT "REU BANKS:"; PEEK(P+5) + PEEK(P+6)*256
+\end{screen}
+
+Line~10 sets \bas{b} to the blob's base, decimal 28672 for \cmd{\$7000}, and
+\bas{p} to the parameter block a page above it. Lines~20 and~25 compare the
+three signature bytes; 213, 195 and 201 are \cmd{\$D5}, \cmd{\$C3} and
+\cmd{\$C9}.
+
+Line~30 calls \cmd{ultimate\_init} at offset \cmd{\$1C}. That is a register
+entry, so it returns its result in \cmd{A} and writes nothing to the block,
+and \bas{sys} cannot read \cmd{A}. Line~40 therefore calls \cmd{getpath} at
+offset \cmd{\$52}, which is a parameter-block entry: it asks the Ultimate for
+the current directory and leaves the result in \cmd{bp\_result}, so
+\bas{peek(p)} is the first result this program can test. A non-zero value
+there means no Ultimate answered.
+
+Line~50 calls \cmd{reu\_size} at offset \cmd{\$AF}, which puts the 16-bit bank
+count in \cmd{bp\_len}. Line~60 reads it back as two bytes, low byte first, and
+prints it. A machine with a 2MB expansion prints 32; one with no expansion
+prints 0.
+
+\begin{warning}
+Do not check \bas{peek(p)} after a register entry such as \cmd{\$1C}. Those
+entries never write \cmd{bp\_result}, so the byte still holds whatever the
+previous call left there, and in a freshly loaded blob that is zero. The test
+would pass whether the call worked or not.
+\end{warning}
+
+\evidence{\cmd{bindings/blob/blob.s}; \cmd{bindings/blob/README.md};
+\cmd{tests/emulator/blob.suite}}
 
 \section{Choose A Different Base Address}
 
-Prefer building at the final base: \cmd{make -C bindings/blob BASE=7000} links
-a \cmd{\$7000} image directly. When the address is known only at run time, the
-build also emits a relocation table for \cmd{reloc.s}. The relocated emulator
-suite moves the default blob, erases the original and calls the moved copy.
+Prefer building at the final base: \cmd{make -C bindings/blob BASE=6000} links
+a \cmd{\$6000} image directly, and \cmd{VARS} and \cmd{ZP} move the SDK's RAM
+the same way.
+
+When the address is known only at run time, the build also emits a relocation
+table beside the binary for \cmd{reloc.s} to apply. The relocated emulator
+suite copies the default blob to \cmd{\$6000}, relocates the copy, calls it,
+and then compares it byte for byte against an image the linker built for
+\cmd{\$6000} directly.
 
 \evidence{\cmd{bindings/blob/Makefile}; \cmd{bindings/blob/reloc.s};
-\cmd{tests/emulator/blob-relocated.suite}}
+\cmd{tests/emulator/blob-relocated.suite.in};
+\cmd{tests/emulator/relocharness.s}}

@@ -59,27 +59,57 @@ other toolchains & \cmd{make blob}; load the standalone binary described in
 \Needspace{18\baselineskip}
 \subsection*{BASIC check}
 
-Load and run the wedge, list the current directory, then print the command
-result:
+Load and run the wedge. It installs itself, prints a banner and performs a
+\bas{new}, so the BASIC program area is empty again afterwards:
 
 \begin{screen}
 LOAD"UCI",8\\
+SEARCHING FOR UCI\\
+LOADING\\
+READY.\\
 RUN\\
-UDIR\\
-PRINT UERR\\
-0
+ULTIMATE UCI BASIC WEDGE\\
+SDK \SDKVersion\\
+VIVA LA COMMODORE!\\
+READY.
 \end{screen}
 
-This demonstrates wedge installation, a DOS command and the shared result
-model. A printed \bas{0} is \cmd{ULTIMATE\_OK}; \bas{1} is
-\cmd{ULTIMATE\_ERR\_NO\_DEVICE}.
+Now send a command. \bas{udir} lists the Ultimate's current directory, and
+\bas{uerr} reports how that command ended:
 
-\evidence{\cmd{src/basic/loader.s}; \cmd{src/basic/dispatch.s};
-\cmd{include/uci\_protocol.h}}
+\begin{screen}
+UDIR\\
+DATA\\
+BIG.BIN\\
+README.TXT\\
+READY.\\
+PRINT UERR\\
+\ 0\\
+READY.
+\end{screen}
+
+The entry names depend on the machine and the medium; the printed result does
+not. A printed \bas{0} is \cmd{ULTIMATE\_OK}; \bas{1} is
+\cmd{ULTIMATE\_ERR\_NO\_DEVICE}. Together these two screens exercise wedge
+installation, a directory command and the shared result model.
+
+\evidence{\cmd{src/basic/loader.s}; \cmd{src/basic/install.s};
+\cmd{src/basic/dispatch.s}; \cmd{include/uci\_protocol.h}}
 
 \subsection*{C check}
 
-This complete program demonstrates initialization and error reporting:
+Build the library once before either of the two checks below:
+
+\begin{listingbox}
+make lib
+\end{listingbox}
+
+\begin{outputbox}
+bindings/cc65/build/ultimate.lib is created.
+\end{outputbox}
+
+This complete program initializes the SDK and reports any failure. Save it as
+\cmd{hello.c}:
 
 \begin{listingbox}
 \#include <stdio.h>\\
@@ -116,22 +146,75 @@ hello.prg is created with no compiler errors.
 \Needspace{14\baselineskip}
 \subsection*{Assembly check}
 
-This demonstrates the assembly return convention: the result code is in
-\cmd{A}, ready to compare and branch on.
+This is the same check in ca65 assembly, complete enough to assemble, link and
+run. Save it as \cmd{hello.s}:
 
 \begin{listingbox}
-\hspace*{2em}jsr ultimate\_init\\
+\hspace*{2em}.include "ultimate.inc"\\
+\\
+\hspace*{2em}.forceimport \_\_STARTUP\_\_\\
+\hspace*{2em}.export \_main\\
+\\
+CHROUT = \$FFD2\\
+\\
+\hspace*{2em}.code\\
+\\
+\_main:\hspace*{1em}jsr ultimate\_init\\
 \hspace*{2em}cmp \#ULTIMATE\_OK\\
-\hspace*{2em}bne failed
+\hspace*{2em}bne failed\\
+\\
+\hspace*{2em}ldx \#0\\
+found:\hspace*{1em}lda msg\_found,x\\
+\hspace*{2em}beq done\\
+\hspace*{2em}jsr CHROUT\\
+\hspace*{2em}inx\\
+\hspace*{2em}bne found\\
+\\
+done:\hspace*{2em}rts\\
+\\
+failed:\hspace*{1em}ldx \#0\\
+absent:\hspace*{1em}lda msg\_absent,x\\
+\hspace*{2em}beq done\\
+\hspace*{2em}jsr CHROUT\\
+\hspace*{2em}inx\\
+\hspace*{2em}bne absent\\
+\\
+\hspace*{2em}.rodata\\
+\\
+msg\_found:\hspace*{1em}.byte "ultimate found", 13, 0\\
+msg\_absent: .byte "no ultimate found", 13, 0
+\end{listingbox}
+
+Build it from the repository root:
+
+\begin{listingbox}
+cl65 -t c64 -{}-asm-include-dir bindings/asm \textbackslash\\
+\hspace*{2em}-o hello.prg hello.s bindings/cc65/build/ultimate.lib
 \end{listingbox}
 
 \begin{outputbox}
-A = ULTIMATE_OK; BNE is not taken.
+ULTIMATE FOUND
 \end{outputbox}
 
-The \cmd{cmp} instruction leaves the processor flags ready for \cmd{bne}.
+Three details in that listing matter. A program that leaves any of them out
+will not link, or will link and print nothing.
 
-\evidence{\cmd{docs/asm-abi.md}; \cmd{examples/asm/identify.s}}
+\cmd{.forceimport \_\_STARTUP\_\_} and the name \cmd{\_main} pull in cc65's
+start-up code, which is the simplest way to get a running \cmd{.prg}. The SDK
+itself needs no C runtime; Chapter~4 covers linking without one.
+
+\cmd{-{}-asm-include-dir} is how \cmd{ultimate.inc} is found.
+
+The message text is lowercase in the source and prints as capitals. ca65's C64
+character map turns source \cmd{a}--\cmd{z} into the byte values the machine
+displays as \cmd{A}--\cmd{Z}.
+
+The result convention is the one every entry point uses: \cmd{jsr}, then
+\cmd{cmp} against \cmd{ULTIMATE\_OK}, then branch. Compare \cmd{A} straight
+away, before another instruction overwrites it.
+
+\evidence{\cmd{docs/asm-abi.md}; \cmd{examples/asm/identify.s};
+\cmd{examples/asm/Makefile}}
 
 \section{Recover From Common Failures}
 

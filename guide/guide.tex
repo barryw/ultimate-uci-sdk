@@ -115,16 +115,18 @@ endorsed by them.
 \section*{Introduction}
 \addcontentsline{toc}{chapter}{Introduction}
 
-The \sdk{} gives a C64 program one API for the Ultimate command interface and
-for the two supported features that use direct hardware registers: REU transfers
-and Ultimate~64 turbo control. The language chapters cover every public call.
+The \sdk{} gives a C64 program one API for the Ultimate Command Interface, the
+UCI, and for the two supported features that use direct hardware registers:
+transfers through the RAM Expansion Unit, the REU, and Ultimate~64 turbo
+control. The language chapters cover every public call.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{include/uci.h};
 \cmd{tools/test\_registers.py}}
 
 The implementation is 6502 assembly. cc65 links it as a library; ca65 callers
-use its assembly ABI; BASIC reaches a banked build through a wedge; other
-toolchains call the same object code through a standalone jump-table binary.
+use its assembly ABI, the Application Binary Interface described in
+Chapter~4; BASIC reaches a banked build through a wedge; other toolchains
+call the same object code through a standalone jump-table binary.
 
 \evidence{\cmd{src/uci/sources.mk}; \cmd{bindings/cc65/Makefile};
 \cmd{src/basic/Makefile}; \cmd{bindings/blob/Makefile}}

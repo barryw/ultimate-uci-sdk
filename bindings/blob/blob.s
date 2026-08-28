@@ -23,6 +23,19 @@
         .import ultimate_palette_set_color, ultimate_palette_reset
         .import ultimate_turbo_available, ultimate_turbo_get
         .import ultimate_turbo_set, ultimate_turbo_badlines
+        .import ultimate_stat, ultimate_fstat, ultimate_rename
+        .import ultimate_copy, ultimate_mkdir, ultimate_home
+        .import ultimate_mount, ultimate_unmount, ultimate_swap
+        .import ultimate_get_time, ultimate_set_time
+        .import ultimate_reboot, ultimate_freeze
+        .import ultimate_drive_enable, ultimate_drive_power
+        .import ultimate_drive_info, ultimate_ramdisk_info
+        .import ultimate_net_setip
+        .import ultimate_http_body, ultimate_http_body_free
+        .import ultimate_http_body_clear, ultimate_http_body_int
+        .import ultimate_http_body_bool, ultimate_http_body_string
+        .import ultimate_http_body_binary
+        .import ult_arg2, ult_stage, ult_val
         .import ultimate_chdir, ultimate_getpath
         .import ultimate_opendir, ultimate_readdir
         .import ultimate_open, ultimate_close, ultimate_read
@@ -129,6 +142,40 @@ blob_start:
         jmp blob_reu_size               ; +$AF
         jmp blob_legacy_sid_info        ; +$B2
 
+; The rest of the Ultimate DOS command set, the disk images, the clock, the
+; machine, and HTTP request bodies.
+;
+; **These twenty-five fill the header page.** The table starts at the base
+; address and the parameter block starts $100 bytes after it, so +$FD is the
+; last entry there is room for; anything added later needs somewhere else to
+; live. What did not fit is listed in bindings/blob/README.md, and every one of
+; those is still reachable through uci_exec_block at +$07.
+        jmp blob_stat                   ; +$B5
+        jmp blob_fstat                  ; +$B8
+        jmp blob_rename                 ; +$BB
+        jmp blob_copy                   ; +$BE
+        jmp blob_mkdir                  ; +$C1
+        jmp blob_home                   ; +$C4
+        jmp blob_mount                  ; +$C7
+        jmp blob_unmount                ; +$CA
+        jmp blob_swap                   ; +$CD
+        jmp blob_get_time               ; +$D0
+        jmp blob_set_time               ; +$D3
+        jmp blob_reboot                 ; +$D6
+        jmp blob_freeze                 ; +$D9
+        jmp blob_drive_enable           ; +$DC
+        jmp blob_drive_power            ; +$DF
+        jmp blob_drive_info             ; +$E2
+        jmp blob_ramdisk_info           ; +$E5
+        jmp blob_net_setip              ; +$E8
+        jmp blob_http_body              ; +$EB
+        jmp blob_http_body_free         ; +$EE
+        jmp blob_http_body_clear        ; +$F1
+        jmp blob_http_body_int          ; +$F4
+        jmp blob_http_body_bool         ; +$F7
+        jmp blob_http_body_string       ; +$FA
+        jmp blob_http_body_binary       ; +$FD
+
 ; ---------------------------------------------------------------------------
 ; The parameter block.
 ;
@@ -145,6 +192,7 @@ blob_start:
         .export bp_attrib, bp_pos, bp_reu, bp_reulen
         .export bp_sock, bp_iface, bp_port
         .export bp_http, bp_body, bp_verb
+        .export bp_name2, bp_drive, bp_format, bp_flag, bp_val, bp_time
 
 BP_STATUS_MAX = 32
 BP_NAME_MAX   = 40
@@ -178,6 +226,18 @@ bp_port:    .res 2                  ; +$160 TCP or UDP port
 bp_http:    .res 1                  ; +$162 header handle, in and out
 bp_body:    .res 1                  ; +$163 body handle, or HTTP_BODY_NONE
 bp_verb:    .res 1                  ; +$164 HTTP_VERB_* for open
+
+; And again for the DOS, disk, clock, machine and HTTP body entries. The block
+; is a fixed 512 bytes and had 155 of them spare, so this moves nothing.
+;
+; bp_name2 exists because three commands take two caller strings where every
+; earlier one took at most a name: rename, copy, and a JSON string value.
+bp_name2:   .res BP_NAME_MAX        ; +$165 second name, or a string value
+bp_drive:   .res 1                  ; +$18D drive A or B, or an IEC device number
+bp_format:  .res 1                  ; +$18E HTTP body format, or the time format
+bp_flag:    .res 1                  ; +$18F on or off, in and out
+bp_val:     .res 4                  ; +$190 a 32-bit value, little-endian
+bp_time:    .res 6                  ; +$194 year less 1900, month, day, h, m, s
 
 ; ---------------------------------------------------------------------------
 ; The shims.
@@ -436,6 +496,196 @@ blob_set_url:
         sta ult_url
         lda #>bp_name
         sta ult_url + 1
+        rts
+
+; --- the rest of Ultimate DOS ---
+
+blob_stat:
+        jsr blob_set_name
+        jsr blob_set_arg2_reply
+        jsr ultimate_stat
+        jmp blob_done
+
+blob_fstat:
+        jsr blob_set_arg2_reply
+        jsr ultimate_fstat
+        jmp blob_done
+
+blob_rename:
+        jsr blob_set_two_names
+        jsr ultimate_rename
+        jmp blob_done
+
+blob_copy:
+        jsr blob_set_two_names
+        jsr ultimate_copy
+        jmp blob_done
+
+blob_mkdir:
+        jsr blob_set_name
+        jsr ultimate_mkdir
+        jmp blob_done
+
+blob_home:
+        jsr ultimate_home
+        jmp blob_done
+
+; --- disk images ---
+
+blob_mount:
+        jsr blob_set_name
+        lda bp_drive
+        jsr ultimate_mount
+        jmp blob_done
+
+blob_unmount:
+        lda bp_drive
+        jsr ultimate_unmount
+        jmp blob_done
+
+blob_swap:
+        lda bp_drive
+        jsr ultimate_swap
+        jmp blob_done
+
+; --- the clock ---
+
+blob_get_time:
+        jsr blob_set_reply
+        lda bp_format
+        jsr ultimate_get_time
+        jmp blob_done
+
+blob_set_time:
+        ldx #$05
+@copy:  lda bp_time,x
+        sta ult_stage,x
+        dex
+        bpl @copy
+        jsr ultimate_set_time
+        jmp blob_done
+
+; --- the machine ---
+
+blob_reboot:
+        jsr ultimate_reboot
+        jmp blob_done
+
+blob_freeze:
+        jsr ultimate_freeze
+        jmp blob_done
+
+blob_drive_enable:
+        ldx bp_flag
+        lda bp_drive
+        jsr ultimate_drive_enable
+        jmp blob_done
+
+blob_drive_power:
+        lda bp_drive
+        jsr ultimate_drive_power
+        pha
+        lda ult_stage
+        sta bp_flag
+        pla
+        jmp blob_done
+
+blob_drive_info:
+        lda #<bp_reply
+        ldx #>bp_reply
+        jsr ultimate_drive_info
+        jmp blob_done
+
+blob_ramdisk_info:
+        lda #<bp_reply
+        ldx #>bp_reply
+        jsr ultimate_ramdisk_info
+        jmp blob_done
+
+; The twelve bytes go in bp_reply, which is where ipconfig puts them coming the
+; other way, so reading a configuration and writing it back needs no copying.
+blob_net_setip:
+        jsr blob_set_iface_reply
+        jsr ultimate_net_setip
+        jmp blob_done
+
+; --- HTTP request bodies ---
+
+blob_http_body:
+        lda bp_format
+        jsr ultimate_http_body
+        pha
+        lda ult_body
+        sta bp_body
+        pla
+        jmp blob_done
+
+blob_http_body_free:
+        jsr blob_set_body
+        jsr ultimate_http_body_free
+        jmp blob_done
+
+blob_http_body_clear:
+        jsr blob_set_body
+        jsr ultimate_http_body_clear
+        jmp blob_done
+
+blob_http_body_int:
+        jsr blob_set_body_key
+        ldx #$03
+@copy:  lda bp_val,x
+        sta ult_val,x
+        dex
+        bpl @copy
+        jsr ultimate_http_body_int
+        jmp blob_done
+
+blob_http_body_bool:
+        jsr blob_set_body_key
+        lda bp_flag
+        sta ult_val
+        jsr ultimate_http_body_bool
+        jmp blob_done
+
+; The key is bp_name, as every caller string is, and the value is bp_name2.
+blob_http_body_string:
+        jsr blob_set_body_key
+        lda #<bp_name2
+        sta ult_buf
+        lda #>bp_name2
+        sta ult_buf + 1
+        jsr ultimate_http_body_string
+        jmp blob_done
+
+blob_http_body_binary:
+        jsr blob_set_body
+        jsr blob_set_addr_buf
+        jsr ultimate_http_body_binary
+        jmp blob_done
+
+blob_set_body:
+        lda bp_body
+        sta ult_body
+        rts
+
+blob_set_body_key:
+        jsr blob_set_body
+        jmp blob_set_url                ; the key travels where a URL does
+
+; bp_reply as the block a stat reply is received into.
+blob_set_arg2_reply:
+        lda #<bp_reply
+        sta ult_arg2
+        lda #>bp_reply
+        sta ult_arg2 + 1
+        rts
+
+blob_set_two_names:
+        jsr blob_set_name
+        lda #<bp_name2
+        sta ult_arg2
+        lda #>bp_name2
+        sta ult_arg2 + 1
         rts
 
 ; --- moving the block in and out ---
