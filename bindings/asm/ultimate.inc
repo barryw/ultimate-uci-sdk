@@ -151,6 +151,14 @@ ULTIMATE_TIME_BUFFER  = 24
 ; --- control.s -------------------------------------------------------------
 ; ultimate_reboot does not return: the C64 is reset part way through it.
 ; ultimate_freeze returns when whoever is at the keyboard leaves the menu.
+;
+; ultimate_drive_enable and ultimate_drive_power name a drive with
+; ULTIMATE_DRIVE_A or ULTIMATE_DRIVE_B, and there are no others: the firmware
+; has one command per drive and it has commands for those two only.
+; ultimate_drive_info is not bounded by that. Its reply also carries the
+; occupied IEC bus slots, so its block is CTRL_DRVINFO_BYTES - the count and
+; CTRL_DRVINFO_MAX records - and its count is what arrived, not what the reply
+; claimed.
 ULTIMATE_DRIVE_A = 0
 ULTIMATE_DRIVE_B = 1
 .global ultimate_reboot      ; -> nothing after this line runs

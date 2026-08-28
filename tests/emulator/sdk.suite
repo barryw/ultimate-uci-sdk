@@ -2132,6 +2132,80 @@ suites {
       assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
     }
 
+    ; docs/uci.md, "Drive information": control_target.cc adds three to the
+    ; reply length for each of drives A and B, and IecInterface::info then
+    ; increments the same count byte once per occupied IEC bus slot without
+    ; growing the length. A machine with SoftwareIEC enabled therefore declares
+    ; more records than it sends, and a parser that insisted the two agreed
+    ; would fail on every such machine.
+    ;
+    ; u64sim does not implement GET_DRVINFO, so these call the SDK's own reply
+    ; parser with the replies a real machine sends. It is the shipping routine,
+    ; not a copy of it, so changing the parser changes what is asserted here.
+    test("sdk-drvinfo-softiec-reply", "a count that includes IEC slots is not a protocol error") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+
+      ; Two drives and one SoftwareIEC slot: a count of three in seven bytes.
+      [reply] = $03
+      [reply] + $01 = $00               ; drive A: 1541, device 8, running
+      [reply] + $02 = $08
+      [reply] + $03 = $01
+      [reply] + $04 = $02               ; drive B: 1581, device 9, stopped
+      [reply] + $05 = $09
+      [reply] + $06 = $00
+      [reply] + $07 = $ff               ; no eighth byte arrived
+      [drvinfo_len] = $07
+      [result] = $ff
+      jsr([t_drvinfo_reply], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK, where the old parser answered ULTIMATE_ERR_PROTOCOL")
+      assert([reply] == $02, "the count is the two records that arrived, not the three declared")
+      assert(([reply] + $02).b == $08, "drive A's device number is untouched")
+      assert(([reply] + $05).b == $09, "and so is drive B's")
+      assert(([reply] + $07).b == $ff, "and nothing past the reply was turned into a record")
+    }
+
+    test("sdk-drvinfo-reply-limits", "what the parser accepts, and what it still refuses") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+
+      ; Both drives and all four IEC slots in use: the largest count there is.
+      [reply] = $06
+      [drvinfo_len] = $07
+      [result] = $ff
+      jsr([t_drvinfo_reply], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([reply] == $02, "clamped to the two records the reply carried")
+
+      ; A firmware that does send every record it counts is not clamped.
+      [reply] = $06
+      [drvinfo_len] = $13               ; CTRL_DRVINFO_BYTES
+      [result] = $ff
+      jsr([t_drvinfo_reply], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([reply] == $06, "and all six records are reported")
+
+      ; Slots only, with neither drive configured: the count byte on its own.
+      [reply] = $02
+      [drvinfo_len] = $01
+      [result] = $ff
+      jsr([t_drvinfo_reply], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert([reply] == $00, "no records arrived, so none are reported")
+
+      ; Seven is past every slot the firmware has to report.
+      [reply] = $07
+      [drvinfo_len] = $07
+      [result] = $ff
+      jsr([t_drvinfo_reply], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "ULTIMATE_ERR_PROTOCOL")
+
+      ; A length that ends inside a record is not this reply layout.
+      [reply] = $02
+      [drvinfo_len] = $08
+      [result] = $ff
+      jsr([t_drvinfo_reply], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "ULTIMATE_ERR_PROTOCOL")
+    }
+
     test("sdk-net-setip", "writing an interface configuration") {
       jsr([boot], stop_on_rts = true, fail_on_brk = true)
       jsr([t_init], stop_on_rts = true, fail_on_brk = true)

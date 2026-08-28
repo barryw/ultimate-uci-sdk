@@ -54,6 +54,7 @@
         .export ultimate_drive_enable
         .export ultimate_drive_power
         .export ultimate_drive_info,   _ultimate_drive_info
+        .export ctrl_drvinfo_reply
         .export ultimate_ramdisk_info, _ultimate_ramdisk_info
 
 ; The second byte of the drive power reply: 'n' of "on ", 'f' of "off".
@@ -109,7 +110,7 @@ _ultimate_freeze:
 ; per drive, so there is nothing to look the number up with.
 ; ---------------------------------------------------------------------------
 ultimate_drive_enable:
-        cmp #CTRL_DRVINFO_MAX
+        cmp #CTRL_DRIVE_SLOTS
         bcs @invalid
         asl a                           ; A: $30 enable, $31 disable
         clc                             ; B: $32 enable, $33 disable
@@ -138,7 +139,7 @@ ultimate_drive_enable:
 ; be a plausible-looking wrong answer.
 ; ---------------------------------------------------------------------------
 ultimate_drive_power:
-        cmp #CTRL_DRVINFO_MAX
+        cmp #CTRL_DRIVE_SLOTS
         bcs @invalid
         clc
         adc #CTRL_CMD_GET_DRIVE_A_POWER
@@ -198,9 +199,19 @@ ultimate_drive_power:
 ; the one src/uci/disk.s takes, so this is how a program finds out what to mount
 ; into without asking its user.
 ;
+; **The records are not only drives A and B.** The firmware adds one per
+; occupied IEC bus slot as well, so the block has to be CTRL_DRVINFO_BYTES - the
+; count and six records - and not the seven bytes two drives need. The type of a
+; slot record is CTRL_DRVTYPE_SOFTIEC or CTRL_DRVTYPE_PRINTER, neither of which
+; is a disk drive, so a caller looking for something to mount into has to read
+; the type rather than assume every record is one.
+;
 ; The effective device number is asked for rather than the configured one: a
 ; drive whose address the running software changed answers on the effective one,
 ; which is the number that matters to anything trying to reach it.
+;
+; ctrl_drvinfo_reply below checks the reply, and says what the firmware gets
+; wrong about the count.
 ; ---------------------------------------------------------------------------
 ultimate_drive_info:
 _ultimate_drive_info:
@@ -235,34 +246,12 @@ _ultimate_drive_info:
         cmp #ULTIMATE_OK
         bne @failed
 
-        ; The reply length has to be the count the reply itself declares:
-        ; anything else means the record layout is not the one read here.
-        lda ult_req + UCI_REQ_DATALEN + 1
-        bne @protocol
-        lda ult_buf
-        sta uci_ptr
-        lda ult_buf + 1
-        sta uci_ptr + 1
-        ldy #$00
-        lda (uci_ptr),y
-        cmp #CTRL_DRVINFO_MAX + 1
-        bcs @protocol
-        tax
-        lda #CTRL_DRVINFO_FIRST
-@add:   cpx #$00
-        beq @check
-        clc
-        adc #CTRL_DRVINFO_RECORD
-        dex
-        bne @add
-@check: cmp ult_req + UCI_REQ_DATALEN
-        bne @protocol
-        lda #ULTIMATE_OK
+        jsr ctrl_drvinfo_reply
+        cmp #ULTIMATE_OK
+        bne @failed
         ldx #$00
         rts
 
-@protocol:
-        lda #ULTIMATE_ERR_PROTOCOL
 @failed:
         pha
         jsr ctrl_no_drives              ; whatever went wrong, report none
@@ -272,6 +261,74 @@ _ultimate_drive_info:
 
 @invalid:
         jmp ult_invalid
+
+; ---------------------------------------------------------------------------
+; ctrl_drvinfo_reply   ult_buf = the caller's block, holding the reply
+;                      ult_req + UCI_REQ_DATALEN = how many bytes of it arrived
+;                   -> A = ULTIMATE_OK or ULTIMATE_ERR_PROTOCOL
+;
+; **The count the reply declares can be larger than the number of records the
+; reply carries.** control_target.cc emits a record for drive A and one for
+; drive B and adds three to the reply length for each. IecInterface::info then
+; increments the same count byte once per occupied IEC bus slot - a SoftwareIEC
+; drive, an IEC printer - but never grows the reply length, so those records are
+; written into the firmware's buffer and never sent. A machine with SoftwareIEC
+; enabled therefore answers, for example, a count of 3 in a reply seven bytes
+; long.
+;
+; So the count is clamped to the records that actually arrived rather than the
+; reply being rejected: rejecting it would fail ultimate_drive_info() on every
+; machine with an IEC slot in use, and trusting it would walk the caller past
+; the data. A firmware that grows the length to match sends more records and
+; this clamps nothing.
+;
+; What is still refused: a count above CTRL_DRVINFO_MAX, which no machine has
+; slots for, and a length that is not the count byte plus a whole number of
+; records, which means the layout is not the one read here.
+;
+; Split out of ultimate_drive_info and exported so that
+; tests/emulator/sdk.suite can call it with the reply a machine running
+; SoftwareIEC sends. u64sim does not implement GET_DRVINFO, so there is no other
+; way to run this against that reply, and a test that rebuilt the check instead
+; would pass while the shipping one was wrong. Nothing else calls it.
+; ---------------------------------------------------------------------------
+ctrl_drvinfo_reply:
+        lda ult_req + UCI_REQ_DATALEN + 1
+        bne @protocol                   ; no reply this long is this reply
+        lda ult_buf
+        sta uci_ptr
+        lda ult_buf + 1
+        sta uci_ptr + 1
+
+        ldy #$00                        ; the count is the first byte
+        lda (uci_ptr),y
+        cmp #CTRL_DRVINFO_MAX + 1
+        bcs @protocol                   ; a count no machine has slots for
+
+        ldy #$00                        ; Y = records the reply actually carries
+        lda #CTRL_DRVINFO_FIRST         ; A = bytes the count and those records fill
+@span:  cmp ult_req + UCI_REQ_DATALEN
+        beq @carried                    ; the reply ends on a record boundary
+        bcs @protocol                   ; it ends inside one
+        cpy #CTRL_DRVINFO_MAX
+        bcs @protocol                   ; longer than the longest reply there is
+        clc
+        adc #CTRL_DRVINFO_RECORD
+        iny
+        bne @span                       ; always: the cpy above bounds Y at 6
+
+@carried:
+        tya
+        ldy #$00
+        cmp (uci_ptr),y
+        bcs @ok                         ; every record the count declares arrived
+        sta (uci_ptr),y                 ; otherwise report only the ones that did
+@ok:    lda #ULTIMATE_OK
+        rts
+
+@protocol:
+        lda #ULTIMATE_ERR_PROTOCOL
+        rts
 
 ; Zero the count at the front of the caller's block.
 ctrl_no_drives:

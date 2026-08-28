@@ -54,6 +54,7 @@
         .import ultimate_reboot, ultimate_freeze
         .import ultimate_drive_enable, ultimate_drive_power
         .import ultimate_drive_info, ultimate_ramdisk_info
+        .import ctrl_drvinfo_reply, ult_req
         .import ultimate_net_setip
         .import ultimate_http_body, ultimate_http_body_free
         .import ultimate_http_body_clear, ultimate_http_body_up
@@ -97,7 +98,7 @@
         .export t_get_time, t_set_time
         .export t_reboot, t_freeze
         .export t_drive_enable, t_drive_power
-        .export t_drive_info, t_ramdisk_info
+        .export t_drive_info, t_ramdisk_info, t_drvinfo_reply, drvinfo_len
         .export t_net_setip
         .export t_body, t_body_free, t_body_clear, t_body_up
         .export t_body_int, t_body_bool, t_body_string
@@ -205,6 +206,7 @@ name2:        .res REPLY_MAX
 finfo:        .res ULTIMATE_FILEINFO_SIZE
 
 drive_arg:    .res 1      ; an IEC device number, or drive A or B
+drvinfo_len:  .res 1      ; the reply length t_drvinfo_reply hands the parser
 flag_arg:     .res 1      ; on or off, in and out
 body_arg:     .res 1      ; an HTTP body format going in, its handle coming out
 time_arg:     .res 6      ; year less 1900, month, day, hour, minute, second
@@ -699,6 +701,24 @@ t_ramdisk_info:
         lda #<reply
         ldx #>reply
         jsr ultimate_ramdisk_info
+        sta result
+        rts
+
+; The GET_DRVINFO reply parser on its own, with a reply the suite wrote into
+; `reply` and a length in `drvinfo_len`. u64sim does not implement GET_DRVINFO,
+; so this is the only way to run the parser against the reply a machine with an
+; IEC bus slot in use really sends. It calls the shipping routine rather than
+; repeating what it does, so a change to the parser changes what is asserted.
+t_drvinfo_reply:
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda drvinfo_len
+        sta ult_req + UCI_REQ_DATALEN
+        lda #$00
+        sta ult_req + UCI_REQ_DATALEN + 1
+        jsr ctrl_drvinfo_reply
         sta result
         rts
 

@@ -218,14 +218,24 @@
 #define CTRL_DRVTYPE_SOFTIEC   0x0F
 #define CTRL_DRVTYPE_PRINTER   0x50
 
+/* ---- Control: the physical drives ---- */
+/* Drives A and B. CTRL_CMD_ENABLE_DRIVE_A through */
+/* CTRL_CMD_GET_DRIVE_B_POWER are one command per drive, so this is how */
+/* many drives those commands can name. It is not how many records */
+/* CTRL_CMD_GET_DRVINFO can return - see CTRL_DRVINFO_MAX. */
+#define CTRL_DRIVE_SLOTS 0x02  /* drives the enable and power commands address */
+
 /* ---- Control: drive information reply ---- */
 /* Layout of the CTRL_CMD_GET_DRVINFO reply: a count, then one record per */
-/* drive the machine has. Read from control_target.cc. */
+/* drive the machine has. control_target.cc emits drives A and B, then */
+/* IecInterface::info in iec_interface.cc adds one record per occupied IEC */
+/* bus slot. */
 #define CTRL_DRVINFO_COUNT  0x00  /* offset of the drive count */
 #define CTRL_DRVINFO_FIRST  0x01  /* offset of the first record */
 #define CTRL_DRVINFO_RECORD 0x03  /* bytes per record: type, IEC address, power */
-#define CTRL_DRVINFO_MAX    0x02  /* records the firmware can report */
-#define CTRL_DRVINFO_BYTES  0x07  /* longest reply: the count and two records */
+#define CTRL_DRVINFO_SLAVES 0x04  /* IEC bus slots, MAX_SLOTS in iec_interface.h */
+#define CTRL_DRVINFO_MAX    0x06  /* records the count can reach: two drives and four slots */
+#define CTRL_DRVINFO_BYTES  0x13  /* longest reply: the count and six records */
 
 /* ---- Control: RAM disk information reply ---- */
 /* Layout of the CTRL_CMD_GET_RAMDISKINFO reply: four two-byte records, */

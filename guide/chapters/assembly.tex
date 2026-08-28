@@ -652,10 +652,17 @@ drives holds a count and one record per drive; ult_stage = 1 when it runs.
 
 \cmd{ultimate\_drive\_info} takes the block pointer in \cmd{A}/\cmd{X}. The
 block is a count at \cmd{CTRL\_DRVINFO\_COUNT}, then
-\cmd{CTRL\_DRVINFO\_RECORD} bytes per drive from \cmd{CTRL\_DRVINFO\_FIRST}:
+\cmd{CTRL\_DRVINFO\_RECORD} bytes per record from \cmd{CTRL\_DRVINFO\_FIRST}:
 type, then the IEC device number, then 1 while the drive is running. On any
 failure the count is set to zero, so a caller that skips the result check reads
 no records.
+
+The block must be \cmd{CTRL\_DRVINFO\_BYTES} long, because the records are not
+only drives A and B. The firmware reports each occupied IEC bus slot in the same
+reply, and there are four of those, so the count reaches six on a machine
+running SoftwareIEC and an IEC printer. A slot has a type of
+\cmd{CTRL\_DRVTYPE\_SOFTIEC} or \cmd{CTRL\_DRVTYPE\_PRINTER}; read the type
+rather than assuming every record is a disk drive.
 
 \cmd{ultimate\_drive\_enable} takes the drive in \cmd{A} and the state in
 \cmd{X}: zero switches it off, and any non-zero value switches it on.
@@ -668,6 +675,12 @@ Two numbering schemes meet here. \cmd{ultimate\_drive\_enable} and
 \cmd{ULTIMATE\_DRIVE\_B}, which name a physical drive.
 \cmd{ultimate\_mount} takes the device number the drive answers to on the IEC
 bus. \cmd{ultimate\_drive\_info} connects the two: each record carries both.
+
+Those two entry points accept no drive beyond A and B, because the firmware has
+one command per drive and it has commands for those two only. That limit is
+\cmd{CTRL\_DRIVE\_SLOTS} and it is not
+\cmd{CTRL\_DRVINFO\_MAX}, which is how many records the information reply can
+carry.
 \end{note}
 
 \begin{warning}

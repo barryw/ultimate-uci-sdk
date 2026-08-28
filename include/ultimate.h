@@ -500,10 +500,19 @@ uint8_t ultimate_reu_save(uint32_t reuaddr, uint32_t len);
  * physical drive - unlike ultimate_mount(), which takes the IEC device number
  * the drive answers as. The two are connected by ultimate_drive_info(), whose
  * records carry both.
+ *
+ * There are two different counts here and they are not interchangeable.
+ * ULTIMATE_DRIVE_SLOTS is how many drives ultimate_drive_enable() and
+ * ultimate_drive_power() can name: two, because the firmware has a separate
+ * command per drive and there are commands for A and B only.
+ * ULTIMATE_DRIVES_MAX is how many records ultimate_drive_info() can return,
+ * which is larger, because the firmware reports the occupied IEC bus slots -
+ * a SoftwareIEC drive, an IEC printer - in the same reply.
  * ------------------------------------------------------------------------- */
 #define ULTIMATE_DRIVE_A 0
 #define ULTIMATE_DRIVE_B 1
-#define ULTIMATE_DRIVES_MAX CTRL_DRVINFO_MAX      /* 2 */
+#define ULTIMATE_DRIVE_SLOTS CTRL_DRIVE_SLOTS     /* 2 */
+#define ULTIMATE_DRIVES_MAX  CTRL_DRVINFO_MAX     /* 6 */
 
 typedef struct {
     uint8_t type;      /* CTRL_DRVTYPE_*: 1541, 1571, 1581, SoftwareIEC... */
@@ -525,7 +534,15 @@ uint8_t ultimate_drive_enable(uint8_t drive, uint8_t on);
 /* 1 in *on when that drive is running. on may not be NULL. */
 uint8_t ultimate_drive_power(uint8_t drive, uint8_t *on);
 
-/* Every drive the machine has, with the device number to mount into. */
+/*
+ * Every drive the machine has, with the device number to mount into.
+ *
+ * count is how many records were filled in, and is never more than the reply
+ * actually carried: the firmware counts the IEC bus slots in the count byte
+ * without lengthening the reply, so the SDK reports the records that arrived
+ * rather than letting a caller read past them. A record whose type is
+ * CTRL_DRVTYPE_SOFTIEC or CTRL_DRVTYPE_PRINTER is a bus slot, not a disk drive.
+ */
 uint8_t ultimate_drive_info(ultimate_drives *drives);
 
 /*

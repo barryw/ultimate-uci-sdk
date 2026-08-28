@@ -1060,13 +1060,21 @@ after_write:
     } else {
         uint8_t on = 0xFF;
 
+        uint8_t rec;
+
         check("drive-info", ULTIMATE_OK, err);
+
+        /* The count includes the occupied IEC bus slots, not only drives A
+         * and B, so this is up to ULTIMATE_DRIVES_MAX and not 2. Every record
+         * is printed, because a machine running SoftwareIEC or an IEC printer
+         * is where the count and the reply length disagree, and the run log is
+         * where that shows. */
         check("drive-info-counts-the-drives", 1,
               drives.count <= ULTIMATE_DRIVES_MAX ? 1 : 0);
-        if (drives.count > 0)
-            printf("# drive=%u type=$%02x power=%u\n",
-                   drives.drive[0].device, drives.drive[0].type,
-                   drives.drive[0].power);
+        for (rec = 0; rec < drives.count; rec++)
+            printf("# record %u: drive=%u type=$%02x power=%u\n",
+                   rec, drives.drive[rec].device, drives.drive[rec].type,
+                   drives.drive[rec].power);
 
         check("drive-power", ULTIMATE_OK,
               ultimate_drive_power(ULTIMATE_DRIVE_A, &on));

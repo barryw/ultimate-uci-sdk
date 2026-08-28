@@ -417,6 +417,34 @@ one — and the firmware defaults it to 1 when the command carries no argument.
 The type codes are the firmware's own drive kinds. `$0F` is SoftwareIEC and
 `$50` a printer, neither of which is a disk drive; the values in between are.
 
+**The reply is not only drives A and B.** `control_target.cc` emits a record for
+each of the two emulated drives, and then `IecInterface::info` in
+`iec_interface.cc` adds one per occupied IEC bus slot. There are `MAX_SLOTS` —
+four — of those, so the count can reach six on a machine running SoftwareIEC and
+an IEC printer.
+
+**The count can be larger than the number of records the reply carries.**
+`control_target.cc` adds three to `data_message.length` for each emulated drive
+it writes. `IecInterface::info` increments the count byte for each slot but
+never touches the length, so the slot records are written into the firmware's
+buffer and are not transmitted. A machine with two drives and one SoftwareIEC
+slot answers a count of 3 in a seven-byte reply.
+
+That is a firmware defect, and it decides how a reader has to be written. The
+SDK reports the records that actually arrived rather than the count the reply
+declares: rejecting the reply would fail `ultimate_drive_info()` on every
+machine with a bus slot in use, and trusting the count would walk the caller
+past the end of the data. A firmware that grows the length to match sends more
+records and nothing is clamped. See `ctrl_drvinfo_reply` in `src/uci/control.s`
+and the `sdk-drvinfo-*` tests in `tests/emulator/sdk.suite`.
+
+A reply buffer therefore has to be `CTRL_DRVINFO_BYTES` — the count and six
+records, 19 bytes — not the seven that two drives need.
+
+`CTRL_DRIVE_SLOTS` is a separate number and means something else: it is 2,
+because `ENABLE_DRIVE_A` through `GET_DRIVE_B_POWER` are one command per drive
+and the firmware has commands for A and B only.
+
 ### RAM disk information (`GET_RAMDISKINFO` `$40`)
 
 Eight bytes: four two-byte records of a GEOS MegaPatch drive type code and a
