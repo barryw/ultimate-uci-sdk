@@ -26,6 +26,16 @@ exactly as it found it. One that ran past \cmd{\$A000} would have to switch
 BASIC ROM out and back around every call.
 \end{note}
 
+\begin{warning}
+\cmd{\$7000} is inside BASIC's memory, not above it. BASIC owns
+\cmd{\$0801--\$9FFF}: the program area grows up from \cmd{\$0801} and strings
+and arrays grow down from \cmd{\$9FFF}. A program that has replaced BASIC owns
+that memory instead and needs to do nothing. A program that leaves BASIC running
+must lower the top of BASIC memory to the base address before it loads the blob,
+or BASIC will write over it. \emph{Call The Blob From BASIC}, later in this
+chapter, shows the two \bas{poke}s and the \bas{clr} that do it.
+\end{warning}
+
 This example checks the default build before calling it:
 
 \begin{listingbox}
@@ -121,9 +131,24 @@ an address from this subset.
 \section{Call The Blob From BASIC}
 
 The page-aligned block gives BASIC a calling convention it can express with
-\bas{poke}, \bas{peek} and \bas{sys}. This program checks the signature,
-brings the SDK up, confirms that an Ultimate answered, and prints the size of
-the RAM expansion:
+\bas{poke}, \bas{peek} and \bas{sys}. Before any of that, BASIC has to be told
+to stay out of the memory the blob occupies. Type this first, then load the
+blob:
+
+\begin{screen}
+POKE 56,112 : POKE 55,0 : CLR
+\end{screen}
+
+112 is \cmd{\$70}, the high byte of the base address, and 55 and 56 are the low
+and high bytes of BASIC's top-of-memory pointer at \cmd{\$37--\$38}. \bas{clr}
+is what makes it take effect, because it resets the string pointer from the new
+top. BASIC then keeps \cmd{\$0801--\$6FFF}, and the blob's code at \cmd{\$7000}
+and its variables at \cmd{\$9F00} are both out of its reach. Loading the blob
+without this leaves it where BASIC's strings and arrays will eventually be
+written.
+
+This program then checks the signature, brings the SDK up, confirms that an
+Ultimate answered, and prints the size of the RAM expansion:
 
 \begin{screen}
 10 B = 28672 : P = B + 256\\

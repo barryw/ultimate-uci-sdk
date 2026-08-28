@@ -8,21 +8,47 @@ can use it — with no linking at all.
     make -C bindings/blob BASE=6000       # at $6000
     make -C bindings/blob BASE=6000 VARS=36864 ZP=163
 
-The default build is 8,694 bytes: the 256-byte jump table page and the
-512-byte parameter block, fixed at those sizes so every offset below holds
-regardless of how little of them is used, plus the code itself.
+A build is the 256-byte jump table page, the 512-byte parameter block — fixed
+at those sizes so every offset below holds regardless of how little of them is
+used — and the code itself. `make` prints the size of what it built. The figure
+is not repeated here: a byte count in prose is wrong again the next time a
+service is added, and this one already has been.
 
 **The default is `$7000`.** It was `$C000` until `file.s` landed and the code
-overflowed the 4K there by 350 bytes, and `$8000` until the DOS, disk, clock,
-machine and HTTP body services landed and overflowed the 8K by 758.
+overflowed the 4K there, and `$8000` until the DOS, disk, clock, machine and
+HTTP body services landed and overflowed the 8K.
 
-The blob has to sit below `$A000` and above the BASIC program area, because
-`$A000-$BFFF` is BASIC ROM. A caller reaches every byte of a blob at `$7000`
-with the machine exactly as it found it, and would have to bank for one that ran
-past `$A000`. That is the difference between the blob and the BASIC wedge, whose
-SDK does sit at `$A000` under BASIC ROM and pays a stub per call for it. A wedge
-can bank because it is the only thing calling; a blob's caller cannot be asked
-to.
+The blob has to sit below `$A000`, because `$A000-$BFFF` is BASIC ROM. A caller
+reaches every byte of a blob at `$7000` with the machine exactly as it found it,
+and would have to bank for one that ran past `$A000`. That is the difference
+between the blob and the BASIC wedge, whose SDK does sit at `$A000` under BASIC
+ROM and pays a stub per call for it. A wedge can bank because it is the only
+thing calling; a blob's caller cannot be asked to.
+
+## `$7000` is in BASIC's memory, and has to be taken out of it
+
+`$7000` is not spare RAM. The BASIC program area starts at `$0801` and grows
+upwards, and BASIC's strings and arrays grow downwards from the top of memory at
+`$9FFF`, so the whole of `$0801-$9FFF` belongs to BASIC on a machine that has
+not been told otherwise. A blob loaded at `$7000` and left unprotected will be
+overwritten by strings or arrays, and a large enough BASIC program will reach it
+from below. The same is true of every other base address the blob can be built
+for. Nothing about `$7000` makes it safe; what makes it usable is that it is
+below BASIC ROM, so no banking is needed to call it.
+
+A program that has replaced BASIC — an assembly or cc65 program loaded and run
+over it — owns `$0801-$9FFF` and has nothing to do. A program that leaves BASIC
+running has to lower the top of BASIC memory to the blob's base *before* loading
+the blob:
+
+    POKE 56,112 : POKE 55,0 : CLR
+
+112 is `$70`, the high byte of the base address; 55 and 56 are the low and high
+bytes of BASIC's top-of-memory pointer at `$37-$38`. `CLR` is what makes it take
+effect, because it resets the string pointer from the new top. BASIC then has
+`$0801-$6FFF` to itself, and the blob's code at `$7000` and its variables at
+`$9F00` are both above the line. For a blob built with `BASE=6000`, poke 96
+instead.
 
 `blob.cfg.in` sizes the code area from `VARS`, so a build that does not fit
 **fails to link** rather than producing a binary whose first command overwrites

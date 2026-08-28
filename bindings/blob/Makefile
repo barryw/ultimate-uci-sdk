@@ -14,18 +14,21 @@ LD65   ?= ld65
 # Where the code goes, as four hex digits, and where its RAM goes, in decimal.
 #
 # **The default is $7000, because the SDK no longer fits in the 8K at $8000.**
-# It was $C000 until file.s landed and overflowed the 4K there by 350 bytes,
-# and $8000 until the DOS, disk, clock, machine and HTTP body services landed
-# and overflowed the 8K by 758. The link fails rather than overlapping the
-# variables, which is what blob.cfg.in is for.
+# It was $C000 until file.s landed and overflowed the 4K there, and $8000 until
+# the DOS, disk, clock, machine and HTTP body services landed and overflowed the
+# 8K. The link fails rather than overlapping the variables, which is what
+# blob.cfg.in is for.
 #
-# The blob has to sit below $A000 and above the BASIC program area, because
-# $A000-$BFFF is BASIC ROM: a caller reaches every byte of a blob at $7000 with
-# the machine exactly as it found it, and would have to bank for one that ran
-# past $A000. That is the difference between the blob and the BASIC wedge,
-# which does put its SDK under BASIC ROM and pays a stub per call for it - the
-# wedge can bank, because the wedge is the only thing calling. A blob's caller
-# cannot be asked to.
+# The blob has to sit below $A000, because $A000-$BFFF is BASIC ROM: a caller
+# reaches every byte of a blob at $7000 with the machine exactly as it found it,
+# and would have to bank for one that ran past $A000. That is the difference
+# between the blob and the BASIC wedge, which does put its SDK under BASIC ROM
+# and pays a stub per call for it - the wedge can bank, because the wedge is the
+# only thing calling. A blob's caller cannot be asked to.
+#
+# $7000 is inside BASIC's own memory, not above it: BASIC has $0801-$9FFF unless
+# it is told otherwise. A program that leaves BASIC running has to lower the top
+# of memory to the base address before loading the blob. README.md says how.
 #
 # Everything here is still a link-time choice. Build it anywhere there is room:
 #   make BASE=6000                 lower, for a program that wants $7000
@@ -80,8 +83,12 @@ MAINSIZE = $(shell printf '$$%04x' $$(( $(VARS) - 0x$(BASE) - 0x300 )))
 $(BUILD)/blob-$(BASE).cfg: blob.cfg.in Makefile | $(BUILD)
 	sed -e 's/@BASE@/$$$(BASE)/' -e 's/@MAINSIZE@/$(MAINSIZE)/' $< > $@
 
+# The size is reported rather than written down anywhere, because a byte count
+# in a document is wrong the next time a service is added - and this one has
+# been wrong twice already.
 $(BIN): $(OBJ) $(BUILD)/blob-$(BASE).cfg
 	$(LD65) -C $(BUILD)/blob-$(BASE).cfg -o $@ $(OBJ)
+	@echo "$@: $$(wc -c < $@) bytes at \$$$(BASE), variables at $(VARS)"
 
 $(BUILD)/probe-$(PROBE_BASE).cfg: blob.cfg.in Makefile | $(BUILD)
 	sed -e 's/@BASE@/$$$(PROBE_BASE)/' -e 's/@MAINSIZE@/$(MAINSIZE)/' $< > $@
