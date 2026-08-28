@@ -2,6 +2,29 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.5.0](https://github.com/barryw/ultimate-uci-sdk/compare/ee9a66d194cd87c0a9563ef843dac00f63857261..v0.5.0) - 2026-08-28
+#### Features
+- (**protocol**) constants for the commands the firmware has and the SDK lacked - ([ee9a66d](https://github.com/barryw/ultimate-uci-sdk/commit/ee9a66d194cd87c0a9563ef843dac00f63857261)) - Christian Gleissner
+- (**sdk**) the rest of the Ultimate DOS, disk, clock, machine and HTTP commands - ([5f09883](https://github.com/barryw/ultimate-uci-sdk/commit/5f09883ac84f29e9b7578f11389839872d9766d6)) - Christian Gleissner
+#### Bug Fixes
+- (**cc65**) a 256-byte status decoded as an empty one - ([d74d09e](https://github.com/barryw/ultimate-uci-sdk/commit/d74d09efebf53ef0b8ffe90b92cdcd35e01d5f8b)) - Christian Gleissner
+- (**control**) read a drive information reply that includes the IEC slots - ([5eaa889](https://github.com/barryw/ultimate-uci-sdk/commit/5eaa889b97220af0fd921ed09aba6b62afa8bca6)) - Christian Gleissner
+- (**release**) package the blob at the base address it is actually built for - ([b02773c](https://github.com/barryw/ultimate-uci-sdk/commit/b02773c0851e6805393fda85334292887383352f)) - Christian Gleissner
+#### Performance
+- (**core**) count a block's bytes locally instead of through the request block - ([397bfca](https://github.com/barryw/ultimate-uci-sdk/commit/397bfca6baea9c8ef16dbfa6bbe034513640048c)) - Christian Gleissner
+#### Documentation
+- (**blob**) correct the $7000 placement claim, and stop printing a stale size - ([4ed2b58](https://github.com/barryw/ultimate-uci-sdk/commit/4ed2b5801577eb367e48d37991ce845d23632205)) - Christian Gleissner
+- (**examples**) an assembly program for the two structured replies - ([d9134a3](https://github.com/barryw/ultimate-uci-sdk/commit/d9134a3faf825b68e6c74a707ff9df840152a19a)) - Christian Gleissner
+- (**guide**) rebuild the committed PDF from the current sources - ([3e36de9](https://github.com/barryw/ultimate-uci-sdk/commit/3e36de9e9e6a31bae83445e09884ba3c028312ab)) - Christian Gleissner
+- (**guide**) rebuild the committed PDF from the current sources - ([7eb5f24](https://github.com/barryw/ultimate-uci-sdk/commit/7eb5f24ec102534b72ba0490057b73a2c5bdecfe)) - Christian Gleissner
+- (**guide**) correct ten wrong statements, and document the new command set - ([43490d2](https://github.com/barryw/ultimate-uci-sdk/commit/43490d264c4006c8a6897acafdb0ecbd9be3b402)) - Christian Gleissner
+- (**handover**) say that section 1 is a dated snapshot - ([b8fa2cb](https://github.com/barryw/ultimate-uci-sdk/commit/b8fa2cbb8a54c44d7ab77d76a9bc1105faa8194a)) - Christian Gleissner
+- (**protocol**) mark NET_CMD_SET_INTERFACE as reserved, not implemented - ([ec3571e](https://github.com/barryw/ultimate-uci-sdk/commit/ec3571e8a236400a69b79a7bdbfafda3a39c1df3)) - Christian Gleissner
+- (**tests**) say what blob-relocated.suite actually compares - ([ee44808](https://github.com/barryw/ultimate-uci-sdk/commit/ee448087ec26d7274953f4c0cc65a02f4965fcb5)) - Christian Gleissner
+- correct the figures that had drifted, and record three reply layouts - ([37af579](https://github.com/barryw/ultimate-uci-sdk/commit/37af57908dc08a871fb92404eaa7100e899643e4)) - Christian Gleissner
+
+- - -
+
 ## [v0.4.0](https://github.com/barryw/ultimate-uci-sdk/compare/9da60803bb258d70b18c8f15f49844737349b414..v0.4.0) - 2026-08-22
 #### Features
 - (**sid**) smooth six-voice visualizer - ([9da6080](https://github.com/barryw/ultimate-uci-sdk/commit/9da60803bb258d70b18c8f15f49844737349b414)) - Barry Walker
