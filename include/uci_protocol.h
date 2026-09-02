@@ -394,6 +394,7 @@
 #define UA_REG_START      0x04  /* W    32-bit SDRAM address, big endian */
 #define UA_REG_LENGTH     0x09  /* W    24-bit byte count, big endian */
 #define UA_REG_RATE       0x0E  /* W    divider from 6.25 MHz, big endian */
+#define UA_RATE_CLOCK     6250000  /* the sampler's reference in Hz; a voice's rate is UA_RATE_CLOCK / sample rate */
 #define UA_REG_REPEAT_A   0x11  /* W    24-bit loop start offset, big endian */
 #define UA_REG_REPEAT_B   0x15  /* W    24-bit loop end offset, big endian */
 #define UA_REG_IRQ_CLEAR  0x1F  /* W    1 clears this channel; $FF clears all */

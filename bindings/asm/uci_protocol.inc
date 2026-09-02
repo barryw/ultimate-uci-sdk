@@ -395,6 +395,7 @@ UA_REG_PAN        = $02  ; W    0 left, 7/8 centre, 15 right
 UA_REG_START      = $04  ; W    32-bit SDRAM address, big endian
 UA_REG_LENGTH     = $09  ; W    24-bit byte count, big endian
 UA_REG_RATE       = $0E  ; W    divider from 6.25 MHz, big endian
+UA_RATE_CLOCK     = $5F5E10  ; the sampler's reference in Hz; a voice's rate is UA_RATE_CLOCK / sample rate
 UA_REG_REPEAT_A   = $11  ; W    24-bit loop start offset, big endian
 UA_REG_REPEAT_B   = $15  ; W    24-bit loop end offset, big endian
 UA_REG_IRQ_CLEAR  = $1F  ; W    1 clears this channel; $FF clears all
