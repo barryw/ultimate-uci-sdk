@@ -261,7 +261,9 @@ of space.
 | `reu_load`, `reu_fetch` or `reu_stash` fails (including no REU) | its result |
 | success | `ULTIMATE_OK` |
 
-The file is closed on every path. `voice` is written only on success.
+The file is closed on every path. On failure the voice may be partly written
+and means nothing; that is what lets the simulator, which has no REU load,
+assert the parsed header.
 
 ### Placement
 

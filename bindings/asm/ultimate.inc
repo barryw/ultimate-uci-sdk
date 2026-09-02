@@ -186,6 +186,8 @@ ULTIMATE_DRIVE_B = 1
 .global ultimate_audio_stop      ; A = channel -> A = result
 .global ultimate_audio_irq_status ; -> A = end-of-sample channel mask
 .global ultimate_audio_irq_clear ; A = channel -> A = result
+.global ultimate_audio_load_wav  ; ult_buf = name, ult_reu = REU address,
+                                 ; A/X = ultimate_audio_voice -> A = result
 
 ; --- net.s -----------------------------------------------------------------
 ; Measured behaviour, not documented behaviour - see src/uci/net.s for all of

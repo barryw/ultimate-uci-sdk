@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The WAV files tests/emulator/sdk.suite feeds ultimate_audio_load_wav.
 
-They are committed with the other fixtures under tests/emulator/fixtures/usb0;
+They are committed with the other fixtures under tests/emulator/fixtures/usb0/data;
 run this to regenerate them. The values the suite asserts:
 
     mono16.wav    16-bit mono, 8,000 Hz, 128 data bytes, a 13-byte LIST chunk
@@ -14,7 +14,7 @@ import os
 import struct
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(REPO, "tests/emulator/fixtures/usb0/wav")
+OUT = os.path.join(REPO, "tests/emulator/fixtures/usb0/data/wav")
 
 
 def chunk(tag, body):

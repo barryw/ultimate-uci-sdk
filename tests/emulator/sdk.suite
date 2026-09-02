@@ -1819,6 +1819,244 @@ suites {
       assert([result] == $02, "Z set: the result is zero")
     }
 
+    ; --- a WAV file into the REU and a voice ---
+    ;
+    ; The simulated firmware implements no REU load, so a good file ends where
+    ; its data chunk would be loaded: NOT_SUPPORTED from reu_load, with the
+    ; header already parsed into the voice. That pins the parser and the
+    ; divider; the load itself is the reu_load the hardware suite runs, and
+    ; the Boing demo plays the whole path. tools/gen_wav_fixtures.py wrote the
+    ; files and documents their values. Voice offsets: flags +1, reu_address
+    ; +4, length +8, rate +20.
+    ;
+    ; They live in /Usb0/data/wav for the same reason the scratch file does:
+    ; the readdir test asserts the fixture root has exactly two entries and
+    ; then ends, so a directory added at the root fails a test that has
+    ; nothing to do with audio.
+
+    test("sdk-wav-mono16", "16-bit mono at 8,000 Hz: address, length, divider 781, the 16-bit flag") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+      [reply0] = $2f            ; "/Usb0/data/wav"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $2f
+      [reply0] + $06 = $64
+      [reply0] + $07 = $61
+      [reply0] + $08 = $74
+      [reply0] + $09 = $61
+      [reply0] + $0a = $2f
+      [reply0] + $0b = $77
+      [reply0] + $0c = $61
+      [reply0] + $0d = $76
+      [reply0] + $0e = $00
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "in the fixture directory")
+
+      [reply0] = $6d            ; "mono16.wav"
+      [reply1] = $6f
+      [reply2] = $6e
+      [reply3] = $6f
+      [reply0] + $04 = $31
+      [reply0] + $05 = $36
+      [reply0] + $06 = $2e
+      [reply0] + $07 = $77
+      [reply0] + $08 = $61
+      [reply0] + $09 = $76
+      [reply0] + $0a = $00
+      [reu_at] = $00            ; REU $004000
+      [reu_at] + $01 = $40
+      [reu_at] + $02 = $00
+      [reu_at] + $03 = $00
+      memfill([voice], 22, $ee)
+      [result] = $ff
+      jsr([t_audio_load_wav], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED: no REU load in this firmware, so the header was accepted")
+      assert(([voice] + $04).b == $00, "reu_address low")
+      assert(([voice] + $05).b == $40, "reu_address middle")
+      assert(([voice] + $06).b == $00, "reu_address high")
+      assert(([voice] + $08).b == $80, "length 128, low")
+      assert(([voice] + $09).b == $00, "length, middle")
+      assert(([voice] + $0a).b == $00, "length, high")
+      assert(([voice] + $14).b == $0d, "divider 781 = $030D, low")
+      assert(([voice] + $15).b == $03, "divider, high")
+      assert(([voice] + $01).b == $10, "UA_CTRL_16BIT, and mono so no interleave")
+      assert(([voice] + $00).b == $ee, "channel untouched")
+      assert(([voice] + $02).b == $ee, "volume untouched")
+      assert(([voice] + $03).b == $ee, "pan untouched")
+
+      ; The file was closed on the way out: a close now is 85,NO FILE OPEN.
+      [result] = $ff
+      jsr([t_close], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE: nothing was left open")
+    }
+
+    test("sdk-wav-stereo16", "16-bit stereo at 11,025 Hz: divider 566, interleave set") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+      [reply0] = $2f            ; "/Usb0/data/wav"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $2f
+      [reply0] + $06 = $64
+      [reply0] + $07 = $61
+      [reply0] + $08 = $74
+      [reply0] + $09 = $61
+      [reply0] + $0a = $2f
+      [reply0] + $0b = $77
+      [reply0] + $0c = $61
+      [reply0] + $0d = $76
+      [reply0] + $0e = $00
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "in the fixture directory")
+      [reply0] = $73            ; "stereo16.wav"
+      [reply1] = $74
+      [reply2] = $65
+      [reply3] = $72
+      [reply0] + $04 = $65
+      [reply0] + $05 = $6f
+      [reply0] + $06 = $31
+      [reply0] + $07 = $36
+      [reply0] + $08 = $2e
+      [reply0] + $09 = $77
+      [reply0] + $0a = $61
+      [reply0] + $0b = $76
+      [reply0] + $0c = $00
+      [reu_at] = $00
+      [reu_at] + $01 = $00
+      [reu_at] + $02 = $01      ; REU $010000
+      [reu_at] + $03 = $00
+      memfill([voice], 22, $ee)
+      [result] = $ff
+      jsr([t_audio_load_wav], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED from reu_load, header accepted")
+      assert(([voice] + $06).b == $01, "reu_address high")
+      assert(([voice] + $08).b == $80, "length 128")
+      assert(([voice] + $14).b == $36, "divider 566 = $0236, low")
+      assert(([voice] + $15).b == $02, "divider, high")
+      assert(([voice] + $01).b == $50, "UA_CTRL_16BIT | UA_CTRL_INTERLEAVE")
+    }
+
+    test("sdk-wav-mono8", "8-bit mono at 8,363 Hz: divider 747, no format flags, length not rounded") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+      [reply0] = $2f            ; "/Usb0/data/wav"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $2f
+      [reply0] + $06 = $64
+      [reply0] + $07 = $61
+      [reply0] + $08 = $74
+      [reply0] + $09 = $61
+      [reply0] + $0a = $2f
+      [reply0] + $0b = $77
+      [reply0] + $0c = $61
+      [reply0] + $0d = $76
+      [reply0] + $0e = $00
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "in the fixture directory")
+      [reply0] = $6d            ; "mono8.wav"
+      [reply1] = $6f
+      [reply2] = $6e
+      [reply3] = $6f
+      [reply0] + $04 = $38
+      [reply0] + $05 = $2e
+      [reply0] + $06 = $77
+      [reply0] + $07 = $61
+      [reply0] + $08 = $76
+      [reply0] + $09 = $00
+      [reu_at] = $00
+      [reu_at] + $01 = $40
+      [reu_at] + $02 = $00
+      [reu_at] + $03 = $00
+      memfill([voice], 22, $ee)
+      [result] = $ff
+      jsr([t_audio_load_wav], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED from reu_load, header accepted")
+      assert(([voice] + $08).b == $64, "length 100: 8-bit mono is not rounded to even")
+      assert(([voice] + $14).b == $eb, "divider 747 = $02EB, low")
+      assert(([voice] + $15).b == $02, "divider, high")
+      assert(([voice] + $01).b == $00, "8-bit mono: no format flags")
+    }
+
+    test("sdk-wav-not-riff", "a file that is not a WAV is a protocol error, and is closed") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+      [reply0] = $2f            ; "/Usb0/data/wav"
+      [reply1] = $55
+      [reply2] = $73
+      [reply3] = $62
+      [reply0] + $04 = $30
+      [reply0] + $05 = $2f
+      [reply0] + $06 = $64
+      [reply0] + $07 = $61
+      [reply0] + $08 = $74
+      [reply0] + $09 = $61
+      [reply0] + $0a = $2f
+      [reply0] + $0b = $77
+      [reply0] + $0c = $61
+      [reply0] + $0d = $76
+      [reply0] + $0e = $00
+      jsr([t_chdir], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "in the fixture directory")
+      [reply0] = $6e            ; "notwav.bin"
+      [reply1] = $6f
+      [reply2] = $74
+      [reply3] = $77
+      [reply0] + $04 = $61
+      [reply0] + $05 = $76
+      [reply0] + $06 = $2e
+      [reply0] + $07 = $62
+      [reply0] + $08 = $69
+      [reply0] + $09 = $6e
+      [reply0] + $0a = $00
+      [reu_at] = $00
+      [reu_at] + $01 = $40
+      [reu_at] + $02 = $00
+      [reu_at] + $03 = $00
+      [result] = $ff
+      jsr([t_audio_load_wav], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $03, "ULTIMATE_ERR_PROTOCOL: not RIFF")
+      [result] = $ff
+      jsr([t_close], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE: the file was closed before returning")
+    }
+
+    test("sdk-wav-missing-file", "a missing file is the DOS error, untouched") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [reply0] = $6e            ; "nope.wav"
+      [reply1] = $6f
+      [reply2] = $70
+      [reply3] = $65
+      [reply0] + $04 = $2e
+      [reply0] + $05 = $77
+      [reply0] + $06 = $61
+      [reply0] + $07 = $76
+      [reply0] + $08 = $00
+      [reu_at] = $00
+      [reu_at] + $01 = $40
+      [reu_at] + $02 = $00
+      [reu_at] + $03 = $00
+      [result] = $ff
+      jsr([t_audio_load_wav], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "ULTIMATE_ERR_DEVICE: FILE DOESN'T EXIST, as ultimate_open reports it")
+    }
+
     ; --- what a file is, and moving files about ---
     ;
     ; stat's reply is a twelve-byte header and then the name with no

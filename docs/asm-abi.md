@@ -154,6 +154,15 @@ sharing them.
 | `ultimate_reu_load` | `ult_reu`, `ult_reulen`, and an open file | `A` = result code |
 | `ultimate_reu_save` | the same, out of the expansion | `A` = result code |
 | `ultimate_reu_size` | — | `A`/`X` = size in 64K banks, 0 when there is none |
+| `ultimate_audio_init` | — | `A` = result code |
+| `ultimate_audio_available` | — | `A` = 1 after a successful init |
+| `ultimate_audio_version` | — | `A` = the module version byte |
+| `ultimate_audio_configure` | `A`/`X` = `ultimate_audio_voice` | `A` = result code; stops the channel, about 2 ms |
+| `ultimate_audio_start` | `A` = channel, `X` = `UA_CTRL_*` flags | `A` = result code |
+| `ultimate_audio_stop` | `A` = channel | `A` = result code |
+| `ultimate_audio_irq_status` | — | `A` = end-of-sample channel mask |
+| `ultimate_audio_irq_clear` | `A` = channel | `A` = result code |
+| `ultimate_audio_load_wav` | `ult_buf` = name, `ult_reu` = REU address, `A`/`X` = `ultimate_audio_voice` | `A` = result code; the voice's address, length, rate and flags filled |
 | `ultimate_net_ifcount` | — | `A` = result, `ult_iface` = interfaces |
 | `ultimate_net_macaddr` | `ult_iface`, `ult_buf` = 6 bytes | `A` = result code |
 | `ultimate_net_ipconfig` | `ult_iface`, `ult_buf` = 12 bytes | `A` = result code |

@@ -110,6 +110,7 @@
         .export t_reu_avail, t_reu_stash, t_reu_fetch
         .export t_reu_load, t_reu_save, reu_at, reu_len
         .export t_flags_init, t_flags_reu_avail, t_flags_audio_avail
+        .export t_audio_load_wav, voice
         .export t_net_ifcount, t_net_ipconfig
         .export t_net_connect, t_net_connect_null
         .export t_net_read_null, t_net_read_tiny, t_net_write_null
@@ -199,6 +200,7 @@ wr_len:       .res 2      ; how many bytes t_write sends from buf_data
 seek_pos:     .res 4      ; t_seek's 32-bit position, little endian
 reu_at:       .res 4      ; the REU address a transfer uses
 reu_len:      .res 4      ; and how many bytes it moves
+voice:        .res UA_VOICE_SIZE  ; the ultimate_audio_voice t_audio_load_wav fills
 
 ; The second name rename and copy take, and the block a stat reply is received
 ; into. `reply` holds the first name, as it does for every other DOS entry
@@ -946,6 +948,24 @@ store_z:
         php
         pla
         and #$02
+        sta result
+        rts
+
+; A WAV into the REU: the name is in `reply`, the REU address in reu_at, and
+; the voice comes back in `voice`.
+t_audio_load_wav:
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        ldx #$03
+@copy:  lda reu_at,x
+        sta ult_reu,x
+        dex
+        bpl @copy
+        lda #<voice
+        ldx #>voice
+        jsr ultimate_audio_load_wav
         sta result
         rts
 

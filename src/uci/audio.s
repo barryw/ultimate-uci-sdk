@@ -3,8 +3,8 @@
 ; Ultimate Audio is not a UCI target. When the owner maps it in the machine's
 ; settings, seven write-only voice blocks appear at $DF20-$DFFF and fetch PCM
 ; from the same SDRAM window exposed as the REU. This module is the small,
-; checked register layer; file streaming is composed from it and the existing
-; DOS/REU services by the application.
+; checked register layer. wav.s composes it with the DOS and REU services to
+; load a sample file; streaming beyond one file is the application's.
 ;
 ; Configure pauses about a millisecond after stopping the channel and again
 ; after programming it: the engine reprogrammed on the fly plays noise.
