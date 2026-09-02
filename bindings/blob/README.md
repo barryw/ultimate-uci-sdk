@@ -175,6 +175,20 @@ into last. `drive_enable` and `drive_power` name it as drive A (0) or drive B
 (1), because the firmware has a separate command per drive. `+$E2` reports both
 numbers for every drive the machine has.
 
+Ultimate Audio uses a secondary table in the unused tail of the fixed parameter
+block because the original header page is full:
+
+| Offset | Entry | Input | Output |
+| --- | --- | --- | --- |
+| `+$2E8` | `ultimate_audio_init` | | `A` = result |
+| `+$2EB` | `ultimate_audio_available` | | `A` = 1 when mapped audio answers |
+| `+$2EE` | `ultimate_audio_version` | | `A` = module version |
+| `+$2F1` | `audio_configure` | `bp_audio` | `bp_result` |
+| `+$2F4` | `audio_start` | `bp_audio` channel and flags | `bp_result` |
+| `+$2F7` | `audio_stop` | `bp_audio` channel | `bp_result` |
+| `+$2FA` | `ultimate_audio_irq_status` | | `A` = end-of-sample bits |
+| `+$2FD` | `audio_irq_clear` | `bp_audio` channel | `bp_result` |
+
 A directory walk is one live exchange: `+$55` then `+$58` until it answers
 `ULTIMATE_END` (`10`), with no other command in between. `+$7F` and `+$82` work
 on whatever `+$5B` left open and carry no filename of their own.
@@ -244,6 +258,7 @@ At `base+$100`, page-aligned so a BASIC program needs no address arithmetic.
 | `+$18F` | `bp_flag` — on or off, in and out | 1 |
 | `+$190` | `bp_val` — a 32-bit value, little-endian | 4 |
 | `+$194` | `bp_time` — year less 1900, month, day, hour, minute, second | 6 |
+| `+$19A` | `bp_audio` — `ultimate_audio_voice` structure | `UA_VOICE_SIZE` |
 
 Offsets are from the block, so `bp_reu` in a `$7000` build is at `$7256`. The
 block is a fixed 512 bytes whatever is used of it, which is why every field

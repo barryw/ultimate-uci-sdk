@@ -180,6 +180,13 @@ ULTIMATE_DRIVE_B = 1
 .global ult_reu, ult_reulen  ; REU address, then length: eight bytes, in that
                               ; order, because the DOS pair sends them as one span
 
+.global ultimate_audio_init, ultimate_audio_available, ultimate_audio_version
+.global ultimate_audio_configure ; A/X = ultimate_audio_voice -> A = result
+.global ultimate_audio_start     ; A = channel, X = UA_CTRL_* flags -> A = result
+.global ultimate_audio_stop      ; A = channel -> A = result
+.global ultimate_audio_irq_status ; -> A = end-of-sample channel mask
+.global ultimate_audio_irq_clear ; A = channel -> A = result
+
 ; --- net.s -----------------------------------------------------------------
 ; Measured behaviour, not documented behaviour - see src/uci/net.s for all of
 ; it. The three that decide how these are called: a read never waits, so poll;

@@ -378,6 +378,55 @@ REU_STAT_DONE         = $40  ; the transfer finished; cleared by reading the reg
 REU_STAT_VERIFY_ERROR = $20  ; a verify found a difference
 REU_STAT_SIZE         = $10  ; set on 256K and larger
 
+; ---- Ultimate Audio registers (NOT UCI) ----
+; Seven hardware PCM voices mapped at $DF20-$DFFF when the machine's 'Map
+; Ultimate Audio' setting is enabled. Multi-byte fields are written most-
+; significant byte first. Sample addresses are offsets into the 16 MB REU
+; window; the hardware adds the SDRAM base byte $01.
+UA_REG_BASE       = $DF20  ; channel 0 base; each channel occupies 32 bytes
+UA_REG_IRQ_STATUS = $DF20  ; R    one end-of-sample bit per channel
+UA_REG_VERSION    = $DF21  ; R    module version; $10 is version 1.0
+UA_CHANNEL_STRIDE = $20  ; bytes between channel register blocks
+UA_CHANNELS       = $07  ; software-visible channels 0-6
+UA_VERSION_1_0    = $10  ; known register API version
+UA_REG_CONTROL    = $00  ; W    gate, repeat, IRQ, format and interleave
+UA_REG_VOLUME     = $01  ; W    0-63
+UA_REG_PAN        = $02  ; W    0 left, 7/8 centre, 15 right
+UA_REG_START      = $04  ; W    32-bit SDRAM address, big endian
+UA_REG_LENGTH     = $09  ; W    24-bit byte count, big endian
+UA_REG_RATE       = $0E  ; W    divider from 6.25 MHz, big endian
+UA_REG_REPEAT_A   = $11  ; W    24-bit loop start offset, big endian
+UA_REG_REPEAT_B   = $15  ; W    24-bit loop end offset, big endian
+UA_REG_IRQ_CLEAR  = $1F  ; W    1 clears this channel; $FF clears all
+UA_REU_SDRAM_BANK = $01  ; upper byte of an address in the REU window
+
+; ---- Ultimate Audio control bits ----
+; Written to a channel's UA_REG_CONTROL.
+UA_CTRL_GATE       = $01  ; start the channel
+UA_CTRL_REPEAT     = $02  ; loop between repeat points A and B
+UA_CTRL_IRQ        = $04  ; raise IRQ at the end of the sample
+UA_CTRL_16BIT      = $10  ; 16-bit little-endian PCM; clear for 8-bit PCM
+UA_CTRL_INTERLEAVE = $40  ; skip the other channel in interleaved stereo data
+UA_CTRL_FLAGS      = $56  ; all caller-selectable bits, excluding gate
+UA_VOLUME_MAX      = $3F  ; largest valid per-channel volume
+UA_PAN_LEFT        = $00  ; hard left
+UA_PAN_CENTER      = $07  ; centre (8 is also centred)
+UA_PAN_RIGHT       = $0F  ; hard right
+
+; ---- Ultimate Audio voice layout ----
+; Byte offsets in ultimate_audio_voice. The C ABI build asserts the
+; structure still matches these.
+UA_VOICE_CHANNEL  = $00  ; byte
+UA_VOICE_FLAGS    = $01  ; byte
+UA_VOICE_VOLUME   = $02  ; byte
+UA_VOICE_PAN      = $03  ; byte
+UA_VOICE_REU      = $04  ; dword, little endian
+UA_VOICE_LENGTH   = $08  ; dword, little endian
+UA_VOICE_REPEAT_A = $0C  ; dword, little endian
+UA_VOICE_REPEAT_B = $10  ; dword, little endian
+UA_VOICE_RATE     = $14  ; word, little endian
+UA_VOICE_SIZE     = $16  ; bytes
+
 ; ---- Ultimate 64 speed indices ----
 ; Index into the machine's speed table. **Only these four mean the same
 ; thing on both machines.** The U64 runs 1,2,3,4,5,6,8..48 MHz and the
@@ -428,7 +477,7 @@ UCI_REQ_SIZE       = $16  ; total size of the block
 ; How much RAM the core needs, and where. All of it is placeable: see
 ; UCI_ZP and UCI_VARS in docs/asm-abi.md.
 UCI_ZP_SIZE   = $04  ; zero page bytes the core needs
-UCI_VARS_SIZE = $BE  ; non-zero-page bytes the whole SDK needs
+UCI_VARS_SIZE = $BF  ; non-zero-page bytes the whole SDK needs
 
 ; ---- ASCII literals ----
 ; Bytes that come off the wire are always written numerically. An

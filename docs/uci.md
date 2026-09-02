@@ -187,6 +187,20 @@ reading is exactly right for this: `DATA_ACC` resets both queues whether or not
 anything read them. The loop is bounded by the same timeout budget as every
 other wait in the SDK.
 
+**And it waits for the abort to be serviced, not just for idle.** Writing the
+abort bit sets status bit 2 (`ABORT_P`), which only the firmware clears - with
+the `HANDSHAKE_RESET` above, which also rewinds the command pointer and forces
+idle. On an interface that is already idle, which is every program's first
+`uci_init()`, a wait for the state alone returns at once, and a command pushed
+before the firmware gets round to the abort is wiped by that reset and answered
+with an empty block, `ULTIMATE_ERR_PROTOCOL` to the caller. Measured on an
+Elite running 3.15: the first command after init failed that way at 10 MHz and
+above, where the push arrives before the firmware task runs; at 1 MHz the
+firmware happened to win. `uci_abort()` now polls until both the state and
+`ABORT_P` are clear.
+`tests/emulator/abort-latency.suite` reproduces the race with a slow simulated
+firmware.
+
 ---
 
 ## Targets

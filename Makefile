@@ -55,6 +55,15 @@ demos: lib
 demo-run: lib
 	$(MAKE) -C demos/sid-visualizer run U64_HOST=$(U64_HOST)
 
+# Software sprites under turbo, through the standalone blob. KickAssembler,
+# like demos/follow-me, so it is not part of `demos`.
+#   make vsprites-run U64_HOST=192.168.1.62
+vsprites: blob
+	$(MAKE) -C demos/vsprites
+
+vsprites-run: blob
+	$(MAKE) -C demos/vsprites run U64_HOST=$(U64_HOST)
+
 emulator: lib
 	$(MAKE) -C tests/emulator run
 
@@ -115,5 +124,5 @@ clean:
 	$(MAKE) -C bindings/cc65 clean
 	$(MAKE) -C bindings/blob clean
 
-.PHONY: all test unittest lib blob examples demos demo-run emulator hardware hardware-run \
+.PHONY: all test unittest lib blob examples demos demo-run vsprites vsprites-run emulator hardware hardware-run \
 		basic-run time-run protocol coverage release clean

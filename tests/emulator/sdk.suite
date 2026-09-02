@@ -1776,9 +1776,13 @@ suites {
       [reu_len] + $01 = $02
       [reu_len] + $02 = $00
       [reu_len] + $03 = $00
+      [timeout_val] = $2f
+      jsr([t_set_timeout], stop_on_rts = true, fail_on_brk = true)
       [result] = $ff
       jsr([t_reu_load], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $04, "ULTIMATE_ERR_NOT_SUPPORTED, from this firmware")
+      jsr([t_get_timeout], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $2f, "the caller's timeout budget is restored")
 
       [result] = $ff
       jsr([t_close], stop_on_rts = true, fail_on_brk = true)

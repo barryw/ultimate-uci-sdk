@@ -92,3 +92,23 @@ UCI_STATIC_ASSERT(drv_count, offsetof(ultimate_drives, count),
 UCI_STATIC_ASSERT(drv_first, offsetof(ultimate_drives, drive),
                   CTRL_DRVINFO_FIRST);
 UCI_STATIC_ASSERT(drv_total, sizeof(ultimate_drives), CTRL_DRVINFO_BYTES);
+
+/* The Ultimate Audio register writer reads this block directly. */
+UCI_STATIC_ASSERT(audio_channel, offsetof(ultimate_audio_voice, channel),
+                  UA_VOICE_CHANNEL);
+UCI_STATIC_ASSERT(audio_flags, offsetof(ultimate_audio_voice, flags),
+                  UA_VOICE_FLAGS);
+UCI_STATIC_ASSERT(audio_volume, offsetof(ultimate_audio_voice, volume),
+                  UA_VOICE_VOLUME);
+UCI_STATIC_ASSERT(audio_pan, offsetof(ultimate_audio_voice, pan), UA_VOICE_PAN);
+UCI_STATIC_ASSERT(audio_reu, offsetof(ultimate_audio_voice, reu_address),
+                  UA_VOICE_REU);
+UCI_STATIC_ASSERT(audio_length, offsetof(ultimate_audio_voice, length),
+                  UA_VOICE_LENGTH);
+UCI_STATIC_ASSERT(audio_repeat_a, offsetof(ultimate_audio_voice, repeat_a),
+                  UA_VOICE_REPEAT_A);
+UCI_STATIC_ASSERT(audio_repeat_b, offsetof(ultimate_audio_voice, repeat_b),
+                  UA_VOICE_REPEAT_B);
+UCI_STATIC_ASSERT(audio_rate, offsetof(ultimate_audio_voice, rate),
+                  UA_VOICE_RATE);
+UCI_STATIC_ASSERT(audio_size, sizeof(ultimate_audio_voice), UA_VOICE_SIZE);

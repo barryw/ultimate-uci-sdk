@@ -420,6 +420,56 @@ GROUPS = [
         ("REU_STAT_SIZE",    0x10, "set on 256K and larger"),
     ]),
 
+    ("Ultimate Audio registers (NOT UCI)", "Seven hardware PCM voices mapped "
+     "at $DF20-$DFFF when the machine's 'Map Ultimate Audio' setting is "
+     "enabled. Multi-byte fields are written most-significant byte first. "
+     "Sample addresses are offsets into the 16 MB REU window; the hardware "
+     "adds the SDRAM base byte $01.", [
+        ("UA_REG_BASE",          0xDF20, "channel 0 base; each channel occupies 32 bytes"),
+        ("UA_REG_IRQ_STATUS",    0xDF20, "R    one end-of-sample bit per channel"),
+        ("UA_REG_VERSION",       0xDF21, "R    module version; $10 is version 1.0"),
+        ("UA_CHANNEL_STRIDE",    0x20,   "bytes between channel register blocks"),
+        ("UA_CHANNELS",          7,      "software-visible channels 0-6"),
+        ("UA_VERSION_1_0",       0x10,   "known register API version"),
+        ("UA_REG_CONTROL",       0x00,   "W    gate, repeat, IRQ, format and interleave"),
+        ("UA_REG_VOLUME",        0x01,   "W    0-63"),
+        ("UA_REG_PAN",           0x02,   "W    0 left, 7/8 centre, 15 right"),
+        ("UA_REG_START",         0x04,   "W    32-bit SDRAM address, big endian"),
+        ("UA_REG_LENGTH",        0x09,   "W    24-bit byte count, big endian"),
+        ("UA_REG_RATE",          0x0E,   "W    divider from 6.25 MHz, big endian"),
+        ("UA_REG_REPEAT_A",      0x11,   "W    24-bit loop start offset, big endian"),
+        ("UA_REG_REPEAT_B",      0x15,   "W    24-bit loop end offset, big endian"),
+        ("UA_REG_IRQ_CLEAR",     0x1F,   "W    1 clears this channel; $FF clears all"),
+        ("UA_REU_SDRAM_BANK",    0x01,   "upper byte of an address in the REU window"),
+    ]),
+
+    ("Ultimate Audio control bits", "Written to a channel's UA_REG_CONTROL.", [
+        ("UA_CTRL_GATE",       0x01, "start the channel"),
+        ("UA_CTRL_REPEAT",     0x02, "loop between repeat points A and B"),
+        ("UA_CTRL_IRQ",        0x04, "raise IRQ at the end of the sample"),
+        ("UA_CTRL_16BIT",      0x10, "16-bit little-endian PCM; clear for 8-bit PCM"),
+        ("UA_CTRL_INTERLEAVE", 0x40, "skip the other channel in interleaved stereo data"),
+        ("UA_CTRL_FLAGS",      0x56, "all caller-selectable bits, excluding gate"),
+        ("UA_VOLUME_MAX",      63,   "largest valid per-channel volume"),
+        ("UA_PAN_LEFT",        0,    "hard left"),
+        ("UA_PAN_CENTER",      7,    "centre (8 is also centred)"),
+        ("UA_PAN_RIGHT",       15,   "hard right"),
+    ]),
+
+    ("Ultimate Audio voice layout", "Byte offsets in ultimate_audio_voice. "
+     "The C ABI build asserts the structure still matches these.", [
+        ("UA_VOICE_CHANNEL",    0,  "byte"),
+        ("UA_VOICE_FLAGS",      1,  "byte"),
+        ("UA_VOICE_VOLUME",     2,  "byte"),
+        ("UA_VOICE_PAN",        3,  "byte"),
+        ("UA_VOICE_REU",        4,  "dword, little endian"),
+        ("UA_VOICE_LENGTH",     8,  "dword, little endian"),
+        ("UA_VOICE_REPEAT_A",  12,  "dword, little endian"),
+        ("UA_VOICE_REPEAT_B",  16,  "dword, little endian"),
+        ("UA_VOICE_RATE",      20,  "word, little endian"),
+        ("UA_VOICE_SIZE",      22,  "bytes"),
+    ]),
+
     ("Ultimate 64 speed indices", "Index into the machine's speed table. **Only "
      "these four mean the same thing on both machines.** The U64 runs "
      "1,2,3,4,5,6,8..48 MHz and the U64-II runs 1,2,3,4,6,8..64, so index 4 is "
@@ -469,7 +519,7 @@ GROUPS = [
     ("SDK memory footprint", "How much RAM the core needs, and where. All of it "
                              "is placeable: see UCI_ZP and UCI_VARS in docs/asm-abi.md.", [
         ("UCI_ZP_SIZE",   4,  "zero page bytes the core needs"),
-        ("UCI_VARS_SIZE", 190, "non-zero-page bytes the whole SDK needs"),
+        ("UCI_VARS_SIZE", 191, "non-zero-page bytes the whole SDK needs"),
     ]),
 
     ("ASCII literals", "Bytes that come off the wire are always written "

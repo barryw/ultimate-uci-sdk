@@ -115,7 +115,7 @@
         .export net_iface, net_sock, net_got
         .export dir_attrib
         .export t_req_reset
-        .export t_abort
+        .export t_abort, t_status_reg
         .export t_exec
         .export t_decode
         .export t_status_fmt
@@ -283,6 +283,13 @@ t_present:
 
 t_ident_reg:
         jsr uci_ident
+        sta result
+        rts
+
+; The raw status register, for a suite that wants to see the interface's own
+; view of itself: abort pending, state, error.
+t_status_reg:
+        lda UCI_REG_STATUS
         sta result
         rts
 

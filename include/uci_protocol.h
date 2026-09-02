@@ -377,6 +377,55 @@
 #define REU_STAT_VERIFY_ERROR 0x20  /* a verify found a difference */
 #define REU_STAT_SIZE         0x10  /* set on 256K and larger */
 
+/* ---- Ultimate Audio registers (NOT UCI) ---- */
+/* Seven hardware PCM voices mapped at $DF20-$DFFF when the machine's 'Map */
+/* Ultimate Audio' setting is enabled. Multi-byte fields are written most- */
+/* significant byte first. Sample addresses are offsets into the 16 MB REU */
+/* window; the hardware adds the SDRAM base byte $01. */
+#define UA_REG_BASE       57120  /* channel 0 base; each channel occupies 32 bytes */
+#define UA_REG_IRQ_STATUS 57120  /* R    one end-of-sample bit per channel */
+#define UA_REG_VERSION    57121  /* R    module version; $10 is version 1.0 */
+#define UA_CHANNEL_STRIDE 0x20  /* bytes between channel register blocks */
+#define UA_CHANNELS       0x07  /* software-visible channels 0-6 */
+#define UA_VERSION_1_0    0x10  /* known register API version */
+#define UA_REG_CONTROL    0x00  /* W    gate, repeat, IRQ, format and interleave */
+#define UA_REG_VOLUME     0x01  /* W    0-63 */
+#define UA_REG_PAN        0x02  /* W    0 left, 7/8 centre, 15 right */
+#define UA_REG_START      0x04  /* W    32-bit SDRAM address, big endian */
+#define UA_REG_LENGTH     0x09  /* W    24-bit byte count, big endian */
+#define UA_REG_RATE       0x0E  /* W    divider from 6.25 MHz, big endian */
+#define UA_REG_REPEAT_A   0x11  /* W    24-bit loop start offset, big endian */
+#define UA_REG_REPEAT_B   0x15  /* W    24-bit loop end offset, big endian */
+#define UA_REG_IRQ_CLEAR  0x1F  /* W    1 clears this channel; $FF clears all */
+#define UA_REU_SDRAM_BANK 0x01  /* upper byte of an address in the REU window */
+
+/* ---- Ultimate Audio control bits ---- */
+/* Written to a channel's UA_REG_CONTROL. */
+#define UA_CTRL_GATE       0x01  /* start the channel */
+#define UA_CTRL_REPEAT     0x02  /* loop between repeat points A and B */
+#define UA_CTRL_IRQ        0x04  /* raise IRQ at the end of the sample */
+#define UA_CTRL_16BIT      0x10  /* 16-bit little-endian PCM; clear for 8-bit PCM */
+#define UA_CTRL_INTERLEAVE 0x40  /* skip the other channel in interleaved stereo data */
+#define UA_CTRL_FLAGS      0x56  /* all caller-selectable bits, excluding gate */
+#define UA_VOLUME_MAX      0x3F  /* largest valid per-channel volume */
+#define UA_PAN_LEFT        0x00  /* hard left */
+#define UA_PAN_CENTER      0x07  /* centre (8 is also centred) */
+#define UA_PAN_RIGHT       0x0F  /* hard right */
+
+/* ---- Ultimate Audio voice layout ---- */
+/* Byte offsets in ultimate_audio_voice. The C ABI build asserts the */
+/* structure still matches these. */
+#define UA_VOICE_CHANNEL  0x00  /* byte */
+#define UA_VOICE_FLAGS    0x01  /* byte */
+#define UA_VOICE_VOLUME   0x02  /* byte */
+#define UA_VOICE_PAN      0x03  /* byte */
+#define UA_VOICE_REU      0x04  /* dword, little endian */
+#define UA_VOICE_LENGTH   0x08  /* dword, little endian */
+#define UA_VOICE_REPEAT_A 0x0C  /* dword, little endian */
+#define UA_VOICE_REPEAT_B 0x10  /* dword, little endian */
+#define UA_VOICE_RATE     0x14  /* word, little endian */
+#define UA_VOICE_SIZE     0x16  /* bytes */
+
 /* ---- Ultimate 64 speed indices ---- */
 /* Index into the machine's speed table. **Only these four mean the same */
 /* thing on both machines.** The U64 runs 1,2,3,4,5,6,8..48 MHz and the */
@@ -427,7 +476,7 @@
 /* How much RAM the core needs, and where. All of it is placeable: see */
 /* UCI_ZP and UCI_VARS in docs/asm-abi.md. */
 #define UCI_ZP_SIZE   4  /* zero page bytes the core needs */
-#define UCI_VARS_SIZE 190  /* non-zero-page bytes the whole SDK needs */
+#define UCI_VARS_SIZE 191  /* non-zero-page bytes the whole SDK needs */
 
 /* ---- ASCII literals ---- */
 /* Bytes that come off the wire are always written numerically. An */

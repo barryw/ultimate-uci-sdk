@@ -446,7 +446,9 @@ uint16_t ultimate_last_end(void);
  *
  * ultimate_reu_load() and ultimate_reu_save() move bytes between the expansion
  * and the *currently open file* - open it with ultimate_open() first - without
- * any of them passing through the C64 at all.
+ * any of them passing through the C64 at all. These transfers may be megabytes
+ * long, so they wait for the firmware's completion result without the normal
+ * UCI polling budget and restore the caller's budget before returning.
  *
  * Lengths are bytes. A DMA length of 0 means 65536, which is the REU's own
  * convention rather than an SDK invention.
@@ -484,6 +486,63 @@ uint8_t ultimate_reu_stash(uint16_t addr, uint32_t reuaddr, uint16_t len);
 uint8_t ultimate_reu_fetch(uint16_t addr, uint32_t reuaddr, uint16_t len);
 uint8_t ultimate_reu_load(uint32_t reuaddr, uint32_t len);
 uint8_t ultimate_reu_save(uint32_t reuaddr, uint32_t len);
+
+/*
+ * Ultimate Audio: hardware PCM voices reading directly from the REU window.
+ *
+ * This is not SID sample playback. When "Map Ultimate Audio $DF20-DFFF" is
+ * enabled, the FPGA plays signed 8-bit or signed little-endian 16-bit PCM in
+ * the background. The CPU only configures a voice; it does not feed samples.
+ *
+ * `reu_address`, `length`, `repeat_a`, and `repeat_b` are byte offsets in the
+ * 16 MB REU window. Repeat points are relative to `reu_address`. `rate` is the
+ * divider from the sampler's 6.25 MHz reference:
+ *
+ *     rate = round(6250000 / samples_per_second)
+ *
+ * Configure leaves the gate closed. Call ultimate_audio_start() after every
+ * voice in a stereo pair is configured, keeping their starts close together.
+ * UA_CTRL_IRQ asserts the C64's IRQ line as well as latching the status bit;
+ * install a handler that clears it, or keep interrupts disabled while polling.
+ */
+typedef struct {
+    uint8_t  channel;       /* 0 .. UA_CHANNELS-1 */
+    uint8_t  flags;         /* UA_CTRL_* except UA_CTRL_GATE */
+    uint8_t  volume;        /* 0 .. UA_VOLUME_MAX */
+    uint8_t  pan;           /* UA_PAN_LEFT .. UA_PAN_RIGHT */
+    uint32_t reu_address;   /* first PCM byte in the REU window */
+    uint32_t length;        /* bytes; 1 .. $FFFFFF */
+    uint32_t repeat_a;      /* loop start byte offset */
+    uint32_t repeat_b;      /* loop end byte offset */
+    uint16_t rate;          /* non-zero 6.25 MHz divider */
+} ultimate_audio_voice;
+
+/*
+ * Probe the mapped engine with a silent one-byte sample. Call once before any
+ * other audio function. Returns ULTIMATE_ERR_NOT_SUPPORTED when it is absent.
+ */
+uint8_t ultimate_audio_init(void);
+
+/* 1 after ultimate_audio_init() succeeded; touches no hardware. */
+uint8_t ultimate_audio_available(void);
+
+/* Raw module version byte. Meaningful only when available() returned 1. */
+uint8_t ultimate_audio_version(void);
+
+/* Validate and write every voice register, leaving its gate closed. */
+uint8_t ultimate_audio_configure(const ultimate_audio_voice *voice);
+
+/* Start a configured channel with the same UA_CTRL_* flags used above. */
+uint8_t ultimate_audio_start(uint8_t channel, uint8_t flags);
+
+/* Stop one channel immediately. */
+uint8_t ultimate_audio_stop(uint8_t channel);
+
+/* End-of-sample bits, one per channel. */
+uint8_t ultimate_audio_irq_status(void);
+
+/* Clear one channel's end-of-sample bit. */
+uint8_t ultimate_audio_irq_clear(uint8_t channel);
 
 /* ---------------------------------------------------------------------------
  * The machine itself: reset, freeze, and the emulated drives.

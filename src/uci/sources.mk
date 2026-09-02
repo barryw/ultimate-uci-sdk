@@ -22,6 +22,7 @@ UCI_SRC := src/uci/uci_core.s \
            src/uci/file.s \
            src/uci/turbo.s \
            src/uci/reu.s \
+           src/uci/audio.s \
            src/uci/net.s \
            src/uci/http.s \
            src/uci/httpbody.s \

@@ -26,6 +26,8 @@ __pycache__/
 
 # ...but the generated KickAssembler binding is a real, committed artifact.
 !bindings/kickass/uci_protocol.asm
+!demos/follow-me/*.asm
+!demos/follow-me/lib/*.asm
 
 # Generated from sdk.suite for the relocated-memory build
 tests/emulator/sdk-placed.suite
@@ -57,3 +59,11 @@ guide/version.tex
 
 # Release bundles are produced from a clean checkout by Woodpecker.
 dist/
+
+# Blob builds at other bases (make -C bindings/blob BUILD=build-boing ...)
+bindings/blob/build-*/
+# cc65 intermediates and KickAssembler debug dumps
+*.c.*.s
+*.dbg
+*.vs
+demos/follow-me/ByteDump.txt

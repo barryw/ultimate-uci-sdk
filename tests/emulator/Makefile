@@ -53,7 +53,7 @@ harness.prg harness.lbl: harness.s $(LIB)
 # The lists live in this file, so every .sym rule below depends on it. Without
 # that, adding a symbol here leaves the .sym untouched and the suite that uses
 # it calls address zero - which reads as a wedge bug rather than a build one.
-HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_available \
+HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_status_reg t_available \
                 t_identify_dos1 t_identify_absent t_detect \
                 t_identify t_get_model t_req_reset t_exec t_wedge \
                 t_sid_info t_sid_info_null sid_info \
@@ -152,6 +152,11 @@ relocharness.sym: relocharness.lbl Makefile
 # smallest budget of 256 status polls, so the poll loop gives up first.
 SLOW_LATENCY := 200000
 
+# Long enough for the SDK to build and push a command before the simulated
+# firmware services the abort that uci_init issued - the race real firmware
+# always won against the SDK before uci_abort waited for the abort flag.
+ABORT_LATENCY := 4000
+
 run: all
 	$(SIM6502) -s /code/tests/emulator/protocol.suite \
 	  --backend u64sim --u64sim-fs-root $(FS_ROOT)
@@ -162,6 +167,9 @@ run: all
 	$(SIM6502) -s /code/tests/emulator/timeout.suite \
 	  --backend u64sim --u64sim-fs-root $(FS_ROOT) \
 	  --u64sim-uci-latency $(SLOW_LATENCY)
+	$(SIM6502) -s /code/tests/emulator/abort-latency.suite \
+	  --backend u64sim --u64sim-fs-root $(FS_ROOT) \
+	  --u64sim-uci-latency $(ABORT_LATENCY)
 # No --backend: the plain simulator has nothing at $DF1B-$DF1F, which is the
 # only way to test a machine with no Ultimate in it.
 	$(SIM6502) -s /code/tests/emulator/absent.suite

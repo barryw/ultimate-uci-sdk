@@ -44,6 +44,11 @@
         .import ultimate_reu_available, ultimate_reu_size
         .import ultimate_reu_stash, ultimate_reu_fetch
         .import ultimate_reu_load, ultimate_reu_save
+        .import ultimate_audio_init, ultimate_audio_available
+        .import ultimate_audio_version
+        .import ultimate_audio_configure, ultimate_audio_start
+        .import ultimate_audio_stop, ultimate_audio_irq_status
+        .import ultimate_audio_irq_clear
         .import ultimate_net_ifcount, ultimate_net_macaddr
         .import ultimate_net_ipconfig, ultimate_net_connect
         .import ultimate_net_udp, ultimate_net_close
@@ -193,6 +198,7 @@ blob_start:
         .export bp_sock, bp_iface, bp_port
         .export bp_http, bp_body, bp_verb
         .export bp_name2, bp_drive, bp_format, bp_flag, bp_val, bp_time
+        .export bp_audio, blob_audio_table
 
 BP_STATUS_MAX = 32
 BP_NAME_MAX   = 40
@@ -239,6 +245,24 @@ bp_flag:    .res 1                  ; +$18F on or off, in and out
 bp_val:     .res 4                  ; +$190 a 32-bit value, little-endian
 bp_time:    .res 6                  ; +$194 year less 1900, month, day, h, m, s
 
+; Ultimate Audio takes the same structure as the linked C and assembly APIs.
+bp_audio:   .res UA_VOICE_SIZE      ; +$19A ultimate_audio_voice
+
+; The original jump-table page is full. Keep the audio entry points stable in
+; the otherwise-unused tail of the fixed parameter block.
+        .res $1E8 - (* - blob_params)
+blob_audio_table:                   ; +$2E8 from the blob base
+        jmp ultimate_audio_init         ; +$2E8
+        jmp ultimate_audio_available    ; +$2EB
+        jmp ultimate_audio_version      ; +$2EE
+        jmp blob_audio_configure        ; +$2F1
+        jmp blob_audio_start            ; +$2F4
+        jmp blob_audio_stop             ; +$2F7
+        jmp ultimate_audio_irq_status   ; +$2FA
+        jmp blob_audio_irq_clear        ; +$2FD
+
+        .assert (* - blob_params) = $200, error, "audio table must end with the parameter block"
+
 ; ---------------------------------------------------------------------------
 ; The shims.
 ;
@@ -272,6 +296,28 @@ blob_readdir:
         lda ult_attrib
         sta bp_attrib
         pla
+        jmp blob_done
+
+blob_audio_configure:
+        lda #<bp_audio
+        ldx #>bp_audio
+        jsr ultimate_audio_configure
+        jmp blob_done
+
+blob_audio_start:
+        lda bp_audio + UA_VOICE_CHANNEL
+        ldx bp_audio + UA_VOICE_FLAGS
+        jsr ultimate_audio_start
+        jmp blob_done
+
+blob_audio_stop:
+        lda bp_audio + UA_VOICE_CHANNEL
+        jsr ultimate_audio_stop
+        jmp blob_done
+
+blob_audio_irq_clear:
+        lda bp_audio + UA_VOICE_CHANNEL
+        jsr ultimate_audio_irq_clear
         jmp blob_done
 
 blob_open:

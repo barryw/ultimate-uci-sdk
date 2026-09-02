@@ -35,7 +35,7 @@ from u64_settings import Ultimate, read_settings, restore_settings  # noqa: E402
 
 # The result block ucitest.prg publishes into the cassette buffer.
 RESULT_ADDR = 0x033C
-RESULT_LEN = 28        # room for the format-4 SID addresses and a little growth
+RESULT_LEN = 28        # through format 5's Ultimate Audio result
 RESULT_MAGIC = b"UCIT"
 RESULT_DONE = 0xA5
 
@@ -45,6 +45,7 @@ from screen import decode_screen, SCREEN_ADDR, SCREEN_LEN  # noqa: E402
 CMD_IF = ("C64 and Cartridge Settings", "Command Interface")
 REU = ("C64 and Cartridge Settings", "RAM Expansion Unit")
 REU_SIZE = ("C64 and Cartridge Settings", "REU Size")
+AUDIO = ("C64 and Cartridge Settings", "Map Ultimate Audio $DF20-DFFF")
 # What each configured size should measure as, in 64K banks. 16 MB is 256, which
 # is why the SDK reports banks in a word: it does not fit a byte, and neither
 # does the same size counted in 256-byte pages fit one.
@@ -88,6 +89,9 @@ class Result:
             block[22] | (block[23] << 8),
             block[24] | (block[25] << 8),
         ] if self.format >= 4 else []
+        # Format 5: a mapped Ultimate Audio voice consumed a silent sample.
+        self.audio_ran = bool(block[26]) if self.format >= 5 else False
+        self.audio_version = block[27] if self.format >= 5 else 0
 
     def __str__(self):
         if not self.valid:
@@ -270,13 +274,26 @@ def expect_turbo_measured(r, state=None):
     return None
 
 
+def expect_audio_measured(r, state=None):
+    problem = expect_clean_pass(r)
+    if problem:
+        return problem
+    if not r.audio_ran:
+        return ("the PCM check skipped with Ultimate Audio mapped - the "
+                "register block did not reach the C64")
+    if r.audio_version >> 4 != 1:
+        return "unsupported Ultimate Audio version $%02x" % r.audio_version
+    return None
+
+
 SCENARIOS = [
     {
         "name": "uci-disabled",
         "why": "with the command interface switched off the SDK must report "
                "no device and return, not hang or misread open bus",
         "steps": [
-            ({CMD_IF: "Disabled", REU: "Disabled", TURBO: "Off"},
+            ({CMD_IF: "Disabled", REU: "Disabled", AUDIO: "Disabled",
+              TURBO: "Off"},
              expect_no_device),
         ],
     },
@@ -285,7 +302,8 @@ SCENARIOS = [
         "why": "the baseline: everything passes with the interface on, and "
                "the sockets reach the machine's own web server",
         "steps": [
-            ({CMD_IF: "Enabled", REU: "Disabled", TURBO: "Off"},
+            ({CMD_IF: "Enabled", REU: "Disabled", AUDIO: "Disabled",
+              TURBO: "Off"},
              expect_clean_pass_with_net),
         ],
     },
@@ -298,11 +316,11 @@ SCENARIOS = [
                "boundary, a middle one, and the top end that falls through "
                "every boundary there is",
         "steps": [
-            ({CMD_IF: "Enabled", REU: "Enabled", TURBO: "Off",
+            ({CMD_IF: "Enabled", REU: "Enabled", AUDIO: "Disabled", TURBO: "Off",
               REU_SIZE: "128 KB"}, expect_reu_size("128 KB")),
-            ({CMD_IF: "Enabled", REU: "Enabled", TURBO: "Off",
+            ({CMD_IF: "Enabled", REU: "Enabled", AUDIO: "Disabled", TURBO: "Off",
               REU_SIZE: "2 MB"}, expect_reu_size("2 MB")),
-            ({CMD_IF: "Enabled", REU: "Enabled", TURBO: "Off",
+            ({CMD_IF: "Enabled", REU: "Enabled", AUDIO: "Disabled", TURBO: "Off",
               REU_SIZE: "16 MB"}, expect_reu_size("16 MB")),
         ],
     },
@@ -311,7 +329,8 @@ SCENARIOS = [
         "why": "the interface overlays the last five REU registers, so an "
                "enabled REU must not disturb it",
         "steps": [
-            ({CMD_IF: "Enabled", REU: "Enabled", TURBO: "Off"},
+            ({CMD_IF: "Enabled", REU: "Enabled", AUDIO: "Disabled",
+              TURBO: "Off"},
              expect_clean_pass),
         ],
     },
@@ -321,10 +340,21 @@ SCENARIOS = [
                "switched off - see #794, it is the path the hyperspeed kernal "
                "uses, and the SDK's fast load depends on it",
         "steps": [
-            ({CMD_IF: "Enabled", REU: "Disabled", IEC_DRIVE: "Disabled",
+            ({CMD_IF: "Enabled", REU: "Disabled", AUDIO: "Disabled",
+              IEC_DRIVE: "Disabled",
               TURBO: "Off"}, record_softiec),
-            ({CMD_IF: "Enabled", REU: "Disabled", IEC_DRIVE: "Enabled",
+            ({CMD_IF: "Enabled", REU: "Disabled", AUDIO: "Disabled",
+              IEC_DRIVE: "Enabled",
               TURBO: "Off"}, expect_softiec_present),
+        ],
+    },
+    {
+        "name": "ultimate-audio",
+        "why": "the mapped PCM engine must consume a sample from REU and "
+               "raise its end flag; status-only register tests are not enough",
+        "steps": [
+            ({CMD_IF: "Enabled", REU: "Enabled", REU_SIZE: "16 MB",
+              AUDIO: "Enabled", TURBO: "Off"}, expect_audio_measured),
         ],
     },
     {
@@ -333,7 +363,7 @@ SCENARIOS = [
                "only way to show it works is to time a loop against the raster "
                "with the registers switched on - which only their owner can do",
         "steps": [
-            ({CMD_IF: "Enabled", REU: "Disabled",
+            ({CMD_IF: "Enabled", REU: "Disabled", AUDIO: "Disabled",
               TURBO: "U64 Turbo Registers"}, expect_turbo_measured),
         ],
     },
@@ -380,7 +410,7 @@ def main():
         settings, _check = SCENARIOS[1]["steps"][0]
         SCENARIOS[1]["steps"][0] = (settings, expect_sid_addresses(expected_sids))
 
-    touched = {CMD_IF, REU, IEC_DRIVE, TURBO}
+    touched = {CMD_IF, REU, IEC_DRIVE, TURBO, AUDIO}
     saved = read_settings(u, touched)
     print("# saved settings: %s"
           % ", ".join("%s=%s" % (k[1], v) for k, v in saved.items()))

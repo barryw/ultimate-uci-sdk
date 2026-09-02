@@ -7,16 +7,15 @@ the last five REU registers and a program that pokes the whole `$DF00-$DF1F`
 range as one device will disturb it. That promise is worth exactly as much as
 the check behind it.
 
-Two rules, and the second is the one that keeps the first honest:
+Three rules keep direct hardware access explicit:
 
   - **No `$DFxx` literal anywhere in the SDK.** Every register is reached
     through a name out of tools/gen_protocol.py, so there is one place that says
     what an address means.
 
-  - **REU registers appear in reu.s and nowhere else.** The REU is the second of
-    exactly two modules allowed to drive hardware directly (turbo.s is the
-    other), and a module that quietly starts writing `$DF00` would erode that
-    without anything failing.
+  - **REU registers appear in reu.s and nowhere else.**
+
+  - **Ultimate Audio registers appear in audio.s and nowhere else.**
 
 Run with the rest: python3 -m unittest discover -s tools -p 'test_*.py'
 """
@@ -40,9 +39,11 @@ PATTERNS = (
 )
 
 REU_ONLY = "src/uci/reu.s"
+AUDIO_ONLY = "src/uci/audio.s"
 
 LITERAL = re.compile(r"\$[Dd][Ff][0-9A-Fa-f]{2}")
 REU_NAME = re.compile(r"\bREU_REG_[A-Z_0-9]+\b")
+AUDIO_NAME = re.compile(r"\bUA_REG_[A-Z_0-9]+\b")
 
 
 def sources():
@@ -93,16 +94,35 @@ class RegisterRules(unittest.TestCase):
                          "the REU registers belong to src/uci/reu.s alone:\n  "
                          + "\n  ".join(found))
 
+    def test_audio_registers_only_in_audio(self):
+        found = []
+        for path in sources():
+            if path == AUDIO_ONLY:
+                continue
+            for number, code in code_lines(path):
+                for hit in AUDIO_NAME.findall(code):
+                    found.append("%s:%d: %s" % (path, number, hit))
+        self.assertEqual([], found,
+                         "the Ultimate Audio registers belong to "
+                         "src/uci/audio.s alone:\n  " + "\n  ".join(found))
+
     def test_the_scan_reaches_the_sources(self):
         """A rule that scans nothing passes for the wrong reason."""
         self.assertGreater(len(list(sources())), 10)
         self.assertIn(REU_ONLY, list(sources()))
+        self.assertIn(AUDIO_ONLY, list(sources()))
 
     def test_reu_really_does_use_them(self):
         """The check above passes trivially if reu.s stops driving the REU."""
         with open(os.path.join(REPO, REU_ONLY)) as fh:
             body = fh.read()
         for name in ("REU_REG_COMMAND", "REU_REG_STATUS", "REU_REG_C64_LO"):
+            self.assertIn(name, body)
+
+    def test_audio_really_does_use_its_registers(self):
+        with open(os.path.join(REPO, AUDIO_ONLY)) as fh:
+            body = fh.read()
+        for name in ("UA_REG_CONTROL", "UA_REG_VERSION", "UA_REG_START"):
             self.assertIn(name, body)
 
 

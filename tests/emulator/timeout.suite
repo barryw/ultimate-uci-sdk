@@ -9,7 +9,8 @@
 ; ULTIMATE_ERR_TIMEOUT. **This exercises one path of it** - a command sent to an
 ; interface that never leaves Busy - which is the path every other entry point
 ; reaches the hardware through. Bring-up is asserted to still *succeed* under
-; the same latency, because init polls for idle rather than for an answer.
+; the same latency: init's abort is serviced within the default budget, and
+; init waits for exactly that (see abort-latency.suite for the race it closes).
 ;
 ; It is its own file because the latency is a suite-wide setting: every other
 ; test wants a device that answers.

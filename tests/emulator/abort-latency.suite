@@ -1,0 +1,63 @@
+; abort-latency.suite - the first command after init, against a slow abort.
+;
+; uci_init recovers the interface with an abort. The abort flag ($DF1C bit 2)
+; is cleared by the Ultimate's firmware when it services the abort, and the
+; service is a HANDSHAKE_RESET: it rewinds the command pointer and forces the
+; state to idle. A command pushed before that happens is destroyed by it.
+;
+; On hardware the firmware takes long enough that the SDK's first command
+; after init always lost that race, and came back as a protocol error or
+; with the wrong status. The simulator's default latency of 64 cycles is
+; too short to show it, so this suite raises it:
+;
+;   sim6502 -s abort-latency.suite --backend u64sim --u64sim-uci-latency 4000
+;
+; SPDX-License-Identifier: MIT
+
+suites {
+  suite("first command after init, slow abort") {
+    system(c64)
+    symbols("/code/tests/emulator/harness.sym")
+    load("/code/tests/emulator/harness.prg", strip_header = true)
+
+    setup {
+      memfill([result], 9, $ff)
+    }
+
+    test("sdk-init-waits-for-the-abort", "init returns only once the firmware has serviced its abort") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      jsr([t_status_reg], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "idle, no error, and no abort pending that could still reset the interface")
+    }
+
+    test("sdk-first-command-after-init-survives", "identify straight after init gets its own reply") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      [ident_target] = $01
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+      jsr([t_identify], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ultimate_identify")
+      assert([reply0] == $55, "'U': the reply is the identify string, not an empty block")
+    }
+
+    test("sdk-abort-then-command", "an explicit abort on an idle interface, then a command") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [result] = $ff
+      jsr([t_abort], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "uci_abort")
+      jsr([t_status_reg], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "abort serviced before uci_abort returned")
+      [ident_target] = $01
+      [ident_buflen] = $40
+      [ident_buflen] + $01 = $00
+      jsr([t_identify], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ultimate_identify")
+      assert([reply0] == $55, "'U'")
+    }
+  }
+}

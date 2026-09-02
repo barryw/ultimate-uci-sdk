@@ -66,6 +66,7 @@ _uci_decode_status:
         .import ultimate_load, ultimate_bload, ultimate_save
         .import ultimate_reu_stash, ultimate_reu_fetch
         .import ultimate_reu_load, ultimate_reu_save
+        .import ultimate_audio_start
         .import ultimate_net_ifcount, ultimate_net_macaddr
         .import ultimate_net_ipconfig, ultimate_net_connect
         .import ultimate_net_udp, ultimate_net_read, ultimate_net_write
@@ -87,6 +88,7 @@ _uci_decode_status:
         .export _ultimate_load, _ultimate_bload, _ultimate_save
         .export _ultimate_reu_stash, _ultimate_reu_fetch
         .export _ultimate_reu_load, _ultimate_reu_save
+        .export _ultimate_audio_start
         .export _ultimate_net_ifcount, _ultimate_net_macaddr
         .export _ultimate_net_ipconfig, _ultimate_net_connect
         .export _ultimate_net_udp, _ultimate_net_read, _ultimate_net_write
@@ -372,6 +374,23 @@ cc_reu_dma:
 _ultimate_reu_load:
         jsr cc_reu_file
         jmp ultimate_reu_load
+
+; uint8_t ultimate_audio_start(uint8_t channel, uint8_t flags);
+;
+; A holds flags; the C stack holds channel. The assembly entry takes A/X so it
+; remains pleasant to call without dragging the C stack into the core.
+_ultimate_audio_start:
+        pha                             ; flags
+        ldy #$00
+        lda (sp),y
+        pha                             ; channel
+        jsr incsp1
+        pla
+        tay                             ; channel
+        pla
+        tax                             ; flags
+        tya
+        jmp ultimate_audio_start
 
 _ultimate_reu_save:
         jsr cc_reu_file

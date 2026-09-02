@@ -1,0 +1,178 @@
+{
+  "rules": {
+    "assembly": "One clip per natural radio phrase; controller callsign first, pilot callsign last.",
+    "callsigns": "One complete, naturally spoken controller callsign and one persistent assigned pilot voice per flight; never assemble airline flight numbers from digit clips.",
+    "number_phraseology": {
+      "airline_flight_numbers": "Use FAA group form unless zeros or clarity make separate digits natural.",
+      "registrations_headings_squawks": "Pronounce digits separately.",
+      "altitudes": "Pronounce digits followed by hundred or thousand as appropriate."
+    },
+    "initial_contact_only": [
+      "Boston Approach",
+      "Boston Departure",
+      "Boston Tower"
+    ],
+    "read_back": [
+      "runway",
+      "heading",
+      "altitude",
+      "takeoff clearance",
+      "landing clearance",
+      "approach clearance"
+    ]
+  },
+  "values": {
+    "callsigns": [
+      {"id": "N172SP", "spoken": "November one seven two Sierra Papa", "aircraft": "Cessna 172", "wake": "L", "pilot_voice": "us_female"},
+      {"id": "N650TW", "spoken": "November six five zero Tango Whiskey", "aircraft": "Pilatus P C twelve", "wake": "L", "pilot_voice": "us_male"},
+      {"id": "KAP582", "spoken": "Cape Air five eighty-two", "aircraft": "Cessna 402", "wake": "L", "pilot_voice": "us_female"},
+      {"id": "RPA4389", "spoken": "Brickyard forty-three eighty-nine", "aircraft": "Embraer 175", "wake": "M", "pilot_voice": "us_male"},
+      {"id": "JBU117", "spoken": "JetBlue one seventeen", "aircraft": "Airbus A220", "wake": "M", "pilot_voice": "us_female"},
+      {"id": "ACA765", "spoken": "Air Canada seven sixty-five", "aircraft": "Embraer 175", "wake": "M", "pilot_voice": "uk_female"},
+      {"id": "POE220", "spoken": "Porter two twenty", "aircraft": "Embraer 195", "wake": "M", "pilot_voice": "uk_female"},
+      {"id": "DAL224", "spoken": "Delta two twenty-four", "aircraft": "Airbus A321", "wake": "M", "pilot_voice": "us_female"},
+      {"id": "AAL181", "spoken": "American one eighty-one", "aircraft": "Boeing 737", "wake": "M", "pilot_voice": "us_male"},
+      {"id": "UAL214", "spoken": "United two fourteen", "aircraft": "Boeing 737", "wake": "M", "pilot_voice": "uk_male"},
+      {"id": "SWA492", "spoken": "Southwest four ninety-two", "aircraft": "Boeing 737", "wake": "M", "pilot_voice": "us_male"},
+      {"id": "NKS310", "spoken": "Spirit three ten", "aircraft": "Airbus A320", "wake": "M", "pilot_voice": "de_female"},
+      {"id": "BAW212H", "spoken": "Speedbird two twelve heavy", "aircraft": "Boeing 787", "wake": "H", "pilot_voice": "uk_male"},
+      {"id": "EIN134H", "spoken": "Shamrock one thirty-four heavy", "aircraft": "Airbus A330", "wake": "H", "pilot_voice": "uk_female"},
+      {"id": "AFR333H", "spoken": "Air France three thirty-three heavy", "aircraft": "Airbus A350", "wake": "H", "pilot_voice": "uk_female"},
+      {"id": "DLH423H", "spoken": "Lufthansa four twenty-three heavy", "aircraft": "Boeing 747", "wake": "H", "pilot_voice": "de_female"},
+      {"id": "SWR53H", "spoken": "Swiss fifty-three heavy", "aircraft": "Airbus A330", "wake": "H", "pilot_voice": "de_female"},
+      {"id": "KLM618H", "spoken": "K L M six eighteen heavy", "aircraft": "Boeing 787", "wake": "H", "pilot_voice": "de_female"},
+      {"id": "TAP218H", "spoken": "Air Portugal two eighteen heavy", "aircraft": "Airbus A330", "wake": "H", "pilot_voice": "in_male"},
+      {"id": "ICE630H", "spoken": "Iceair six thirty heavy", "aircraft": "Boeing 767", "wake": "H", "pilot_voice": "uk_male"},
+      {"id": "FDX28H", "spoken": "FedEx twenty-eight heavy", "aircraft": "Boeing 777 freighter", "wake": "H", "pilot_voice": "in_male"},
+      {"id": "UPS205H", "spoken": "U P S two zero five heavy", "aircraft": "Boeing 767 freighter", "wake": "H", "pilot_voice": "in_male"},
+      {"id": "UAE238S", "spoken": "Emirates two thirty-eight super", "aircraft": "Airbus A380", "wake": "S", "pilot_voice": "in_male"},
+      {"id": "LOG744H", "spoken": "Logan seven forty-four heavy", "aircraft": "Boeing 747", "wake": "H", "fictional": true, "pilot_voice": "uk_male"}
+    ],
+    "headings": [
+      {"id": "360", "game_heading": 0, "spoken": "three six zero"},
+      {"id": "045", "game_heading": 1, "spoken": "zero four five"},
+      {"id": "090", "game_heading": 2, "spoken": "zero niner zero"},
+      {"id": "135", "game_heading": 3, "spoken": "one three five"},
+      {"id": "180", "game_heading": 4, "spoken": "one eight zero"},
+      {"id": "225", "game_heading": 5, "spoken": "two two five"},
+      {"id": "270", "game_heading": 6, "spoken": "two seven zero"},
+      {"id": "315", "game_heading": 7, "spoken": "three one five"}
+    ],
+    "altitudes": [
+      {"id": "1000", "spoken": "one thousand"},
+      {"id": "2000", "spoken": "two thousand"},
+      {"id": "3000", "spoken": "three thousand"},
+      {"id": "4000", "spoken": "four thousand"},
+      {"id": "5000", "spoken": "five thousand"},
+      {"id": "6000", "spoken": "six thousand"},
+      {"id": "7000", "spoken": "seven thousand"},
+      {"id": "8000", "spoken": "eight thousand"},
+      {"id": "9000", "spoken": "niner thousand"},
+      {"id": "10000", "spoken": "one zero thousand"}
+    ],
+    "runways": [
+      {"id": "04L", "game_heading": 1, "spoken": "runway four left"},
+      {"id": "04R", "game_heading": 1, "spoken": "runway four right"},
+      {"id": "09", "game_heading": 2, "spoken": "runway niner"},
+      {"id": "14", "game_heading": 3, "spoken": "runway one four"},
+      {"id": "15L", "game_heading": 3, "spoken": "runway one five left"},
+      {"id": "15R", "game_heading": 3, "spoken": "runway one five right"},
+      {"id": "22L", "game_heading": 5, "spoken": "runway two two left"},
+      {"id": "22R", "game_heading": 5, "spoken": "runway two two right"},
+      {"id": "27", "game_heading": 6, "spoken": "runway two seven"},
+      {"id": "32", "game_heading": 7, "spoken": "runway three two"},
+      {"id": "33L", "game_heading": 7, "spoken": "runway three three left"},
+      {"id": "33R", "game_heading": 7, "spoken": "runway three three right"}
+    ]
+  },
+  "voices": {
+    "controller": {"voice_id": "uoImkLkkmvR0sENljlDt", "name": "Logan Approach Controller"},
+    "pilots": [
+      {"id": "us_female", "voice_id": "hpp4J3VqNfWAUOO0d1Us", "name": "Bella", "accent": "American", "gender": "female"},
+      {"id": "us_male", "voice_id": "Cfbgpw5er48RSeYP2TnP", "name": "Logan Southern Pilot", "accent": "Southern American", "gender": "male"},
+      {"id": "uk_female", "voice_id": "Xb7hH8MSUJpSbSDYk0k2", "name": "Alice", "accent": "British", "gender": "female"},
+      {"id": "uk_male", "voice_id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel", "accent": "British", "gender": "male"},
+      {"id": "de_female", "voice_id": "v3V1d2rk6528UrLKRuy8", "name": "Susi", "accent": "German", "gender": "female"},
+      {"id": "in_male", "voice_id": "oArP4WehPe3qjqvCwHNo", "name": "Matheus", "accent": "Indian", "gender": "male"}
+    ],
+    "easter_egg": {"voice_id": "ycIo7vDgYrbcj1Wc1RA7", "name": "Logan Dunks Pilot"}
+  },
+  "controller": {
+    "fixed": {
+      "radar_contact": "radar contact",
+      "fly_runway_heading": "fly runway heading",
+      "contact_tower": "contact Boston Tower",
+      "contact_departure": "contact Boston Departure",
+      "contact_center": "contact Boston Center",
+      "go_around": "go around",
+      "traffic_alert": "traffic alert",
+      "caution_wake": "caution wake turbulence",
+      "hold_for_wake": "hold position for wake turbulence"
+    },
+    "templates": {
+      "turn_left": "turn left heading {heading}",
+      "turn_right": "turn right heading {heading}",
+      "climb": "climb and maintain {altitude}",
+      "descend": "descend and maintain {altitude}",
+      "takeoff": "{runway}, cleared for takeoff",
+      "land": "{runway}, cleared to land",
+      "ils": "cleared I L S {runway} approach"
+    }
+  },
+  "pilot": {
+    "fixed": {
+      "boston_approach": "Boston Approach",
+      "boston_departure": "Boston Departure",
+      "boston_tower": "Boston Tower",
+      "boston_center": "Boston Center",
+      "fly_runway_heading": "fly runway heading",
+      "going_around": "going around",
+      "holding_position": "holding position",
+      "roger_wake": "roger, wake turbulence",
+      "traffic_in_sight": "traffic in sight",
+      "looking_for_traffic": "looking for traffic",
+      "unable": "unable"
+    },
+    "templates": {
+      "level": "level {altitude}",
+      "climbing_to": "climbing to {altitude}",
+      "ready": "{runway}, ready for departure",
+      "turn_left": "left heading {heading}",
+      "turn_right": "right heading {heading}",
+      "climb": "climb and maintain {altitude}",
+      "descend": "descend and maintain {altitude}",
+      "takeoff": "{runway}, cleared for takeoff",
+      "land": "{runway}, cleared to land",
+      "ils": "cleared I L S {runway} approach"
+    },
+    "easter_eggs": {
+      "wicked_brutal": "Boston Approach, Logan seven forty-four heavy. Unable. Traffic's wicked brutal. Bangin' a youey and headin' to Dunks. Logan seven forty-four heavy."
+    }
+  },
+  "example_sequences": {
+    "arrival": [
+      "PILOT boston_approach + callsign + level",
+      "ATC callsign + radar_contact",
+      "ATC callsign + turn_left|turn_right + descend",
+      "PILOT turn_left|turn_right + descend + callsign",
+      "ATC callsign + ils",
+      "PILOT ils + callsign",
+      "ATC callsign + contact_tower",
+      "PILOT boston_tower + callsign",
+      "ATC callsign + land",
+      "PILOT land + callsign"
+    ],
+    "departure": [
+      "PILOT boston_tower + callsign + ready",
+      "ATC callsign + takeoff + fly_runway_heading + climb",
+      "PILOT takeoff + fly_runway_heading + climb + callsign",
+      "ATC callsign + contact_departure",
+      "PILOT boston_departure + callsign + climbing_to",
+      "ATC callsign + radar_contact",
+      "ATC callsign + turn_left|turn_right + climb",
+      "PILOT turn_left|turn_right + climb + callsign",
+      "ATC callsign + contact_center",
+      "PILOT boston_center + callsign"
+    ]
+  }
+}

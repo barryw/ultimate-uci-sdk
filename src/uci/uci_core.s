@@ -47,6 +47,7 @@
         .export ult_sock, ult_socklen, ult_iface, ult_port
         .export ult_url, ult_http, ult_body, ult_httplen
         .export ult_arg2, ult_stage, ult_stagelen, ult_val
+        .export ult_audio_up
         .export uci_stat, uci_devcode
 
 ; ---------------------------------------------------------------------------
@@ -152,7 +153,10 @@ ult_stage       = UCI_VARS + 101 + 2 * UCI_REQ_SIZE ; ULT_STAGE_SIZE bytes
 ult_stagelen    = UCI_VARS + 101 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE
 ult_val         = UCI_VARS + 102 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE
 
-.assert (106 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
+; --- Ultimate Audio (src/uci/audio.s) ---
+ult_audio_up    = UCI_VARS + 106 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE
+
+.assert (107 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
         .export uci_req
 
@@ -246,6 +250,9 @@ ult_stage:      .res ULT_STAGE_SIZE
 ult_stagelen:   .res 1          ; how much of it the command being built uses
 ult_val:        .res 4          ; a scalar argument: the HTTP body builder's
                                 ; integers and booleans
+
+; --- Ultimate Audio (src/uci/audio.s) ---
+ult_audio_up:   .res 1          ; silent probe succeeded
 
 .endif
 
@@ -397,7 +404,19 @@ _uci_abort:
 
 @clear: lda #UCI_CTRL_ABORT
         sta UCI_REG_CONTROL
-        jsr uci_poll_idle
+
+        ; **Wait for the firmware to service the abort, not just for idle.**
+        ; The abort flag (UCI_STAT_ABORT_P) is set by the write above and
+        ; cleared only by the Ultimate's software, which services it with a
+        ; HANDSHAKE_RESET: state forced to idle *and the command pointer
+        ; rewound*. On an interface that was already idle - every program's
+        ; first init - the state test alone passes at once, the SDK pushes its
+        ; first command, and the firmware's reset then destroys it: an empty
+        ; block comes back and the caller sees ULTIMATE_ERR_PROTOCOL. Seen on
+        ; an Elite running 3.15 at 10 MHz and above, where the push beats the
+        ; firmware to it; tests/emulator/abort-latency.suite reproduces it at
+        ; any speed with a slower simulated firmware.
+        jsr uci_poll_aborted
         bcs @timeout
         and #UCI_STAT_ERROR
         beq @done
@@ -409,6 +428,29 @@ _uci_abort:
 @timeout:
         lda #ULTIMATE_ERR_TIMEOUT
         ldx #$00
+        rts
+
+; ---------------------------------------------------------------------------
+; Internal: wait until the interface is idle and no abort is pending. Carry
+; set on timeout, else A = the status register. The same loop as
+; uci_poll_idle with a wider mask; see uci_abort for why both bits matter.
+; ---------------------------------------------------------------------------
+uci_poll_aborted:
+        ldx uci_timeout
+@outer: ldy #$00
+@inner: lda UCI_REG_STATUS
+        and #UCI_STAT_STATE | UCI_STAT_ABORT_P
+        beq @hit
+        dey
+        bne @inner
+        lda uci_timeout         ; zero means wait forever
+        beq @outer
+        dex
+        bne @outer
+        sec
+        rts
+@hit:   lda UCI_REG_STATUS
+        clc
         rts
 
 ; ---------------------------------------------------------------------------

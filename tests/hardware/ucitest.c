@@ -299,7 +299,7 @@ static ultimate_sid_info sid_info;
  * polls for it and then reads the rest can never catch a half-written block.
  */
 #define RESULT_BLOCK  ((uint8_t *)0x033C)
-#define RESULT_FORMAT 4
+#define RESULT_FORMAT 5
 #define RESULT_DONE   0xA5
 
 static uint8_t turbo_ran;
@@ -310,6 +310,8 @@ static uint16_t reu_banks;
 static uint8_t reu_probe_clean;
 static uint8_t sid_physical_count;
 static uint16_t sid_physical_address[2];
+static uint8_t audio_ran;
+static uint8_t audio_version;
 
 static void publish(void)
 {
@@ -345,6 +347,9 @@ static void publish(void)
     RESULT_BLOCK[23] = (uint8_t)(sid_physical_address[0] >> 8);
     RESULT_BLOCK[24] = (uint8_t)sid_physical_address[1];
     RESULT_BLOCK[25] = (uint8_t)(sid_physical_address[1] >> 8);
+    /* Format 5: whether the mapped PCM engine completed a real sample. */
+    RESULT_BLOCK[26] = audio_ran;
+    RESULT_BLOCK[27] = audio_version;
     RESULT_BLOCK[12] = RESULT_DONE;     /* last, always */
 }
 
@@ -399,6 +404,21 @@ int main(void)
         publish();
         return 1;
     }
+
+    /*
+     * The very first command after init has to get its own reply. uci_init
+     * recovers the interface with an abort, and the firmware services that
+     * abort with a reset that rewinds the command queue; before uci_abort
+     * waited for the abort flag to clear, a command pushed in that window was
+     * wiped and answered with an empty block, ULTIMATE_ERR_PROTOCOL to the
+     * caller. So the first thing sent is a command with a known, non-OK
+     * answer, and it must come back as exactly that.
+     */
+    memset(&req, 0, sizeof(req));
+    req.target  = UCI_TARGET_DOS1;
+    req.command = 0x7E;                  /* no DOS firmware implements this */
+    err = uci_exec(&req);
+    check("first-command-after-init", ULTIMATE_ERR_NOT_SUPPORTED, err);
 
     ultimate_detect(&caps);
     printf("# ident=$%02x targets=$%04x\n", caps.ident, caps.targets);
@@ -608,6 +628,19 @@ int main(void)
         check("badlines-off-is-faster", 1,
               (nobad != 0 && nobad <= slow - (slow / 32)) ? 1 : 0);
 
+        /*
+         * And the same race at full speed, where a push follows the abort
+         * within microseconds: re-init at the top speed index and send the
+         * rejected command first again.
+         */
+        ultimate_turbo_set(U64_SPEED_MAX);
+        check("init-at-max-turbo", ULTIMATE_OK, ultimate_init());
+        memset(&req, 0, sizeof(req));
+        req.target  = UCI_TARGET_DOS1;
+        req.command = 0x7E;
+        check("first-command-after-init-at-max-turbo",
+              ULTIMATE_ERR_NOT_SUPPORTED, uci_exec(&req));
+
         /* Put the machine back at the speed it was found at. */
         ultimate_turbo_set(entry);
     }
@@ -785,7 +818,9 @@ after_write:
             skip("reu-load-from-a-file", "the fixture is not on the device");
         } else {
             check("reu-load-from-a-file", ULTIMATE_OK,
-                  ultimate_reu_load(0, 28));
+                  ultimate_reu_load(0, 14));
+            check("reu-load-continues-from-current-position", ULTIMATE_OK,
+                  ultimate_reu_load(14, 14));
             ultimate_close();
 
             memset(reu_work, 0, sizeof(reu_work));
@@ -861,6 +896,66 @@ after_write:
                 if (snap[j] != reu_work[j])
                     reu_probe_clean = 0;
             check("reu-size-left-nothing-changed", 1, (int)reu_probe_clean);
+        }
+
+        /*
+         * Ultimate Audio reads PCM from this same memory without CPU feeding.
+         * Volume zero keeps the hardware test silent; the end flag proves the
+         * sampler actually consumed all 32 bytes. When the owner has not
+         * mapped the module, configure must fail cleanly and touch nothing.
+         */
+        {
+            ultimate_audio_voice voice;
+            uint16_t polls;
+            uint8_t start_err;
+            uint8_t clear_err;
+            uint8_t stop_err;
+            uint8_t ended;
+            uint8_t cleared;
+
+            memset(&voice, 0, sizeof(voice));
+            voice.channel = 6;
+            voice.flags = UA_CTRL_IRQ;
+            voice.volume = 0;
+            voice.pan = UA_PAN_CENTER;
+            voice.reu_address = 0;
+            voice.length = sizeof(reu_work);
+            voice.rate = 2000;             /* 3.125 kHz, about 10 ms total */
+
+            err = ultimate_audio_init();
+            if (err != ULTIMATE_OK) {
+                check("audio-disabled-init", ULTIMATE_ERR_NOT_SUPPORTED, err);
+                check("audio-disabled-available", 0,
+                      ultimate_audio_available());
+                check("audio-disabled-fails-cleanly", ULTIMATE_ERR_NOT_SUPPORTED,
+                      ultimate_audio_configure(&voice));
+            } else {
+                audio_ran = 1;
+                audio_version = ultimate_audio_version();
+                check("audio-init", ULTIMATE_OK, err);
+                check("audio-available", 1, ultimate_audio_available());
+                memset(reu_work, 0, sizeof(reu_work));
+                check("audio-silent-sample-stashed", ULTIMATE_OK,
+                      ultimate_reu_stash((uint16_t)reu_work, 0,
+                                         sizeof(reu_work)));
+                check("audio-configure", ULTIMATE_OK,
+                      ultimate_audio_configure(&voice));
+                __asm__("sei");
+                start_err = ultimate_audio_start(voice.channel, voice.flags);
+                for (polls = 0; polls != 0xFFFF; ++polls)
+                    if (ultimate_audio_irq_status() & (1u << voice.channel))
+                        break;
+                ended = polls != 0xFFFF ? 1 : 0;
+                clear_err = ultimate_audio_irq_clear(voice.channel);
+                cleared = ultimate_audio_irq_status() & (1u << voice.channel);
+                stop_err = ultimate_audio_stop(voice.channel);
+                __asm__("cli");
+                check("audio-start", ULTIMATE_OK, start_err);
+                check("audio-reached-end", 1, ended);
+                check("audio-clear", ULTIMATE_OK, clear_err);
+                check("audio-end-cleared", 0, cleared);
+                check("audio-stop", ULTIMATE_OK, stop_err);
+            }
         }
 
         /* Put the expansion back exactly as it was found. */

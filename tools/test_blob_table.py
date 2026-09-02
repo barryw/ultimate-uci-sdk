@@ -14,8 +14,7 @@ two ever disagree.
 Three rules:
 
   - Every `jmp` in the header is documented, at the offset it really has.
-  - The offsets are contiguous: `$04`, `$07`, `$0A`, ... with no gaps, because
-    the table is a jump table and a gap is a typo.
+  - Each table's offsets are contiguous, because a gap is a typo.
   - The parameter block's fields are documented at the offsets `blob.s`
     reserves for them.
 
@@ -34,7 +33,7 @@ BLOB = os.path.join(REPO, "bindings/blob/blob.s")
 DOC = os.path.join(REPO, "bindings/blob/README.md")
 
 # `        jmp ultimate_init               ; +$1C`
-JUMP = re.compile(r"^\s+jmp\s+(\w+)\s*;\s*\+\$([0-9A-F]{2})", re.M)
+JUMP = re.compile(r"^\s+jmp\s+(\w+)\s*;\s*\+\$([0-9A-F]+)", re.M)
 # `| `+$1C` | `ultimate_init` | | `A` = result |`
 DOC_ROW = re.compile(r"^\|\s*`\+\$([0-9A-F]+)`\s*\|\s*`?([A-Za-z_0-9]+)", re.M)
 # The README documents two different things with the same `+$NN` notation - the
@@ -85,9 +84,10 @@ class JumpTable(unittest.TestCase):
 
     def test_the_table_has_no_gaps(self):
         offsets = [off for off, _ in code_entries()]
-        self.assertEqual(offsets, list(range(4, 4 + 3 * len(offsets), 3)),
-                         "the jump table is three bytes per entry and starts at "
-                         "+$04; a gap means a mistyped comment or a missing jmp")
+        split = offsets.index(0x2E8)
+        expected = list(range(4, 0x100, 3)) + list(range(0x2E8, 0x300, 3))
+        self.assertEqual(offsets[:split] + offsets[split:], expected,
+                         "a jump table has a mistyped comment or a missing jmp")
 
     def test_every_entry_is_documented_at_its_real_offset(self):
         documented = dict(doc_entries())

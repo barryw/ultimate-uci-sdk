@@ -90,6 +90,9 @@ enable it in the ultimate settings menu.
 The Ultimate-only [Machine Yearning SID visualizer](demos/sid-visualizer/)
 drives six 24-bit palette colours from six live SID voices. Its bundled music
 has a separate CC BY-NC 4.0 licence; the SDK remains MIT-licensed.
+[vsprites](demos/vsprites/) draws software sprites the way an Amiga draws
+bobs, and uses the turbo entry points to fill whatever frame the machine has:
+sixty 32x32 bobs at 60 fps on a 48 MHz Elite, two on a stock C64.
 
 Some commands stay unwrapped on purpose: EasyFlash sector erase, GCR track
 encoding and decoding, the control target's REU pair — which never returns on
@@ -269,7 +272,7 @@ public model does not expose them.
 Built for a machine with 38 kilobytes.
 
 - No heap, no hidden buffers. Every byte lands in a buffer you own.
-- 190 bytes of static RAM in total, request block included. No allocation, ever.
+- 191 bytes of static RAM in total, request block included. No allocation, ever.
 - Four bytes of zero page, at an address you choose.
 - No interrupts required, and no interrupt handler installed.
 - Every entry point is bounded: it completes or returns `ULTIMATE_ERR_TIMEOUT`.
