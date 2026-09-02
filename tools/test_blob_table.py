@@ -83,15 +83,16 @@ def normalise(name):
 class JumpTable(unittest.TestCase):
 
     def test_the_tables_have_no_gaps(self):
-        # Three tables: the header page from +$04, the audio table in the
-        # tail of the parameter block from +$2E8, and the extension table from
-        # +$300. Within each, entries are three bytes apart with nothing
-        # missing; a gap is a mistyped comment or a missing jmp.
+        # Three tables. The header page from +$04 and the audio table from
+        # +$2E8 are full and closed, so their whole ranges are pinned: a
+        # deleted last entry fails here as surely as a mistyped comment or a
+        # missing jmp in the middle. The extension table from +$300 grows, so
+        # its length comes from the code and only its contiguity is checked.
         offsets = [off for off, _ in code_entries()]
-        expected = []
-        for start, limit in ((0x04, 0x100), (0x2E8, 0x300), (0x300, 0x1000)):
-            count = len([off for off in offsets if start <= off < limit])
-            expected += list(range(start, start + 3 * count, 3))
+        extension = len([off for off in offsets if 0x300 <= off < 0x1000])
+        expected = (list(range(0x04, 0x100, 3))
+                    + list(range(0x2E8, 0x300, 3))
+                    + list(range(0x300, 0x300 + 3 * extension, 3)))
         self.assertEqual(offsets, expected,
                          "a jump table has a mistyped comment or a missing jmp")
 
