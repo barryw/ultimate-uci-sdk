@@ -2057,6 +2057,65 @@ suites {
       assert([result] == $07, "ULTIMATE_ERR_DEVICE: FILE DOESN'T EXIST, as ultimate_open reports it")
     }
 
+    ; The sign pass on its own. The simulated REU is registers only: no DMA
+    ; moves a byte and the done bit stays set once poked, so what is left
+    ; behind is the last slice's programming, the staging area the flip loop
+    ; worked on, and ult_reu. 100 bytes is three full slices and a slice of
+    ; four: the last stash goes to $004060 for 4 bytes; bytes 0-3 of the stage
+    ; were flipped four times (back to themselves) and bytes 4-31 three times.
+    test("sdk-wav-sign-pass-slices", "100 bytes at $4000: 32, 32, 32, 4, then ult_reu restored") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      $df00 = $40               ; REU_STAT_DONE for every transfer
+      [reu_at] = $00            ; $004000
+      [reu_at] + $01 = $40
+      [reu_at] + $02 = $00
+      [reu_at] + $03 = $00
+      [reu_len] = $64           ; 100
+      [reu_len] + $01 = $00
+      [reu_len] + $02 = $00
+      [reu_len] + $03 = $00
+      memfill([ult_stage], 32, $00)
+      [result] = $ff
+      jsr([t_wav_sign_pass], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the pass succeeded")
+      assert($df04 == $60, "last slice REU address low: $4000 + 96")
+      assert($df05 == $40, "last slice REU address middle")
+      assert($df06 == $00, "last slice REU address high")
+      assert($df07 == $04, "last slice length: 100 - 96")
+      assert($df08 == $00, "...and no high byte")
+      assert($df01 == $90, "the last command was a stash: EXECUTE, NOW, mode 0")
+      assert(([ult_stage] + $00).b == $00, "byte 0 flipped four times: unchanged")
+      assert(([ult_stage] + $03).b == $00, "byte 3 flipped four times: unchanged")
+      assert(([ult_stage] + $04).b == $80, "byte 4 flipped three times")
+      assert(([ult_stage] + $1f).b == $80, "byte 31 flipped three times")
+      assert([reu_at] == $00, "ult_reu restored, low")
+      assert(([reu_at] + $01).b == $40, "ult_reu restored, middle")
+      assert(([reu_at] + $02).b == $00, "ult_reu restored, high")
+    }
+
+    test("sdk-wav-sign-pass-exact-slices", "64 bytes is two full slices and nothing dangling") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      $df00 = $40
+      [reu_at] = $00
+      [reu_at] + $01 = $40
+      [reu_at] + $02 = $00
+      [reu_at] + $03 = $00
+      [reu_len] = $40           ; 64
+      [reu_len] + $01 = $00
+      [reu_len] + $02 = $00
+      [reu_len] + $03 = $00
+      memfill([ult_stage], 32, $00)
+      [result] = $ff
+      jsr([t_wav_sign_pass], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "the pass succeeded")
+      assert($df04 == $20, "second slice at $4020")
+      assert($df07 == $20, "of 32 bytes")
+      assert(([ult_stage] + $00).b == $00, "every byte flipped twice: unchanged")
+      assert(([ult_stage] + $1f).b == $00, "...to the last")
+      assert([reu_at] == $00, "ult_reu restored")
+      assert(([reu_at] + $01).b == $40, "...middle byte")
+    }
+
     ; --- what a file is, and moving files about ---
     ;
     ; stat's reply is a twelve-byte header and then the name with no

@@ -67,6 +67,7 @@
         .import ultimate_reu_available, ultimate_reu_stash, ultimate_reu_fetch
         .import ultimate_reu_load, ultimate_reu_save
         .import ult_reu, ult_reulen
+        .import wav_sign_pass, ult_scratch
         .import ultimate_net_ifcount, ultimate_net_ipconfig
         .import ultimate_net_connect, ultimate_net_read, ultimate_net_write
         .import ult_sock, ult_socklen, ult_iface, ult_port
@@ -111,6 +112,7 @@
         .export t_reu_load, t_reu_save, reu_at, reu_len
         .export t_flags_init, t_flags_reu_avail, t_flags_audio_avail
         .export t_audio_load_wav, voice
+        .export t_wav_sign_pass
         .export t_net_ifcount, t_net_ipconfig
         .export t_net_connect, t_net_connect_null
         .export t_net_read_null, t_net_read_tiny, t_net_write_null
@@ -967,6 +969,30 @@ t_audio_load_wav:
         ldx #>voice
         jsr ultimate_audio_load_wav
         sta result
+        rts
+
+; The 8-bit sign pass on its own: the REU address from reu_at, the byte count
+; from reu_len into WAV_LEN (ult_scratch+8), and afterwards ult_reu copied back
+; into reu_at so the suite can see it was restored. result = 0 on success,
+; else the error the pass returned.
+t_wav_sign_pass:
+        ldx #$03
+@copy:  lda reu_at,x
+        sta ult_reu,x
+        lda reu_len,x
+        sta ult_scratch + 8,x
+        dex
+        bpl @copy
+        jsr wav_sign_pass
+        bcs @failed
+        lda #$00
+@failed:
+        sta result
+        ldx #$03
+@back:  lda ult_reu,x
+        sta reu_at,x
+        dex
+        bpl @back
         rts
 
 ; The name is in `reply`, put there by the suite; the address and the limit come

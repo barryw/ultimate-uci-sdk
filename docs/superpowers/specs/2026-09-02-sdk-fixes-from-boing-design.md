@@ -244,9 +244,10 @@ The engine plays signed 8-bit or signed 16-bit little-endian PCM from the
 REU at any rate the divider can express, so the only conversion a WAV ever
 needs is the 8-bit sign: WAV stores 8-bit samples unsigned. 16-bit data is
 loaded as it is, full quality. 8-bit data is loaded as it is, then fixed in
-place inside the REU: for each 40-byte slice, `reu_fetch` into the SDK's
+place inside the REU: for each 32-byte slice (the staging area is 40 bytes;
+its last eight hold the parser's state), `reu_fetch` into the SDK's
 staging area, `eor #$80` every byte, `reu_stash` back. No caller buffer,
-no byte-by-byte UCI reads; the Boing sample (24 KB) takes about 620 DMA
+no byte-by-byte UCI reads; the Boing sample (24 KB) takes about 770 DMA
 round trips, well under a tenth of a second at any CPU speed. No resampling
 and no bit-depth change: the divider handles rate, and the REU is not short
 of space.
@@ -272,7 +273,7 @@ register layer, and its header comment ("file streaming is composed from it
 and the DOS/REU services by the application") is updated to point here. The
 header parse and the 8-bit sign pass both use the SDK's 40-byte staging
 area (`ult_stage`): the 12-byte RIFF header, then 8-byte chunk headers, then
-16 bytes of `fmt `, then 40-byte slices of sample data, so no caller buffer.
+16 bytes of `fmt `, then 32-byte slices of sample data, so no caller buffer.
 One 24-by-16-bit division routine for the divider.
 
 Blob: entry `audio_load_wav` appended, `bp_name` = path, `bp_reu` = REU

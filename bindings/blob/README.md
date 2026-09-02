@@ -196,8 +196,8 @@ block because the original header page is full:
 
 The parameter block is full and the audio table with it, so entries after
 `+$2FD` live in a third table at `+$300`, the first thing in the code area.
-It grows downwards into code that is not published by offset, so it never
-moves anything above it.
+It grows into the code that follows it, which is not published by offset, so
+it never moves anything above it.
 
 | Offset | Entry | In | Out |
 |---|---|---|---|

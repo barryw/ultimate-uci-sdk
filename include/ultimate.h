@@ -558,20 +558,21 @@ uint8_t ultimate_audio_irq_clear(uint8_t channel);
  * them, OR UA_CTRL_REPEAT or UA_CTRL_IRQ into flags if wanted, then
  * ultimate_audio_configure() and ultimate_audio_start().
  *
- * Any PCM WAV: 8 or 16 bit, mono or stereo, any rate from 96 Hz. 16-bit data
- * is played as it is. 8-bit data is stored unsigned in a WAV and played
- * signed by the engine, so it is fixed in place inside the REU after the
- * load, 32 bytes at a time: about a tenth of a second for a 24 KB sample at
- * any CPU speed. Stereo: the voice describes the left channel with
- * UA_CTRL_INTERLEAVE set; the right channel is the same voice with
- * reu_address + 2 and length - 2 (16-bit), or + 1 and - 1 (8-bit).
+ * Any PCM WAV: 8 or 16 bit, mono or stereo, any rate from 96 Hz to 65,535 Hz.
+ * 16-bit data is played as it is. 8-bit data is stored unsigned in a WAV and
+ * played signed by the engine, so it is fixed in place inside the REU after
+ * the load, 32 bytes at a time: about a tenth of a second for a 24 KB sample
+ * under turbo, closer to a second at 1 MHz. Stereo: the voice describes the
+ * left channel with UA_CTRL_INTERLEAVE set; the right channel is the same
+ * voice with reu_address + 2 and length - 2 (16-bit), or + 1 and - 1 (8-bit).
  *
  * Results: the DOS error when the file will not open; ULTIMATE_ERR_PROTOCOL
  * for a file that is not RIFF/WAVE or has a broken chunk list;
  * ULTIMATE_ERR_NOT_SUPPORTED for compressed or 24-bit data, more than two
- * channels, a rate under 96 Hz, or a data chunk past 16 MB; the REU result
- * when the load or the sign fix fails. The file is closed on every path. On
- * failure the voice may be partly written and means nothing.
+ * channels, a rate under 96 Hz or above 65,535 Hz, or a data chunk past
+ * 16 MB; the REU result when the load or the sign fix fails. The file is
+ * closed on every path. On failure the voice may be partly written and means
+ * nothing.
  */
 uint8_t ultimate_audio_load_wav(const char *name, uint32_t reuaddr,
                                 ultimate_audio_voice *voice);

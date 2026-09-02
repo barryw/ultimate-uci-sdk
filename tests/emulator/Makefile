@@ -75,6 +75,7 @@ HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_status_reg t_
                 t_load t_bload t_save load_addr load_max load_end \
                 t_reu_avail t_reu_stash t_reu_fetch t_reu_load t_reu_save \
                 t_flags_init t_flags_reu_avail t_flags_audio_avail t_audio_load_wav voice \
+                t_wav_sign_pass ult_stage \
                 reu_at reu_len \
                 t_net_ifcount t_net_ipconfig \
                 t_net_connect t_net_connect_null \

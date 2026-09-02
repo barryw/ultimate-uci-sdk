@@ -23,7 +23,7 @@
         .import ult_addr, ult_reu, ult_reulen
         .import ult_scratch, ult_stage, ult_arg2
 
-        .export ultimate_audio_load_wav
+        .export ultimate_audio_load_wav, wav_sign_pass ; wav_sign_pass is exported for the emulator harness only
 
 ; State: ult_scratch (16 bytes) and the tail of ult_stage (40 bytes, of which
 ; the first WAV_SLICE are the read buffer and the sign pass's slice).
@@ -467,7 +467,8 @@ wav_load:
 
 ; 8-bit WAV samples are unsigned and the engine plays signed: flip bit 7 of
 ; every byte in place, WAV_SLICE bytes at a time, through ult_stage. Leaves
-; ult_reu where it started.
+; ult_reu where it started on success; a failed fetch or stash leaves it
+; mid-sample.
 wav_sign_pass:
         ldx #$03
 @save:  lda ult_reu,x
