@@ -28,20 +28,20 @@ import re
 import unittest
 from pathlib import Path
 
+# The two patterns the generator reads blob.s with: one parser, so the
+# constants it emits and the table this file checks cannot read differently.
+from gen_protocol import BLOB_JUMP as JUMP, BLOB_FIELD as FIELD
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BLOB = os.path.join(REPO, "bindings/blob/blob.s")
 DOC = os.path.join(REPO, "bindings/blob/README.md")
 
-# `        jmp ultimate_init               ; +$1C`
-JUMP = re.compile(r"^\s+jmp\s+(\w+)\s*;\s*\+\$([0-9A-F]+)", re.M)
 # `| `+$1C` | `ultimate_init` | | `A` = result |`
 DOC_ROW = re.compile(r"^\|\s*`\+\$([0-9A-F]+)`\s*\|\s*`?([A-Za-z_0-9]+)", re.M)
 # The README documents two different things with the same `+$NN` notation - the
 # jump table, offsets from the base, and the parameter block, offsets from the
 # block - so `+$07` means one thing above this heading and another below it.
 PARAM_HEADING = "## The parameter block"
-# `bp_attrib:  .res 1                  ; +$151 open's ...`
-FIELD = re.compile(r"^(bp_\w+):\s+\.res\s+(\S+)\s*;\s*\+\$([0-9A-F]+)", re.M)
 
 
 def code_entries():

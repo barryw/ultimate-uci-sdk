@@ -17,6 +17,7 @@ arithmetically means deleting a padding field fails here instead.
 Runs under `make test` with no hardware and no Docker.
 """
 
+import os
 import unittest
 
 import gen_protocol as gp
@@ -304,6 +305,47 @@ class TestTableHygiene(unittest.TestCase):
         for shape in gp.ARGS.values():
             for kind, _spec in shape:
                 self.assertIn(kind, gp.ARG_WIDTHS)
+
+
+class TestBlobConstants(unittest.TestCase):
+    """The BLOB_* constants are read out of blob.s, so a wrong one is a wrong blob.s."""
+
+    def names(self):
+        out = {}
+        for _title, _note, items in gp.blob_groups():
+            for name, value, _comment in items:
+                out[name] = value
+        return out
+
+    def test_the_first_and_the_audio_entries(self):
+        n = self.names()
+        self.assertEqual(n["BLOB_UCI_INIT"], 0x04)
+        self.assertEqual(n["BLOB_ULTIMATE_INIT"], 0x1C)
+        self.assertEqual(n["BLOB_ULTIMATE_TURBO_AVAILABLE"], 0x43)
+        self.assertEqual(n["BLOB_ULTIMATE_AUDIO_INIT"], 0x2E8)
+        self.assertEqual(n["BLOB_AUDIO_CONFIGURE"], 0x2F1)
+
+    def test_parameter_block_fields_are_from_the_blob_base(self):
+        n = self.names()
+        self.assertEqual(n["BLOB_PARAMS"], 0x100)
+        self.assertEqual(n["BLOB_BP_RESULT"], 0x100)
+        self.assertEqual(n["BLOB_BP_ADDR"], 0x103)
+        self.assertEqual(n["BLOB_BP_REU"], 0x256)
+        self.assertEqual(n["BLOB_BP_AUDIO"], 0x29A)
+
+    def test_every_jump_has_a_constant(self):
+        with open(os.path.join(gp.REPO, gp.BLOB_SOURCE)) as fh:
+            text = fh.read()
+        names = self.names()
+        for target, off in gp.BLOB_JUMP.findall(text):
+            self.assertEqual(names[gp.blob_name(target)], int(off, 16), target)
+
+    def test_the_assembler_includes_carry_them_and_the_c_header_does_not(self):
+        for text in (gp.asm_include(), gp.kickass_include(), gp.acme_include()):
+            self.assertIn("BLOB_ULTIMATE_INIT", text)
+            self.assertIn("BLOB_BP_AUDIO", text)
+        self.assertNotIn("BLOB_ULTIMATE_INIT", gp.c_header())
+        self.assertNotIn("BLOB_ULTIMATE_INIT", gp.markdown())
 
 
 if __name__ == "__main__":

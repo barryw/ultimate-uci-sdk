@@ -21,6 +21,7 @@ sources rather than the published register API document.
 """
 
 import os
+import re
 import textwrap
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -542,6 +543,52 @@ GROUPS = [
     ]),
 ]
 
+# ---------------------------------------------------------------------------
+# The standalone blob's jump table and parameter block, read from blob.s at
+# generation time so the constants can never disagree with the code they name.
+# Not in the C header: a C program links the library and has no table to jsr.
+# ---------------------------------------------------------------------------
+
+BLOB_SOURCE = "bindings/blob/blob.s"
+BLOB_PARAMS = 0x100   # the parameter block's offset from the blob's base
+
+# `        jmp ultimate_init               ; +$1C`
+BLOB_JUMP = re.compile(r"^\s+jmp\s+(\w+)\s*;\s*\+\$([0-9A-F]+)", re.M)
+# `bp_attrib:  .res 1                  ; +$151 open's DOS_FA_* mask in,`
+BLOB_FIELD = re.compile(r"^(bp_\w+):\s+\.res\s+(\S+)\s*;\s*\+\$([0-9A-F]+)", re.M)
+
+
+def blob_name(target):
+    """`blob_audio_configure` -> BLOB_AUDIO_CONFIGURE; `ultimate_init` -> BLOB_ULTIMATE_INIT.
+
+    The shims in blob.s are named for the file they live in; the constant names
+    the operation, which is what the README table already does.
+    """
+    if target.startswith("blob_"):
+        target = target[5:]
+    return "BLOB_" + target.upper()
+
+
+def blob_groups():
+    """Two groups in GROUPS' (title, note, items) shape, for the assembler emitters."""
+    with open(os.path.join(REPO, BLOB_SOURCE)) as fh:
+        text = fh.read()
+    jumps = [(blob_name(name), int(off, 16), "")
+             for name, off in BLOB_JUMP.findall(text)]
+    fields = [("BLOB_PARAMS", BLOB_PARAMS, "the parameter block itself")]
+    fields += [("BLOB_" + name.upper(), BLOB_PARAMS + int(off, 16), "")
+               for name, _size, off in BLOB_FIELD.findall(text)]
+    return [
+        ("Blob jump table", "Offsets from the base address of the standalone blob "
+         "(bindings/blob), whatever base it was built for: jsr BLOB + "
+         "BLOB_ULTIMATE_INIT. Entries are appended, never moved. Read from "
+         "blob.s when this file was generated.", jumps),
+        ("Blob parameter block", "Fields of the blob's parameter block, also from "
+         "the blob's base: sta BLOB + BLOB_BP_ADDR. The block starts at "
+         "BLOB_PARAMS.", fields),
+    ]
+
+
 # Strings that the protocol defines and that bindings must not re-spell.
 STRINGS = [
     ("UCI_STR_NO_TARGET", "NO TARGET",
@@ -1027,7 +1074,7 @@ def asm_include():
         "ULTIMATE_UCI_PROTOCOL_INC = 1",
         "",
     ]
-    for title, note, items in GROUPS:
+    for title, note, items in GROUPS + blob_groups():
         out.append("; ---- %s ----" % title)
         if note:
             for line in textwrap.wrap(note, 72):
@@ -1078,7 +1125,7 @@ def kickass_include():
         ".filenamespace uci",
         "",
     ]
-    for title, note, items in GROUPS:
+    for title, note, items in GROUPS + blob_groups():
         out.append("// ---- %s ----" % title)
         if note:
             for line in textwrap.wrap(note, 72):
@@ -1110,7 +1157,7 @@ def acme_include():
         "; SPDX-License-Identifier: MIT",
         "",
     ]
-    for title, note, items in GROUPS:
+    for title, note, items in GROUPS + blob_groups():
         out.append("; ---- %s ----" % title)
         if note:
             for line in textwrap.wrap(note, 72):
