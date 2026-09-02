@@ -129,7 +129,9 @@ documents `A`/`X` pairs.
 
 `tests/emulator/harness.s` gets one routine, `t_flags`, that calls an entry
 whose address the suite poked, then `php` / `pla` and stores the status byte.
-`sdk.suite` and `blob.suite` each get cases asserting the Z bit for:
+`sdk.suite` (and so `sdk-placed.suite`) and `absent.suite` get cases asserting
+the Z bit for the following; `blob.suite` gets none, because the blob is the
+same object code and its suite has no harness to execute a `php` in:
 
 - `ultimate_reu_available` returning 0 (absent suite) and 1;
 - `ultimate_audio_available` returning 0;
