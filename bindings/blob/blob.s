@@ -49,6 +49,7 @@
         .import ultimate_audio_configure, ultimate_audio_start
         .import ultimate_audio_stop, ultimate_audio_irq_status
         .import ultimate_audio_irq_clear
+        .import ultimate_audio_load_wav
         .import ultimate_net_ifcount, ultimate_net_macaddr
         .import ultimate_net_ipconfig, ultimate_net_connect
         .import ultimate_net_udp, ultimate_net_close
@@ -263,6 +264,14 @@ blob_audio_table:                   ; +$2E8 from the blob base
 
         .assert (* - blob_params) = $200, error, "audio table must end with the parameter block"
 
+; The parameter block is full and the audio table with it. Entries from here
+; on live in a third table at +$300, the first thing in the code area: it can
+; grow without moving anything published before it, and nothing below it is
+; published by offset.
+        .segment "BLOBEXT"
+blob_ext_table:                     ; +$300 from the blob base
+        jmp blob_audio_load_wav         ; +$300
+
 ; ---------------------------------------------------------------------------
 ; The shims.
 ;
@@ -318,6 +327,16 @@ blob_audio_stop:
 blob_audio_irq_clear:
         lda bp_audio + UA_VOICE_CHANNEL
         jsr ultimate_audio_irq_clear
+        jmp blob_done
+
+; The WAV's name in bp_name, the REU address in bp_reu; bp_audio comes back
+; with the address, length, divider and flags filled.
+blob_audio_load_wav:
+        jsr blob_set_name
+        jsr blob_set_reu
+        lda #<bp_audio
+        ldx #>bp_audio
+        jsr ultimate_audio_load_wav
         jmp blob_done
 
 blob_open:

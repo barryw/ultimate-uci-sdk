@@ -67,6 +67,7 @@ _uci_decode_status:
         .import ultimate_reu_stash, ultimate_reu_fetch
         .import ultimate_reu_load, ultimate_reu_save
         .import ultimate_audio_start
+        .import ultimate_audio_load_wav
         .import ultimate_net_ifcount, ultimate_net_macaddr
         .import ultimate_net_ipconfig, ultimate_net_connect
         .import ultimate_net_udp, ultimate_net_read, ultimate_net_write
@@ -89,6 +90,7 @@ _uci_decode_status:
         .export _ultimate_reu_stash, _ultimate_reu_fetch
         .export _ultimate_reu_load, _ultimate_reu_save
         .export _ultimate_audio_start
+        .export _ultimate_audio_load_wav
         .export _ultimate_net_ifcount, _ultimate_net_macaddr
         .export _ultimate_net_ipconfig, _ultimate_net_connect
         .export _ultimate_net_udp, _ultimate_net_read, _ultimate_net_write
@@ -391,6 +393,34 @@ _ultimate_audio_start:
         tax                             ; flags
         tya
         jmp ultimate_audio_start
+
+; uint8_t ultimate_audio_load_wav(const char *name, uint32_t reuaddr,
+;                                 ultimate_audio_voice *voice);
+;
+; A/X holds voice; the C stack holds reuaddr at 0..3 and name at 4..5.
+_ultimate_audio_load_wav:
+        pha
+        txa
+        pha
+        ldy #$00
+        lda (sp),y
+        sta ult_reu
+        iny
+        lda (sp),y
+        sta ult_reu + 1
+        iny
+        lda (sp),y
+        sta ult_reu + 2
+        iny
+        lda (sp),y
+        sta ult_reu + 3
+        iny
+        jsr cc_ptr_at_y                 ; name -> ult_buf
+        jsr incsp6
+        pla
+        tax
+        pla
+        jmp ultimate_audio_load_wav
 
 _ultimate_reu_save:
         jsr cc_reu_file

@@ -602,6 +602,7 @@
 .label BLOB_AUDIO_STOP            = $02F7
 .label BLOB_ULTIMATE_AUDIO_IRQ_STATUS = $02FA
 .label BLOB_AUDIO_IRQ_CLEAR       = $02FD
+.label BLOB_AUDIO_LOAD_WAV        = $0300
 
 // ---- Blob parameter block ----
 // Fields of the blob's parameter block, also from the blob's base: sta

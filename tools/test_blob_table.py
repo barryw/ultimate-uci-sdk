@@ -82,12 +82,24 @@ def normalise(name):
 
 class JumpTable(unittest.TestCase):
 
-    def test_the_table_has_no_gaps(self):
+    def test_the_tables_have_no_gaps(self):
+        # Three tables: the header page from +$04, the audio table in the
+        # tail of the parameter block from +$2E8, and the extension table from
+        # +$300. Within each, entries are three bytes apart with nothing
+        # missing; a gap is a mistyped comment or a missing jmp.
         offsets = [off for off, _ in code_entries()]
-        split = offsets.index(0x2E8)
-        expected = list(range(4, 0x100, 3)) + list(range(0x2E8, 0x300, 3))
-        self.assertEqual(offsets[:split] + offsets[split:], expected,
+        expected = []
+        for start, limit in ((0x04, 0x100), (0x2E8, 0x300), (0x300, 0x1000)):
+            count = len([off for off in offsets if start <= off < limit])
+            expected += list(range(start, start + 3 * count, 3))
+        self.assertEqual(offsets, expected,
                          "a jump table has a mistyped comment or a missing jmp")
+
+    def test_the_extension_table_starts_the_code_area(self):
+        # The parameter block is full; entries added after the audio table
+        # live at +$300 and must be documented there.
+        self.assertIn(0x300, [off for off, _ in code_entries()])
+        self.assertIn(0x300, dict(doc_entries()))
 
     def test_every_entry_is_documented_at_its_real_offset(self):
         documented = dict(doc_entries())

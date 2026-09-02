@@ -24,6 +24,7 @@ MEMORY {
 SEGMENTS {
     BLOBHDR:  load = HDR,  type = ro;
     BLOBPARM: load = PARM, type = rw, define = yes;
+    BLOBEXT:  load = MAIN, type = ro;
     CODE:     load = MAIN, type = ro;
     RODATA:   load = MAIN, type = ro;
 }

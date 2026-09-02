@@ -595,6 +595,7 @@ BLOB_AUDIO_START                = $02F4
 BLOB_AUDIO_STOP                 = $02F7
 BLOB_ULTIMATE_AUDIO_IRQ_STATUS  = $02FA
 BLOB_AUDIO_IRQ_CLEAR            = $02FD
+BLOB_AUDIO_LOAD_WAV             = $0300
 
 ; ---- Blob parameter block ----
 ; Fields of the blob's parameter block, also from the blob's base: sta

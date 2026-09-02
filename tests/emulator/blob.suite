@@ -352,5 +352,28 @@ suites {
       assert($7100 == $03, "bp_result is ULTIMATE_ERR_PROTOCOL")
       assert($7151 == $00, "the SID count is clear after failure")
     }
+
+    ; The extension table: +$300 is the first entry past the full parameter
+    ; block. A missing file is enough to prove the shim reaches the SDK and
+    ; the SDK's result reaches bp_result.
+    test("blob-audio-load-wav-missing-file", "audio_load_wav through +$300 reports the DOS error") {
+      jsr($701c, stop_on_rts = true, fail_on_brk = true)   ; +$1C ultimate_init
+      $7129 = $6e            ; bp_name at +$29: "nope.wav"
+      $712a = $6f
+      $712b = $70
+      $712c = $65
+      $712d = $2e
+      $712e = $77
+      $712f = $61
+      $7130 = $76
+      $7131 = $00
+      $7256 = $00            ; bp_reu at +$156: 0
+      $7257 = $00
+      $7258 = $00
+      $7259 = $00
+      $7100 = $ff
+      jsr($7300, stop_on_rts = true, fail_on_brk = true)   ; +$300 audio_load_wav
+      assert($7100 == $07, "ULTIMATE_ERR_DEVICE: FILE DOESN'T EXIST")
+    }
   }
 }

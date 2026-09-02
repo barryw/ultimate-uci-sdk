@@ -194,6 +194,15 @@ block because the original header page is full:
 | `+$2FA` | `ultimate_audio_irq_status` | | `A` = end-of-sample bits |
 | `+$2FD` | `audio_irq_clear` | `bp_audio` channel | `bp_result` |
 
+The parameter block is full and the audio table with it, so entries after
+`+$2FD` live in a third table at `+$300`, the first thing in the code area.
+It grows downwards into code that is not published by offset, so it never
+moves anything above it.
+
+| Offset | Entry | In | Out |
+|---|---|---|---|
+| `+$300` | `audio_load_wav` | `bp_name` = the WAV, `bp_reu` = REU address | `bp_audio` address, length, rate and flags filled; `bp_result` |
+
 A directory walk is one live exchange: `+$55` then `+$58` until it answers
 `ULTIMATE_END` (`10`), with no other command in between. `+$7F` and `+$82` work
 on whatever `+$5B` left open and carry no filename of their own.
