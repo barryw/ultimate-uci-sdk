@@ -212,8 +212,9 @@ dos_stat:
         sta (uci_ptr),y
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
-@short: lda #ULTIMATE_ERR_PROTOCOL
-        ldx #$00
+@short: ldx #$00
+        lda #ULTIMATE_ERR_PROTOCOL
         rts

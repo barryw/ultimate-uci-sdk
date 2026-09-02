@@ -265,8 +265,8 @@ ult_audio_up:   .res 1          ; silent probe succeeded
 ; ---------------------------------------------------------------------------
 uci_ident:
 _uci_ident_register:
-        lda UCI_REG_IDENT
         ldx #$00
+        lda UCI_REG_IDENT
         rts
 
 ; ---------------------------------------------------------------------------
@@ -283,8 +283,8 @@ _uci_signature_present:
         and #UCI_IDENT_MASK
         cmp #UCI_IDENT_VALUE
         bne @absent
-        lda #$01
         ldx #$00
+        lda #$01
         rts
 @absent:
         lda #$00
@@ -302,8 +302,8 @@ _uci_set_timeout:
 
 uci_get_timeout_a:
 _uci_get_timeout:
-        lda uci_timeout
         ldx #$00
+        lda uci_timeout
         rts
 
 ; ---------------------------------------------------------------------------
@@ -422,12 +422,12 @@ _uci_abort:
         beq @done
         lda #UCI_CTRL_CLR_ERR
         sta UCI_REG_CONTROL
-@done:  lda #ULTIMATE_OK
-        ldx #$00
+@done:  ldx #$00
+        lda #ULTIMATE_OK
         rts
 @timeout:
-        lda #ULTIMATE_ERR_TIMEOUT
         ldx #$00
+        lda #ULTIMATE_ERR_TIMEOUT
         rts
 
 ; ---------------------------------------------------------------------------
@@ -481,24 +481,24 @@ _uci_init:
         sta uci_devcode + 1
 
         jsr uci_present
-        cmp #$00                ; test A explicitly: uci_present returns with
-        bne @probe              ; Z set from its trailing ldx, not from A
-        lda #ULTIMATE_ERR_NO_DEVICE
+        bne @probe              ; the ABI's promise: Z is set from the result
         ldx #$00
+        lda #ULTIMATE_ERR_NO_DEVICE
         rts
 
 @probe: jsr uci_abort
         cmp #ULTIMATE_OK
         beq @ok
         ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts                     ; the abort already returned a timeout
 
 @ok:    lda #UCI_CTRL_CLR_ERR
         sta UCI_REG_CONTROL
         lda #$01
         sta uci_ready
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 ; ---------------------------------------------------------------------------
@@ -596,6 +596,7 @@ _uci_exec:
 @out_ok:
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 ; ---------------------------------------------------------------------------
@@ -628,6 +629,7 @@ _uci_exec_first:
 @out_ok:
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 uci_exec_next:
@@ -636,8 +638,8 @@ _uci_exec_next:
 
 ; uci_more_blocks  ->  A = 1 while another reply block follows
 _uci_more_blocks:
-        lda uci_more
         ldx #$00
+        lda uci_more
         rts
 
 ; Internal: one block, into an empty buffer, decoding the status when it turns
@@ -657,6 +659,7 @@ uci_block_fresh:
 @out_ok:
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 ; ---------------------------------------------------------------------------
@@ -754,8 +757,8 @@ uci_exec_send:
         bcc @ready_check
 
 @invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         ldx #$00
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         rts
 
 @ready_check:
@@ -765,14 +768,15 @@ uci_exec_send:
         cmp #ULTIMATE_OK
         beq @wait_idle
         ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
         ; --- wait for idle, then submit ---
 @wait_idle:
         jsr uci_poll_idle
         bcc @idle
-        lda #ULTIMATE_ERR_TIMEOUT
         ldx #$00
+        lda #ULTIMATE_ERR_TIMEOUT
         rts
 @idle:  and #UCI_STAT_ERROR
         beq @send
@@ -817,8 +821,8 @@ uci_exec_send:
         beq @sent
         lda #UCI_CTRL_CLR_ERR
         sta UCI_REG_CONTROL
-        lda #ULTIMATE_ERR_PROTOCOL
         ldx #$00
+        lda #ULTIMATE_ERR_PROTOCOL
         rts
 
 @sent:  ; --- fire and forget ---
@@ -830,15 +834,15 @@ uci_exec_send:
         beq @ok_sent
         jsr uci_poll_idle
         bcc @ok_noreply
-        lda #ULTIMATE_ERR_TIMEOUT
         ldx #$00
+        lda #ULTIMATE_ERR_TIMEOUT
         rts
 @ok_noreply:
         lda #$00
         sta uci_more            ; nothing to collect, and no status to decode
 @ok_sent:
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 ; ---------------------------------------------------------------------------
@@ -898,10 +902,11 @@ uci_translate:
         beq @out_ok
         lda #ULTIMATE_ERR_TRUNCATED
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 @out_ok:
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 ; ---------------------------------------------------------------------------
@@ -1132,15 +1137,15 @@ _uci_status_format:
         beq @binary
         cmp #UCI_TARGET_HTTP
         beq @dec3
-        lda #UCI_STATUS_FMT_DECIMAL2
         ldx #$00
+        lda #UCI_STATUS_FMT_DECIMAL2
         rts
 @binary:
+        ldx #$00
         lda #UCI_STATUS_FMT_BINARY
-        ldx #$00
         rts
-@dec3:  lda #UCI_STATUS_FMT_DECIMAL3
-        ldx #$00
+@dec3:  ldx #$00
+        lda #UCI_STATUS_FMT_DECIMAL3
         rts
 
 ; ---------------------------------------------------------------------------
@@ -1181,8 +1186,8 @@ uci_decode:
 
         lda uci_dec_len
         bne @have
-        lda #ULTIMATE_OK        ; silence is success
         ldx #$00
+        lda #ULTIMATE_OK        ; silence is success
         rts
 
 @have:  ; **"HTTP/1.0 200 OK" is a status too, and it is not a code.** An HTTP
@@ -1274,14 +1279,14 @@ uci_decode:
         cmp #<400
         bcc @d3_ok
 @d3_err:
-        lda #ULTIMATE_ERR_DEVICE
         ldx #$00
+        lda #ULTIMATE_ERR_DEVICE
         rts
 
 ; Its own success return rather than the shared one: two encodings now land
 ; here and the shared @ok is no longer inside a relative branch of either.
-@d3_ok: lda #ULTIMATE_OK
-        ldx #$00
+@d3_ok: ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 ; --- "NN,TEXT" ---
@@ -1406,8 +1411,8 @@ uci_decode:
         cmp #$02
         bcc @malformed          ; one byte is the binary shape, and this target
                                 ; has no binary vocabulary to read it with
-        lda #ULTIMATE_ERR_DEVICE
         ldx #$00
+        lda #ULTIMATE_ERR_DEVICE
         rts
 
 @binary_ok:
@@ -1423,12 +1428,12 @@ uci_decode:
         lda #$FF
         sta uci_devcode
         sta uci_devcode + 1
-        lda #ULTIMATE_ERR_PROTOCOL
         ldx #$00
+        lda #ULTIMATE_ERR_PROTOCOL
         rts
 
-@ok:    lda #ULTIMATE_OK
-        ldx #$00
+@ok:    ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 ; ---------------------------------------------------------------------------
@@ -1504,18 +1509,18 @@ uci_map_decimal2:
         beq @unsup
         cmp #81
         beq @badarg
+        ldx #$00
         lda #ULTIMATE_ERR_DEVICE
-        ldx #$00
         rts
-@ok:    lda #ULTIMATE_OK
-        ldx #$00
+@ok:    ldx #$00
+        lda #ULTIMATE_OK
         rts
-@unsup: lda #ULTIMATE_ERR_NOT_SUPPORTED
-        ldx #$00
+@unsup: ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         rts
 @badarg:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         ldx #$00
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         rts
 
 ; Internal: map a SoftwareIEC binary status byte in A.
@@ -1534,19 +1539,19 @@ uci_map_binary:
         beq @badarg
         cmp #SOFTIEC_ST_SAVE_ERROR
         beq @io
+        ldx #$00
         lda #ULTIMATE_ERR_DEVICE
-        ldx #$00
         rts
-@ok:    lda #ULTIMATE_OK
-        ldx #$00
+@ok:    ldx #$00
+        lda #ULTIMATE_OK
         rts
-@unsup: lda #ULTIMATE_ERR_NOT_SUPPORTED
-        ldx #$00
+@unsup: ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         rts
 @badarg:
+        ldx #$00
         lda #ULTIMATE_ERR_INVALID_ARGUMENT
-        ldx #$00
         rts
-@io:    lda #ULTIMATE_ERR_IO
-        ldx #$00
+@io:    ldx #$00
+        lda #ULTIMATE_ERR_IO
         rts

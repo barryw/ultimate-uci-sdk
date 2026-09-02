@@ -75,6 +75,7 @@ _ultimate_palette_get:
         beq @out                ; the first version of this returned. Always taken.
 @short: lda #ULTIMATE_ERR_PROTOCOL
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 @invalid:
@@ -106,7 +107,6 @@ _ultimate_palette_set:
         sta ult_req + UCI_REQ_ARGLEN
 
         jsr pal_exec
-        ldx #$00
         rts
 
 @invalid:
@@ -140,7 +140,6 @@ ultimate_palette_set_color:
         sta ult_req + UCI_REQ_ARGLEN
 
         jsr pal_exec
-        ldx #$00
         rts
 
 @invalid:
@@ -161,7 +160,6 @@ _ultimate_palette_reset:
         sta ult_req + UCI_REQ_COMMAND
 
         jsr pal_exec
-        ldx #$00
         rts
 
 ; ---------------------------------------------------------------------------

@@ -102,7 +102,7 @@ include path (`--asm-include-dir`, or `-I` if you invoke `ca65` directly).
 | | |
 |---|---|
 | Arguments | in `A`, or in the request block |
-| Return | result code in `A` |
+| Return | result code in `A`, with N and Z set from it: `jsr entry` / `beq ok` tests the result. A result that occupies `A` and `X` (a 16-bit value such as `ultimate_reu_size`) carries no such promise; test both bytes. |
 | Clobbers | `A`, `X`, `Y`, processor flags |
 | Zero page | `UCI_ZP_SIZE` (4) bytes at `UCI_ZP`, which defaults to `$FB`. Nothing else. |
 | Stack | shallow: a handful of nested `jsr`s, no recursion, no deep call chains |

@@ -79,6 +79,7 @@ ultimate_get_time:
         bne @out
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 @invalid:

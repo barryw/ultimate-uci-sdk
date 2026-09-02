@@ -33,6 +33,13 @@ suites {
       assert([result] == $00, "and the SDK does not claim to be up")
     }
 
+    test("absent-flags-error-clears-z", "ultimate_init returning NO_DEVICE leaves Z clear") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      [result] = $ff
+      jsr([t_flags_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "Z clear: the result is 1")
+    }
+
     ; A program that ignores the init result and issues a command anyway must
     ; still get an answer. Pushing a command into open bus and then polling for
     ; a reply is what hangs a C64 with no cartridge in it.

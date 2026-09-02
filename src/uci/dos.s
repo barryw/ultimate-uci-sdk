@@ -101,6 +101,7 @@ ultimate_getpath:
         bne @out
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 @invalid:
@@ -128,6 +129,7 @@ _ultimate_opendir:
         sta ult_dir
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 ; ---------------------------------------------------------------------------
@@ -158,8 +160,8 @@ ultimate_readdir:
 
         lda ult_dir
         bne @walking
-        lda #ULTIMATE_END       ; no directory open, or this one is finished
         ldx #$00
+        lda #ULTIMATE_END       ; no directory open, or this one is finished
         rts
 
 @walking:
@@ -187,8 +189,8 @@ ultimate_readdir:
         pha                     ; the walk is over, however it ended
         lda #$00
         sta ult_dir
-        pla
         ldx #$00
+        pla
         rts
 
         ; Another block follows only while uci_more says so. Recording that now
@@ -207,13 +209,13 @@ ultimate_readdir:
         lda ult_req + UCI_REQ_DATALEN
         ora ult_req + UCI_REQ_DATALEN + 1
         bne @have
-        lda #ULTIMATE_END
         ldx #$00
+        lda #ULTIMATE_END
         rts
 
 @have:  jsr ult_shift_name
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 @invalid:
@@ -246,8 +248,8 @@ ultimate_open:
         jmp ult_dos_exec
 
 @toolong:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         ldx #$00
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         rts
 
 ; ---------------------------------------------------------------------------
@@ -302,8 +304,8 @@ ultimate_read:
         jsr ult_dos_exec
         pha
         jsr ult_report_len
-        pla
         ldx #$00
+        pla
         rts
 
 @invalid:
@@ -466,8 +468,8 @@ ult_str_cmd:
 
 @toolong:
         pla
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         ldx #$00
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         rts
 
 ; ult_buflen = strlen(ult_buf), carry set when it fit.

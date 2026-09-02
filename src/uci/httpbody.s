@@ -126,8 +126,8 @@ ultimate_http_body:
         lda ult_req + UCI_REQ_DATALEN
         cmp #$01
         bne @noreply
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 @noreply:
@@ -136,8 +136,8 @@ ultimate_http_body:
         pha
         lda #HTTP_BODY_NONE
         sta ult_body
-        pla
         ldx #$00
+        pla
         rts
 
 @invalid:

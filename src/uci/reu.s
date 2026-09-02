@@ -98,11 +98,11 @@ _ultimate_reu_available:
         sta REU_REG_C64_LO
         cmp REU_REG_C64_LO
         bne @no
+        ldx #$00
         lda #$01
-        ldx #$00
         rts
-@no:    lda #$00
-        ldx #$00
+@no:    ldx #$00
+        lda #$00
         rts
 
 ; ---------------------------------------------------------------------------
@@ -131,8 +131,8 @@ reu_transfer:
         cmp #$01
         beq @there
         pla
-        lda #ULTIMATE_ERR_NOT_SUPPORTED
         ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         rts
 
 @there: lda ult_addr
@@ -167,16 +167,16 @@ reu_transfer:
 
         and #REU_STAT_DONE
         beq @failed
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 ; The registers answered the probe and then no transfer finished. On real
 ; hardware that is the expansion being switched off between the two, or
 ; something else driving the same registers.
 @failed:
-        lda #ULTIMATE_ERR_IO
         ldx #$00
+        lda #ULTIMATE_ERR_IO
         rts
 
 ; ---------------------------------------------------------------------------
@@ -279,8 +279,8 @@ _ultimate_reu_size:
 
         jsr reu_sz_restore              ; it wrapped, so this boundary is the size
         ldy ult_scratch + REU_SZ_I
-        lda reu_sz_banks,y
         ldx #$00
+        lda reu_sz_banks,y
         rts
 
 @distinct:
@@ -420,4 +420,5 @@ reu_dos_cmd:
         jsr uci_set_timeout_a
         txa
         ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts

@@ -107,7 +107,6 @@ ultimate_net_ifcount:
         sta ult_req + UCI_REQ_DATAMAX
 
         jsr net_exec
-        ldx #$00
         rts
 
 ; ---------------------------------------------------------------------------
@@ -178,9 +177,10 @@ net_getaddr:
         bne @short
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
-@short: lda #ULTIMATE_ERR_PROTOCOL
-        ldx #$00
+@short: ldx #$00
+        lda #ULTIMATE_ERR_PROTOCOL
         rts
 
 ; ---------------------------------------------------------------------------
@@ -226,7 +226,6 @@ ultimate_net_setip:
         sta ult_req + UCI_REQ_PAYLOADLEN
 
         jsr net_exec
-        ldx #$00
         rts
 
 @invalid:
@@ -321,6 +320,7 @@ net_open:
         sta ult_sock
         txa                             ; the result, which the store clobbered
         ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 @check: lda ult_req + UCI_REQ_DATALEN
@@ -328,15 +328,15 @@ net_open:
         bne @noreply
         lda ult_req + UCI_REQ_DATALEN + 1
         bne @noreply
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 @noreply:
         lda #$FF
         sta ult_sock
-        lda #ULTIMATE_ERR_PROTOCOL
         ldx #$00
+        lda #ULTIMATE_ERR_PROTOCOL
         rts
 
 @invalid:
@@ -366,7 +366,6 @@ ultimate_net_close:
         sta ult_req + UCI_REQ_ARGLEN
 
         jsr net_exec
-        ldx #$00
         rts
 
 ; ---------------------------------------------------------------------------
@@ -482,31 +481,31 @@ ultimate_net_read:
         sbc #$00
         sta ult_socklen + 1
         jsr net_unprefix
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 @empty: jsr net_nothing
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 @closed:
         jsr net_nothing
-        lda #ULTIMATE_END
         ldx #$00
+        lda #ULTIMATE_END
         rts
 
 @short: jsr net_nothing
-        lda #ULTIMATE_ERR_PROTOCOL
         ldx #$00
+        lda #ULTIMATE_ERR_PROTOCOL
         rts
 
 @failed:
         pha
         jsr net_nothing
-        pla
         ldx #$00
+        pla
         rts
 
 @invalid:
@@ -573,21 +572,21 @@ ultimate_net_write:
         lda ult_req + UCI_REQ_DATALEN
         cmp #$02
         bne @noreply
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 @noreply:
         jsr net_nothing
-        lda #ULTIMATE_ERR_PROTOCOL
         ldx #$00
+        lda #ULTIMATE_ERR_PROTOCOL
         rts
 
 @failed:
         pha
         jsr net_nothing
-        pla
         ldx #$00
+        pla
         rts
 
 @invalid:

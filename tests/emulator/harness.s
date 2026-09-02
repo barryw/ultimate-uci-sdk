@@ -109,6 +109,7 @@
         .export t_load, t_bload, t_save, load_addr, load_max, load_end
         .export t_reu_avail, t_reu_stash, t_reu_fetch
         .export t_reu_load, t_reu_save, reu_at, reu_len
+        .export t_flags_init, t_flags_reu_avail, t_flags_audio_avail
         .export t_net_ifcount, t_net_ipconfig
         .export t_net_connect, t_net_connect_null
         .export t_net_read_null, t_net_read_tiny, t_net_write_null
@@ -921,6 +922,31 @@ set_reu_args:
         sta ult_addr
         lda load_addr + 1
         sta ult_addr + 1
+        rts
+
+; --- byte results set the flags ---
+;
+; The ABI promises that a byte result in A leaves Z set from A, so that a
+; caller can write `jsr entry` / `beq ok`. Each of these stores the Z bit of
+; the status register exactly as the call left it: $02 when the result was
+; zero, $00 when it was not.
+t_flags_init:
+        jsr ultimate_init
+        jmp store_z
+
+t_flags_reu_avail:
+        jsr ultimate_reu_available
+        jmp store_z
+
+t_flags_audio_avail:
+        jsr ultimate_audio_available
+        jmp store_z
+
+store_z:
+        php
+        pla
+        and #$02
+        sta result
         rts
 
 ; The name is in `reply`, put there by the suite; the address and the limit come

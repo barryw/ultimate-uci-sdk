@@ -53,8 +53,8 @@ _ultimate_init:
         beq @store              ; always taken
 @up:    lda #$01
 @store: sta ult_up
-        pla
         ldx #$00
+        pla
         rts
 
 ; ---------------------------------------------------------------------------
@@ -62,8 +62,8 @@ _ultimate_init:
 ; ---------------------------------------------------------------------------
 ultimate_available:
 _ultimate_available:
-        lda ult_up
         ldx #$00
+        lda ult_up
         rts
 
 ; ---------------------------------------------------------------------------
@@ -105,8 +105,8 @@ ult_have_buf:
 ; unsigned char return.
 ; ---------------------------------------------------------------------------
 ult_invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         ldx #$00
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         rts
 
 ; ---------------------------------------------------------------------------
@@ -213,8 +213,8 @@ ultimate_identify:
         iny
         sta (uci_ptr),y
 @absent:
-        lda #ULTIMATE_ERR_NOT_SUPPORTED
         ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         rts
 
 @keep:  pla
@@ -222,12 +222,13 @@ ultimate_identify:
         bne @out
         lda #ULTIMATE_OK        ; an identification string we clipped is fine
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 @invalid:
         pla
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         ldx #$00
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         rts
 
 ; ---------------------------------------------------------------------------
@@ -270,8 +271,8 @@ _ultimate_detect:
         lda ult_caps
         ora ult_caps + 1
         bne @have_caps
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         ldx #$00
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         rts
 
 @have_caps:
@@ -288,8 +289,8 @@ _ultimate_detect:
         jsr uci_present
         cmp #$00
         bne @probe
-        lda #ULTIMATE_ERR_NO_DEVICE
         ldx #$00
+        lda #ULTIMATE_ERR_NO_DEVICE
         rts
 
 @probe: jsr uci_ident
@@ -300,6 +301,7 @@ _ultimate_detect:
         cmp #ULTIMATE_OK
         beq @up
         ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 @up:    lda #$01
@@ -353,8 +355,8 @@ _ultimate_detect:
         cmp #UCI_TARGET_HTTP + 1
         bcc @next
 
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 ; ---------------------------------------------------------------------------
@@ -391,6 +393,7 @@ ultimate_get_model:
         bne @out
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 @invalid:
@@ -463,8 +466,8 @@ _ultimate_legacy_get_sid_info:
         lda ult_sid_reply_lengths,x
         cmp ult_req + UCI_REQ_DATALEN
         bne @protocol
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 @protocol:
@@ -472,8 +475,8 @@ _ultimate_legacy_get_sid_info:
 @failed:
         pha
         jsr @clear_count
-        pla
         ldx #$00
+        pla
         rts
 
 @invalid:

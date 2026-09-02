@@ -121,8 +121,8 @@ _ultimate_audio_init:
         sta UA_REG_BASE + UA_REG_CONTROL,x
         plp
 @absent:
-        lda #ULTIMATE_ERR_NOT_SUPPORTED
         ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         rts
 
 ; ---------------------------------------------------------------------------
@@ -130,8 +130,8 @@ _ultimate_audio_init:
 ; ---------------------------------------------------------------------------
 ultimate_audio_version:
 _ultimate_audio_version:
-        lda UA_REG_VERSION
         ldx #$00
+        lda UA_REG_VERSION
         rts
 
 ; ---------------------------------------------------------------------------
@@ -139,8 +139,8 @@ _ultimate_audio_version:
 ; ---------------------------------------------------------------------------
 ultimate_audio_available:
 _ultimate_audio_available:
-        lda ult_audio_up
         ldx #$00
+        lda ult_audio_up
         rts
 
 ; A = channel -> X = channel register offset, carry clear; carry set if bad.
@@ -163,8 +163,8 @@ audio_require:
         lda ult_audio_up
         cmp #$01
         beq @yes
-        lda #ULTIMATE_ERR_NOT_SUPPORTED
         ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         sec
         rts
 @yes:   clc
@@ -172,13 +172,13 @@ audio_require:
 
 ; Shared result tails.
 audio_invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         ldx #$00
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         rts
 
 audio_ok:
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 ; ---------------------------------------------------------------------------
@@ -444,8 +444,8 @@ ultimate_audio_start:
 @unsupported_pop:
         pla                             ; flags
         pla                             ; channel
-        lda #ULTIMATE_ERR_NOT_SUPPORTED
         ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         rts
 @invalid_pop:
         pla                             ; channel
@@ -469,8 +469,8 @@ _ultimate_audio_stop:
         sta UA_REG_BASE + UA_REG_CONTROL,x
         jmp audio_ok
 @pop:   pla
-        lda #ULTIMATE_ERR_NOT_SUPPORTED
         ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         rts
 
 ; ---------------------------------------------------------------------------
@@ -481,9 +481,9 @@ _ultimate_audio_irq_status:
         jsr ultimate_audio_available
         cmp #$01
         bne @none
+        ldx #$00
         lda UA_REG_IRQ_STATUS
         and #((1 << UA_CHANNELS) - 1)
-        ldx #$00
         rts
 @none:  lda #$00
         tax
@@ -507,6 +507,6 @@ _ultimate_audio_irq_clear:
         sta UA_REG_BASE + UA_REG_IRQ_CLEAR,x
         jmp audio_ok
 @pop:   pla
-        lda #ULTIMATE_ERR_NOT_SUPPORTED
         ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         rts

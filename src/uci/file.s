@@ -81,8 +81,8 @@ ultimate_load:
 @slow:  jmp file_load_dos
 
 file_invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         ldx #$00
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         rts
 
 ; ---------------------------------------------------------------------------
@@ -117,8 +117,8 @@ ultimate_bload:
         jsr file_read_body
 @out:   pha
         jsr ultimate_close
-        pla
         ldx #$00
+        pla
         rts
 
 ; ---------------------------------------------------------------------------
@@ -156,8 +156,8 @@ ultimate_save:
 @done:  lda #ULTIMATE_OK
 @out:   pha
         jsr ultimate_close
-        pla
         ldx #$00
+        pla
         rts
 
 ; ---------------------------------------------------------------------------
@@ -270,8 +270,8 @@ file_load_dos:
 
 @out:   pha
         jsr ultimate_close
-        pla
         ldx #$00
+        pla
         rts
 
 ; Read into ult_addr until a short read says the file has ended, or until

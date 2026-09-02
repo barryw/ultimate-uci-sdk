@@ -130,23 +130,23 @@ ultimate_http_open:
         bne @noreply
         lda ult_req + UCI_REQ_DATALEN + 1
         bne @noreply
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 @failed:
         pha
         lda #$FF
         sta ult_http
-        pla
         ldx #$00
+        pla
         rts
 
 @noreply:
         lda #$FF
         sta ult_http
-        lda #ULTIMATE_ERR_PROTOCOL
         ldx #$00
+        lda #ULTIMATE_ERR_PROTOCOL
         rts
 
 @invalid:
@@ -176,7 +176,6 @@ ultimate_http_header:
         beq @invalid                    ; an empty header line says nothing
 
         jsr http_exec
-        ldx #$00
         rts
 
 @invalid:
@@ -248,8 +247,8 @@ ultimate_http_exchange:
         sta ult_httplen
         lda ult_req + UCI_REQ_DATALEN + 1
         sta ult_httplen + 1
-        pla
         ldx #$00
+        pla
         rts
 
 @invalid:
@@ -270,7 +269,6 @@ ultimate_http_close:
         sta ult_req + UCI_REQ_COMMAND
         jsr http_handle_arg
         jsr http_exec
-        ldx #$00
         rts
 
 ; ---------------------------------------------------------------------------
@@ -287,7 +285,6 @@ _ultimate_http_free_all:
         lda #HTTP_CMD_FREE_ALL
         sta ult_req + UCI_REQ_COMMAND
         jsr http_exec
-        ldx #$00
         rts
 
 ; ---------------------------------------------------------------------------
@@ -330,6 +327,7 @@ ultimate_http_get:
         sta uci_devcode + 1
         pla                             ; ...and the result it came with
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 ; ---------------------------------------------------------------------------

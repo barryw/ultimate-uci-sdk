@@ -180,11 +180,12 @@ ultimate_drive_power:
         sta ult_stage
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 @protocol:
-        lda #ULTIMATE_ERR_PROTOCOL
         ldx #$00
+        lda #ULTIMATE_ERR_PROTOCOL
         rts
 
 @invalid:
@@ -255,8 +256,8 @@ _ultimate_drive_info:
 @failed:
         pha
         jsr ctrl_no_drives              ; whatever went wrong, report none
-        pla
         ldx #$00
+        pla
         rts
 
 @invalid:
@@ -378,11 +379,12 @@ _ultimate_ramdisk_info:
         bne @protocol
         lda #ULTIMATE_OK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 @protocol:
-        lda #ULTIMATE_ERR_PROTOCOL
         ldx #$00
+        lda #ULTIMATE_ERR_PROTOCOL
         rts
 
 @invalid:

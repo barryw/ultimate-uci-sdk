@@ -1789,6 +1789,36 @@ suites {
       assert([result] == $00, "and the file closed")
     }
 
+    ; --- byte results set the flags ---
+    ;
+    ; docs/asm-abi.md promises that a byte result in A leaves Z set from A, so
+    ; `jsr` / `beq` tests the result. Every entry used to end in `ldx #$00`,
+    ; which left Z set whatever A was. $02 is the Z bit of the status byte the
+    ; harness stores.
+
+    test("sdk-flags-ok-sets-z", "ultimate_init returning ULTIMATE_OK leaves Z set") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      [result] = $ff
+      jsr([t_flags_init], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $02, "Z set: the result is zero")
+    }
+
+    test("sdk-flags-one-clears-z", "ultimate_reu_available returning 1 leaves Z clear") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      $df00 = $40               ; REU_STAT_DONE, so the probe sees an expansion
+      [result] = $ff
+      jsr([t_flags_reu_avail], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "Z clear: the result is 1")
+    }
+
+    test("sdk-flags-zero-byte-sets-z", "ultimate_audio_available returning 0 before init leaves Z set") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      [result] = $ff
+      jsr([t_flags_audio_avail], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $02, "Z set: the result is zero")
+    }
+
     ; --- what a file is, and moving files about ---
     ;
     ; stat's reply is a twelve-byte header and then the name with no

@@ -54,11 +54,11 @@ _ultimate_turbo_available:
         lda U64_REG_TURBO
         cmp #U64_TURBO_UNAVAILABLE
         beq @no
+        ldx #$00
         lda #$01
-        ldx #$00
         rts
-@no:    lda #$00
-        ldx #$00
+@no:    ldx #$00
+        lda #$00
         rts
 
 ; ---------------------------------------------------------------------------
@@ -74,6 +74,7 @@ _ultimate_turbo_get:
         beq @out
         and #U64_TURBO_SPEED_MASK
 @out:   ldx #$00
+        ora #$00                ; N and Z from A, not the ldx
         rts
 
 ; ---------------------------------------------------------------------------
@@ -104,18 +105,18 @@ _ultimate_turbo_set:
 @badlines_on:
         tya
 @store: sta U64_REG_TURBO
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 @absent:
-        lda #ULTIMATE_ERR_NOT_SUPPORTED
         ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         rts
 
 @invalid:
-        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         ldx #$00
+        lda #ULTIMATE_ERR_INVALID_ARGUMENT
         rts
 
 ; ---------------------------------------------------------------------------
@@ -143,11 +144,11 @@ _ultimate_turbo_badlines:
         bne @store                      ; badlines on: bit 7 stays clear
         ora #U64_TURBO_NO_BADLINES
 @store: sta U64_REG_TURBO
-        lda #ULTIMATE_OK
         ldx #$00
+        lda #ULTIMATE_OK
         rts
 
 @absent:
-        lda #ULTIMATE_ERR_NOT_SUPPORTED
         ldx #$00
+        lda #ULTIMATE_ERR_NOT_SUPPORTED
         rts

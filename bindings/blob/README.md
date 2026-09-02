@@ -54,6 +54,11 @@ instead.
 **fails to link** rather than producing a binary whose first command overwrites
 its own request block.
 
+**A byte result sets the flags.** Every entry that answers with a byte in `A`
+leaves N and Z set from it, so `jsr BLOB + $1C` / `beq ok` tests the result
+without a `cmp #0`. The two entries that answer in `A` and `X` together
+(`uci_last_code`, `ultimate_strerror`) make no such promise.
+
 ## The jump table
 
 Offsets from the base address. **They never change.** Entries are appended,
