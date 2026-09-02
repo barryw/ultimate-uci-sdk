@@ -1036,20 +1036,22 @@ In `tests/emulator/sdk.suite`, after the three `sdk-flags-*` tests, add:
 Run: `make -C tests/emulator 2>&1 | grep -iE 'unresolved|error' | head -3`
 Expected: `Unresolved external 'ultimate_audio_load_wav'` from the harness link. (The suites cannot run until Task 6 provides the symbol; that is the red step.)
 
-- [ ] **Step 6: Commit the fixtures, constant, and red tests**
+- [ ] **Step 6: Commit the fixtures and the constant only**
+
+The harness, suite and `ultimate.inc` edits stay uncommitted: a commit whose
+test harness does not link is a commit with failing tests, which this repo
+does not allow. Task 6 commits them together with the module that makes them
+pass.
 
 ```bash
 git add tools/gen_protocol.py tools/gen_wav_fixtures.py tests/emulator/fixtures/usb0/wav \
         include/uci_protocol.h bindings/asm/uci_protocol.inc bindings/kickass/uci_protocol.asm \
-        bindings/acme/uci_protocol.a docs/generated/protocol-constants.md bindings/asm/uci_argtable.inc \
-        bindings/asm/ultimate.inc tests/emulator/harness.s tests/emulator/Makefile tests/emulator/sdk.suite
-git commit -m "test(wav): fixtures and suite cases for ultimate_audio_load_wav
+        bindings/acme/uci_protocol.a docs/generated/protocol-constants.md bindings/asm/uci_argtable.inc
+git commit -m "test(wav): fixtures for ultimate_audio_load_wav, and UA_RATE_CLOCK
 
-Four small files under the simulator's filesystem and five cases that
-pin the parser: address, length, divider and flags for 16-bit mono,
-16-bit stereo and 8-bit mono; PROTOCOL for a non-RIFF file; the DOS
-error for a missing one. UA_RATE_CLOCK joins the protocol constants.
-The harness does not link until the entry exists.
+Four small files under the simulator's filesystem, written by
+tools/gen_wav_fixtures.py, with the values the suite will assert.
+UA_RATE_CLOCK joins the protocol constants.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01MWZot9Zonrj1xjkwu9tCpq"
@@ -1723,13 +1725,15 @@ Expected: no error lines (`exit=1` from grep finding nothing). The cc65 library,
 
 ```bash
 git add src/uci/wav.s src/uci/sources.mk src/uci/audio.s include/ultimate.h docs/asm-abi.md \
+        bindings/asm/ultimate.inc tests/emulator/harness.s tests/emulator/Makefile tests/emulator/sdk.suite \
         docs/superpowers/specs/2026-09-02-sdk-fixes-from-boing-design.md
 git commit -m "feat(audio): ultimate_audio_load_wav, a WAV file into the REU and a voice
 
 Open, walk the RIFF header, reu_load the data chunk, close, fill the
 voice's address, length, divider and format flags. 8-bit data, which a
 WAV stores unsigned, is fixed in place inside the REU 32 bytes at a time
-through the staging area. No host conversion, no caller buffer.
+through the staging area. No host conversion, no caller buffer. Five
+simulator cases pin the parser and the divider.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01MWZot9Zonrj1xjkwu9tCpq"
