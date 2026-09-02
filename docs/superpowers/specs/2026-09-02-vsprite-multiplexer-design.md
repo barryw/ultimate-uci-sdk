@@ -3,7 +3,7 @@
 Date: 2026-09-02. Bench: Ultimate 64 Elite at 192.168.1.62, firmware 3.15,
 core 1.4F, NTSC. Origin: `experiments/boing/`, whose ball is sixteen sprites a
 frame out of eight, with three hand-written raster interrupts that know the
-ball's shape. Depends on the three fixes in
+ball's shape. Depends on the four fixes in
 `2026-09-02-sdk-fixes-from-boing-design.md`.
 
 ## Why
