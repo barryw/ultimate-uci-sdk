@@ -26,8 +26,8 @@ __pycache__/
 
 # ...but the generated KickAssembler binding is a real, committed artifact.
 !bindings/kickass/uci_protocol.asm
-!demos/follow-me/*.asm
-!demos/follow-me/lib/*.asm
+!demos/**/*.asm
+!experiments/**/*.asm
 
 # Generated from sdk.suite for the relocated-memory build
 tests/emulator/sdk-placed.suite
