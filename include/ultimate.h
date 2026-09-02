@@ -529,7 +529,13 @@ uint8_t ultimate_audio_available(void);
 /* Raw module version byte. Meaningful only when available() returned 1. */
 uint8_t ultimate_audio_version(void);
 
-/* Validate and write every voice register, leaving its gate closed. */
+/*
+ * Validate and write every voice register, leaving its gate closed. Stops the
+ * channel first and pauses about a millisecond after the stop and again after
+ * the writes (about 2 ms under turbo, 20 ms at 1 MHz): a running channel
+ * reprogrammed without a pause plays noise. This is the safe way to re-arm a
+ * voice: stop, configure, start. stop() and start() themselves are immediate.
+ */
 uint8_t ultimate_audio_configure(const ultimate_audio_voice *voice);
 
 /* Start a configured channel with the same UA_CTRL_* flags used above. */

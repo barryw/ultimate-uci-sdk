@@ -188,7 +188,7 @@ block because the original header page is full:
 | `+$2E8` | `ultimate_audio_init` | | `A` = result |
 | `+$2EB` | `ultimate_audio_available` | | `A` = 1 when mapped audio answers |
 | `+$2EE` | `ultimate_audio_version` | | `A` = module version |
-| `+$2F1` | `audio_configure` | `bp_audio` | `bp_result` |
+| `+$2F1` | `audio_configure` | `bp_audio` | `bp_result`; stops the channel first, about 2 ms |
 | `+$2F4` | `audio_start` | `bp_audio` channel and flags | `bp_result` |
 | `+$2F7` | `audio_stop` | `bp_audio` channel | `bp_result` |
 | `+$2FA` | `ultimate_audio_irq_status` | | `A` = end-of-sample bits |

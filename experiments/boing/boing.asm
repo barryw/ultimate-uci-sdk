@@ -456,9 +456,7 @@ sdk_init:
     cmp #0
     beq !+
     rts
-!:  jsr AUDIO_STOP      // whatever a previous run or the init probe left running
-    jsr audio_settle
-    jsr voice_setup
+!:  jsr voice_setup
     jsr AUDIO_CONF
     lda BP_RESULT
     sta ST_RESULT
@@ -1046,26 +1044,13 @@ reu_probe:
     sta ST_PROBE
     rts
 
-// About a millisecond at any CPU speed: I/O reads run at 1 MHz under turbo.
-audio_settle:
-    ldx #0
-    ldy #4
-!:  lda $d012
-    inx
-    bne !-
-    dey
-    bne !-
-    rts
-
 play_boing:
     lda ST_FLAGS
     and #4
     bne !+
     rts
 !:  jsr AUDIO_STOP
-    jsr audio_settle    // let the engine actually stop before it is reprogrammed
     jsr AUDIO_CONF
-    jsr audio_settle
     jsr AUDIO_START
     lda BP_RESULT
     sta ST_RESULT

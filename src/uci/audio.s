@@ -6,6 +6,9 @@
 ; checked register layer; file streaming is composed from it and the existing
 ; DOS/REU services by the application.
 ;
+; Configure pauses about a millisecond after stopping the channel and again
+; after programming it: the engine reprogrammed on the fly plays noise.
+;
 ; Multi-byte registers are big endian even though the public structure is
 ; naturally little endian on a 6502. Every byte is written explicitly here so
 ; callers never have to know that trap, nor that REU offset zero is SDRAM
@@ -181,6 +184,26 @@ audio_ok:
         lda #ULTIMATE_OK
         rts
 
+; About a millisecond at any CPU speed: I/O reads run at 1 MHz under Ultimate
+; 64 turbo, so 1,024 of them take a millisecond at 48 MHz and nine at stock
+; speed. Reprogramming a running channel without a pause leaves it playing
+; noise (an Elite, firmware 3.15: intermittent from one launch to the next
+; until the pause went in). Preserves X, which configure keeps the channel
+; offset in.
+audio_settle:
+        txa
+        pha
+        ldx #$00
+        ldy #$04
+@loop:  lda $D012
+        inx
+        bne @loop
+        dey
+        bne @loop
+        pla
+        tax
+        rts
+
 ; ---------------------------------------------------------------------------
 ; ultimate_audio_configure A/X = ultimate_audio_voice pointer -> A = result
 ;
@@ -257,7 +280,8 @@ _ultimate_audio_configure:
         ldy #UA_VOICE_LENGTH
         lda (uci_ptr),y
         and #$01
-        bne audio_invalid
+        beq @aligned
+        jmp audio_invalid
 
 @aligned:
         ; reu_address + length may end at 16 MB, but may not wrap past it.
@@ -349,9 +373,12 @@ _ultimate_audio_configure:
         lda (uci_ptr),y
         jsr audio_channel_x
 
-        ; Stop first, then replace every write-only register.
+        ; Stop first and let the engine actually stop, then replace every
+        ; write-only register, then let it take those before the caller can
+        ; open the gate.
         lda #$00
         sta UA_REG_BASE + UA_REG_CONTROL,x
+        jsr audio_settle
 
         ldy #UA_VOICE_VOLUME
         lda (uci_ptr),y
@@ -411,6 +438,7 @@ _ultimate_audio_configure:
 
         lda #$01
         sta UA_REG_BASE + UA_REG_IRQ_CLEAR,x
+        jsr audio_settle
         ldy #UA_VOICE_FLAGS
         lda (uci_ptr),y
         sta UA_REG_BASE + UA_REG_CONTROL,x
