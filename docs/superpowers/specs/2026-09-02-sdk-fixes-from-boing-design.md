@@ -1,4 +1,4 @@
-# Three SDK fixes the Boing demo asked for
+# Four SDK fixes the Boing demo asked for
 
 Date: 2026-09-02. Bench: Ultimate 64 Elite at 192.168.1.62, firmware 3.15,
 core 1.4F, NTSC. Origin: `docs/handover-vsprites-boing.md`, "Two more SDK
@@ -6,7 +6,7 @@ findings", and the demo's own hand-copied blob offsets.
 
 ## Why
 
-The Boing demo (`experiments/boing/`) works around three things the SDK
+The Boing demo (`experiments/boing/`) works around four things the SDK
 should do for it:
 
 1. It brackets `audio_configure` with a millisecond of settling on each
@@ -19,8 +19,13 @@ should do for it:
 3. It hand-copies jump table offsets (`BLOB + $2e8`) and parameter block
    offsets (`BP + $19a`) out of `bindings/blob/README.md`. So does
    `demos/vsprites`. A typo there is a wrong address nothing checks.
+4. Its sample is assembled into the PRG in two pieces (`$aa00`, and `$e000`
+   under the KERNAL) because 17 KB fits nowhere contiguous, then copied to
+   the REU at start. `demos/pcm-visualizer` does the honest thing, `open`
+   and `reu_load` straight into the REU, and pays for it with its own RIFF
+   parser in C. Nothing in the SDK turns a sample file into a voice.
 
-All three are the SDK's job. This spec fixes them in the SDK; the demos then
+All four are the SDK's job. This spec fixes them in the SDK; the demos then
 delete their workarounds.
 
 ## A1. `ultimate_audio_configure` settles
@@ -194,9 +199,89 @@ generates the KickAssembler include and asserts `BLOB_ULTIMATE_INIT = $1C`,
 vsprites.asm` (here) replace their `.const` blocks with `uci.BLOB_*` names;
 each keeps one `.const BLOB = $8000` (or `$7000`) for the base.
 
+## A4. `ultimate_audio_load_wav`
+
+### Contract
+
+```
+uint8_t ultimate_audio_load_wav(const char *name, uint32_t reuaddr,
+                                ultimate_audio_voice *voice);
+```
+
+Opens `name`, walks the RIFF header, loads the `data` chunk into the REU at
+`reuaddr` with `ultimate_reu_load` (no byte passes through the C64), closes
+the file, and fills four fields of `voice`: `reu_address` = `reuaddr`,
+`length` = the data chunk's byte count rounded down to even, `rate` =
+`UA_RATE_CLOCK / sample rate` truncated, `flags` = `UA_CTRL_16BIT`, plus
+`UA_CTRL_INTERLEAVE` for stereo. Every other field (`channel`, `volume`,
+`pan`, `repeat_a`, `repeat_b`) is left as the caller had it; the caller ORs
+`UA_CTRL_REPEAT` or `UA_CTRL_IRQ` into `flags` afterwards if it wants them,
+then calls `ultimate_audio_configure` and `ultimate_audio_start`.
+
+Stereo: the voice describes the left channel. The right channel is the same
+voice with `reu_address + 2` and `length - 2`, one line the header documents,
+which is what pcm-visualizer already does by hand.
+
+`UA_RATE_CLOCK = 6250000` joins the protocol constants so the number lives
+in one place.
+
+### Accepted input
+
+RIFF/WAVE, `fmt ` chunk with format 1 (PCM), 1 or 2 channels, 16 bits per
+sample, any sample rate from 96 Hz up (below that the divider overflows 16
+bits). Chunks before `data` other than `fmt ` are skipped; odd chunk sizes
+are padded as RIFF requires; `data` without a preceding `fmt ` is an error.
+
+8-bit WAV is refused. WAV stores 8-bit samples unsigned and the engine plays
+them signed; correcting that means a pass through C64 RAM, which the whole
+point of this function is to avoid. Host tooling writes 16-bit.
+
+### Results
+
+| Case | Result |
+|---|---|
+| `open` fails | the DOS result, as `ultimate_open` returned it |
+| not RIFF/WAVE, chunk walk runs off the end, `data` before `fmt ` | `ULTIMATE_ERR_PROTOCOL` |
+| format not 1, bits not 16, channels not 1 or 2, rate under 96 | `ULTIMATE_ERR_NOT_SUPPORTED` |
+| `reu_load` fails (including no REU) | its result |
+| success | `ULTIMATE_OK` |
+
+The file is closed on every path. `voice` is written only on success.
+
+### Placement
+
+New module `src/uci/wav.s`, listed in `sources.mk`: `audio.s` stays the
+register layer, and its header comment ("file streaming is composed from it
+and the DOS/REU services by the application") is updated to point here. The
+header parse uses the SDK's 40-byte staging area (`ult_stage`), reading the
+12-byte RIFF header, then 8-byte chunk headers, then 16 bytes of `fmt `, so
+no caller buffer. One 24-by-16-bit division routine for the divider.
+
+Blob: entry `audio_load_wav` appended, `bp_name` = path, `bp_reu` = REU
+address, fills `bp_audio`, result in `bp_result`. cc65: wrapper with three
+arguments on the cc65 stack, as `ultimate_reu_stash` already does.
+
+### Tests
+
+- Emulator: `tests/emulator/fixtures/usb0` gains four small files written by
+  a script under `tools/` (not committed as binaries by hand): a 16-bit mono
+  WAV at 8,000 Hz, a 16-bit stereo WAV, an 8-bit WAV, and a file that is
+  not RIFF. `sdk.suite` and `blob.suite` cases assert the voice fields
+  (`rate` = 781 for 8,000 Hz, `length`, `flags`) and the result codes for
+  each, and that a missing file returns the DOS error. `reu_load` already
+  runs in the emulator.
+- Hardware: the Boing demo plays its `boing.wav`; `ucitest.c` gains no case,
+  the demo is the hardware test for this.
+
+### Consumers
+
+Boing, in its migration. `demos/pcm-visualizer` keeps its parser for now: it
+streams 1 MiB windows of one file with `seek` and `reu_load`, which this
+function does not do. Retiring that parser is a later pass, out of scope.
+
 ## Order of work
 
 A3 first (it changes generated files every later step assembles against),
-then A2, then A1 with its hardware verification. Each is one commit. The
-vsprites demo edit rides with A3 and A2; the Boing edits belong to the
-multiplexer spec's migration step.
+then A2, then A1 with its hardware verification, then A4. Each is one
+commit. The vsprites demo edit rides with A3 and A2; the Boing edits belong
+to the multiplexer spec's migration step.

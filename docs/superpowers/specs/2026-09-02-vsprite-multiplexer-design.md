@@ -240,11 +240,29 @@ included, so the Amiga sample stays out of git). Then:
   run on `A == top`, exactly where the vblank work runs today.
 - `audio_settle` and the init `AUDIO_STOP` go (A1). The `cmp #0`s go (A2).
   The `.const` offsets become `uci.BLOB_*` (A3).
+- The sample leaves the PRG (A4). At init, after the REU is known to be
+  there, the demo calls `audio_load_wav` with `boing.wav`, then with
+  `/Temp/boing.wav`, into REU `$4000`; the first success sets the audio flag,
+  and a failure leaves the demo silent with the result in the status block,
+  exactly as a missing REU does today. `PCM`, `PCM2`, `boing_pcm.inc`, the
+  two `reu_stash` calls and the KERNAL bank switch go. The PRG loses 17 KB
+  but stays above the runner's 16 KB, so `hwtest.py` keeps its FTP path and
+  uploads `boing.wav` beside the PRG.
+- `mkpcm.py` becomes `mkwav.py`: same inputs (a WAV, or a raw signed 8-bit
+  file and a rate, or nothing for the synthesised fallback), one output,
+  `boing.wav`, 16-bit mono at the source rate. `make` builds it; `SAMPLE=`
+  selects the input as now. The shipped sound is the synthesised fallback:
+  the original recording is Amiga Corp's, stays git-ignored, and the README
+  tells an owner of the Workbench Demos disk how to extract and pass it.
+  Improving the synthesis is its own later task.
+- VICE has no UCI, so the load fails there and the demo runs silent, as it
+  does today; `make check` asserts flags 2 as before.
 - The blob build is unchanged (`BASE=8000 VARS=43008`); the work buffer is
   the demo's, `VSPRITE_WORK_SIZE` bytes at `$5900`, after the clean screen
   copy (which ends at `$58E7`) and well before the bitmap at `$6000`.
-- Memory map, README ("What the SDK does here": turbo, REU, audio, vsprite,
-  one paragraph each), `NOTES.md` trimmed to what is still true.
+- Memory map (`$aa00-$b911` and the `$e000` piece freed, work buffer at
+  `$5900`), README ("What the SDK does here": turbo, REU, WAV load, audio,
+  vsprite, one paragraph each), `NOTES.md` trimmed to what is still true.
 - Top-level `Makefile`: `boing` and `boing-run` targets beside `vsprites`,
   not in `demos` (KickAssembler, like vsprites). `make -C demos/boing check`
   keeps the five-screenshot VICE check; `hwtest.py` unchanged.
@@ -272,8 +290,9 @@ screenshot check in its Makefile (`make -C examples/cc65 check-vsprites`).
   on the plan buffer.
 - **VICE**: `demos/boing` `make check` (whole ball every screenshot, no
   shadow trail, bounce counted) and the example's screenshot.
-- **Hardware**: `make boing-run U64_HOST=192.168.1.62` reports 60 fps, flags
-  7, bounces climbing with sound; three fresh launches clean.
+- **Hardware**: `make boing-run U64_HOST=192.168.1.62` uploads the PRG and
+  `boing.wav`, reports 60 fps, flags 7, bounces climbing with sound; three
+  fresh launches clean.
 
 ## Order of work
 
