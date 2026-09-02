@@ -247,14 +247,21 @@ included, so the Amiga sample stays out of git). Then:
   exactly as a missing REU does today. `PCM`, `PCM2`, `boing_pcm.inc`, the
   two `reu_stash` calls and the KERNAL bank switch go. The PRG loses 17 KB
   but stays above the runner's 16 KB, so `hwtest.py` keeps its FTP path and
-  uploads `boing.wav` beside the PRG.
-- `mkpcm.py` becomes `mkwav.py`: same inputs (a WAV, or a raw signed 8-bit
-  file and a rate, or nothing for the synthesised fallback), one output,
-  `boing.wav`, 16-bit mono at the source rate. `make` builds it; `SAMPLE=`
-  selects the input as now. The shipped sound is the synthesised fallback:
-  the original recording is Amiga Corp's, stays git-ignored, and the README
-  tells an owner of the Workbench Demos disk how to extract and pass it.
-  Improving the synthesis is its own later task.
+  uploads `boing.wav` beside the PRG. Planning checks on the bench whether
+  the DOS target's current directory follows a PRG started from the
+  Ultimate's browser; if it does not, the demo also tries the storage roots
+  (`/Usb0`, `/Usb1`, `/SD`, exact names verified there) so that copying the
+  two files to a card is enough.
+- `boing.wav` is committed: the original Amiga recording, the 24,698
+  sample bytes after the 8-byte header of `boing.samples`, wrapped once as
+  an 8-bit mono WAV at 8,363 Hz with a 44-byte header, sample bytes
+  untouched. The SDK's loader does the sign fix at run time, so the shipped
+  file is the authentic one and the demo exercises the 8-bit path. The
+  `.gitignore` entries for it, `mkpcm.py`, `genboing.py` and the synthesised
+  fallback are deleted; nothing is generated at build. The README states
+  the provenance (Amiga Corp, 1984, Workbench Demos disk) and that it is
+  not under the repository's MIT licence; shipping it is the author's
+  decision, recorded here.
 - VICE has no UCI, so the load fails there and the demo runs silent, as it
   does today; `make check` asserts flags 2 as before.
 - The blob build is unchanged (`BASE=8000 VARS=43008`); the work buffer is

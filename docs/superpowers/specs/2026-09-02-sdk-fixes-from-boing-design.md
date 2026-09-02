@@ -21,9 +21,11 @@ should do for it:
    `demos/vsprites`. A typo there is a wrong address nothing checks.
 4. Its sample is assembled into the PRG in two pieces (`$aa00`, and `$e000`
    under the KERNAL) because 17 KB fits nowhere contiguous, then copied to
-   the REU at start. `demos/pcm-visualizer` does the honest thing, `open`
-   and `reu_load` straight into the REU, and pays for it with its own RIFF
-   parser in C. Nothing in the SDK turns a sample file into a voice.
+   the REU at start, after a host script has converted it. `demos/
+   pcm-visualizer` does the honest thing, `open` and `reu_load` straight
+   into the REU, and pays for it with its own RIFF parser in C. Nothing in
+   the SDK turns a sample file into a voice, and a demo that needs a host
+   conversion step before it makes a sound is not a demo.
 
 All four are the SDK's job. This spec fixes them in the SDK; the demos then
 delete their workarounds.
@@ -159,7 +161,7 @@ blob header, offset from the blob's base:
 ```
 BLOB_UCI_INIT            = $04
 BLOB_ULTIMATE_INIT       = $1C
-BLOB_TURBO_AVAILABLE     = $43
+BLOB_ULTIMATE_TURBO_AVAILABLE = $43
 BLOB_AUDIO_CONFIGURE     = $2F1
 ```
 
@@ -211,9 +213,9 @@ uint8_t ultimate_audio_load_wav(const char *name, uint32_t reuaddr,
 Opens `name`, walks the RIFF header, loads the `data` chunk into the REU at
 `reuaddr` with `ultimate_reu_load` (no byte passes through the C64), closes
 the file, and fills four fields of `voice`: `reu_address` = `reuaddr`,
-`length` = the data chunk's byte count rounded down to even, `rate` =
-`UA_RATE_CLOCK / sample rate` truncated, `flags` = `UA_CTRL_16BIT`, plus
-`UA_CTRL_INTERLEAVE` for stereo. Every other field (`channel`, `volume`,
+`length` = the data chunk's byte count (rounded down to even for 16-bit or
+stereo), `rate` = `UA_RATE_CLOCK / sample rate` truncated, `flags` =
+`UA_CTRL_16BIT` for 16-bit data, plus `UA_CTRL_INTERLEAVE` for stereo. Every other field (`channel`, `volume`,
 `pan`, `repeat_a`, `repeat_b`) is left as the caller had it; the caller ORs
 `UA_CTRL_REPEAT` or `UA_CTRL_IRQ` into `flags` afterwards if it wants them,
 then calls `ultimate_audio_configure` and `ultimate_audio_start`.
@@ -227,14 +229,25 @@ in one place.
 
 ### Accepted input
 
-RIFF/WAVE, `fmt ` chunk with format 1 (PCM), 1 or 2 channels, 16 bits per
-sample, any sample rate from 96 Hz up (below that the divider overflows 16
-bits). Chunks before `data` other than `fmt ` are skipped; odd chunk sizes
-are padded as RIFF requires; `data` without a preceding `fmt ` is an error.
+RIFF/WAVE, `fmt ` chunk with format 1 (PCM), 1 or 2 channels, 8 or 16 bits
+per sample, any sample rate from 96 Hz up (below that the divider overflows
+16 bits). Chunks before `data` other than `fmt ` are skipped; odd chunk
+sizes are padded as RIFF requires; `data` without a preceding `fmt ` is an
+error. Any WAV a normal tool writes loads; the caller never converts on the
+host.
 
-8-bit WAV is refused. WAV stores 8-bit samples unsigned and the engine plays
-them signed; correcting that means a pass through C64 RAM, which the whole
-point of this function is to avoid. Host tooling writes 16-bit.
+### What "optimal" means here
+
+The engine plays signed 8-bit or signed 16-bit little-endian PCM from the
+REU at any rate the divider can express, so the only conversion a WAV ever
+needs is the 8-bit sign: WAV stores 8-bit samples unsigned. 16-bit data is
+loaded as it is, full quality. 8-bit data is loaded as it is, then fixed in
+place inside the REU: for each 40-byte slice, `reu_fetch` into the SDK's
+staging area, `eor #$80` every byte, `reu_stash` back. No caller buffer,
+no byte-by-byte UCI reads; the Boing sample (24 KB) takes about 620 DMA
+round trips, well under a tenth of a second at any CPU speed. No resampling
+and no bit-depth change: the divider handles rate, and the REU is not short
+of space.
 
 ### Results
 
@@ -242,8 +255,8 @@ point of this function is to avoid. Host tooling writes 16-bit.
 |---|---|
 | `open` fails | the DOS result, as `ultimate_open` returned it |
 | not RIFF/WAVE, chunk walk runs off the end, `data` before `fmt ` | `ULTIMATE_ERR_PROTOCOL` |
-| format not 1, bits not 16, channels not 1 or 2, rate under 96 | `ULTIMATE_ERR_NOT_SUPPORTED` |
-| `reu_load` fails (including no REU) | its result |
+| format not 1, bits not 8 or 16, channels not 1 or 2, rate under 96 | `ULTIMATE_ERR_NOT_SUPPORTED` |
+| `reu_load`, `reu_fetch` or `reu_stash` fails (including no REU) | its result |
 | success | `ULTIMATE_OK` |
 
 The file is closed on every path. `voice` is written only on success.
@@ -253,9 +266,10 @@ The file is closed on every path. `voice` is written only on success.
 New module `src/uci/wav.s`, listed in `sources.mk`: `audio.s` stays the
 register layer, and its header comment ("file streaming is composed from it
 and the DOS/REU services by the application") is updated to point here. The
-header parse uses the SDK's 40-byte staging area (`ult_stage`), reading the
-12-byte RIFF header, then 8-byte chunk headers, then 16 bytes of `fmt `, so
-no caller buffer. One 24-by-16-bit division routine for the divider.
+header parse and the 8-bit sign pass both use the SDK's 40-byte staging
+area (`ult_stage`): the 12-byte RIFF header, then 8-byte chunk headers, then
+16 bytes of `fmt `, then 40-byte slices of sample data, so no caller buffer.
+One 24-by-16-bit division routine for the divider.
 
 Blob: entry `audio_load_wav` appended, `bp_name` = path, `bp_reu` = REU
 address, fills `bp_audio`, result in `bp_result`. cc65: wrapper with three
@@ -265,13 +279,17 @@ arguments on the cc65 stack, as `ultimate_reu_stash` already does.
 
 - Emulator: `tests/emulator/fixtures/usb0` gains four small files written by
   a script under `tools/` (not committed as binaries by hand): a 16-bit mono
-  WAV at 8,000 Hz, a 16-bit stereo WAV, an 8-bit WAV, and a file that is
-  not RIFF. `sdk.suite` and `blob.suite` cases assert the voice fields
-  (`rate` = 781 for 8,000 Hz, `length`, `flags`) and the result codes for
-  each, and that a missing file returns the DOS error. `reu_load` already
-  runs in the emulator.
-- Hardware: the Boing demo plays its `boing.wav`; `ucitest.c` gains no case,
-  the demo is the hardware test for this.
+  WAV at 8,000 Hz, a 16-bit stereo WAV, an 8-bit mono WAV with known bytes,
+  and a file that is not RIFF. `sdk.suite` and `blob.suite` cases assert
+  the voice fields (`rate` = 781 for 8,000 Hz, `length`, `flags`) and the
+  result codes for each, that a missing file returns the DOS error, and,
+  for the 8-bit file, that a `reu_fetch` after the load reads the bytes
+  back with bit 7 flipped. `reu_load`, `reu_fetch` and `reu_stash` already
+  run in the emulator; planning confirms the simulator's REU keeps data
+  across them.
+- Hardware: the Boing demo plays its `boing.wav`, an 8-bit file, so the
+  sign pass is heard; `ucitest.c` gains no case, the demo is the hardware
+  test for this.
 
 ### Consumers
 
