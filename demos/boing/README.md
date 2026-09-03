@@ -1,6 +1,6 @@
 # Boing ball out of multiplexed hardware sprites
 
-[![Boing ball running on an Ultimate 64](boing-demo.png)](boing-demo.mp4)
+[![Boing ball running on an Ultimate 64](boing-demo.png)](boing-demo.mp4?raw=1)
 
 *Click the image for a 12-second hardware capture with sound.*
 
