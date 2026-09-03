@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.6.2](https://github.com/barryw/ultimate-uci-sdk/compare/0c7d558c8356d722cee827890f2067ced8631b97..v0.6.2) - 2026-09-03
+#### Documentation
+- (**boing**) remove video capture - ([557cc75](https://github.com/barryw/ultimate-uci-sdk/commit/557cc7552776bf51743b4a402ba19983b054a32b)) - Barry Walker
+- (**boing**) fix video link - ([6ccdad0](https://github.com/barryw/ultimate-uci-sdk/commit/6ccdad0d78b02327049abc7ee729417b2f38a1e2)) - Barry Walker
+- (**demos**) clarify vsprites and Boing - ([0c7d558](https://github.com/barryw/ultimate-uci-sdk/commit/0c7d558c8356d722cee827890f2067ced8631b97)) - Barry Walker
+
+- - -
+
 ## [v0.6.1](https://github.com/barryw/ultimate-uci-sdk/compare/cf11c808d8e64258d5c7bfdec94c54e9343f155a..v0.6.1) - 2026-09-03
 #### Documentation
 - (**boing**) open capture in raw player - ([b63e317](https://github.com/barryw/ultimate-uci-sdk/commit/b63e317260126cfb9c986652d0b9f1012c8e3ef6)) - Barry Walker
