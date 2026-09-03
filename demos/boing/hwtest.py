@@ -25,6 +25,7 @@ REMOTE = "/Temp/boing.prg"
 AUDIO = ("C64 and Cartridge Settings", "Map Ultimate Audio $DF20-DFFF")
 REU = ("C64 and Cartridge Settings", "RAM Expansion Unit")
 TURBO = ("U64 Specific Settings", "Turbo Control")
+UCI = ("C64 and Cartridge Settings", "Command Interface")
 
 
 def upload(host, path):
@@ -51,7 +52,10 @@ def main():
     ap.add_argument("--prg", default=str(pathlib.Path(__file__).with_name("boing.prg")))
     args = ap.parse_args()
     u = Ultimate(args.host)
-    changed = require_settings(u, {AUDIO: "Enabled", REU: "Enabled", TURBO: "U64 Turbo Registers"})
+    changed = require_settings(u, {
+        UCI: "Enabled", AUDIO: "Enabled", REU: "Enabled",
+        TURBO: "U64 Turbo Registers",
+    })
     try:
         print("uploaded %d bytes to %s" % (upload(args.host, args.prg), REMOTE))
         u._request("PUT", "/machine:reset")
@@ -75,7 +79,8 @@ def main():
             s = status(u)
             print("  x %3d y %3d rot %2d bounces %3d" % (s["x"], s["y"], s["rot"], s["bounces"]))
             time.sleep(0.5)
-        ok = fps > 50 and s["bounces"] > b["bounces"]
+        turbo = u.readmem(0xD031, 1)[0]
+        ok = fps > 50 and s["bounces"] > b["bounces"] and f == 7 and turbo == 0x8f
         print(("ok" if ok else "not ok") + " - %.1f fps, %d bounces in eight seconds" % (fps, s["bounces"] - b["bounces"]))
         return 0 if ok else 1
 

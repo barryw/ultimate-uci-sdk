@@ -93,6 +93,8 @@ has a separate CC BY-NC 4.0 licence; the SDK remains MIT-licensed.
 [vsprites](demos/vsprites/) draws software sprites the way an Amiga draws
 bobs, and uses the turbo entry points to fill whatever frame the machine has:
 sixty 32x32 bobs at 60 fps on a 48 MHz Elite, two on a stock C64.
+[Boing](demos/boing/) recreates the Amiga Boing Ball with multiplexed hardware
+sprites, a blitter shadow, a perspective grid and PCM audio.
 
 Some commands stay unwrapped on purpose: EasyFlash sector erase, GCR track
 encoding and decoding, the control target's REU pair — which never returns on

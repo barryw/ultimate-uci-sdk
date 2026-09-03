@@ -16,9 +16,9 @@
 // vblank sync, and the ball's sprites float over it. The boing plays through
 // the Ultimate's PCM engine from the REU on every bounce.
 //
-// The SDK (the standalone blob at $8000, its RAM at $a800): turbo, REU
-// stash/fetch, audio init/configure/start/stop. All optional: no REU means no
-// shadow and no sound, no turbo means it all just runs slower.
+// The SDK (the standalone blob at $8000, its RAM at $a940): turbo, REU
+// stash/fetch, audio init/configure/start/stop. UCI and turbo are mandatory;
+// without either the SYS returns to BASIC. REU and audio remain optional.
 //
 // Status block at $033c: "BONG", frames (16-bit) +4, x lo/hi +6, y +8,
 // rotation frame +9, flags +10 (1 turbo, 2 REU and shadow, 4 audio), bounces
@@ -100,6 +100,13 @@
 BasicUpstart2(main)
 
 main:
+    jsr require_uci_turbo
+    cmp #uci.ULTIMATE_OK
+    beq start
+no_ultimate:
+    rts
+
+start:
     sei
     lda #$7f
     sta $dc0d
@@ -132,6 +139,8 @@ main:
     sta ST_BOUNCE
     sta ST_RESULT
     sta ST_NOSHADOW
+    lda #1
+    sta ST_FLAGS
 
     jsr clear_live
     // the PRG loaded the background straight into SCREEN and BITMAP; keep a
@@ -375,22 +384,31 @@ done_nosnd:
     rti
 
 // ---------------------------------------------------------------------------
-// SDK bring-up: turbo (best speed, badlines off), REU (clean background and
-// the sample stashed), audio (a channel configured). Each guarded; a failure
-// leaves the flags as they are and the demo does without.
-sdk_init:
-    jsr ULT_INIT           // fails without a UCI (VICE); nothing below needs it
+// Refuse to start without a working UCI and max turbo. This runs before main
+// changes the C64's interrupt and memory configuration, so failure can return
+// directly to BASIC.
+require_uci_turbo:
+    jsr ULT_INIT
+    cmp #uci.ULTIMATE_OK
+    bne !+
     jsr TURBO_AVAIL
-    cmp #0                 // test A: the entry returns with Z from a trailing ldx
-    beq !+
+    cmp #1
+    bne no_turbo
     lda #uci.U64_SPEED_MAX
     jsr TURBO_SET
+    cmp #uci.ULTIMATE_OK
+    bne !+
     lda #0
     jsr TURBO_BADLINES
-    lda ST_FLAGS
-    ora #1
-    sta ST_FLAGS
-!:  jsr REU_AVAIL
+!:  rts
+no_turbo:
+    lda #uci.ULTIMATE_ERR_NOT_SUPPORTED
+    rts
+
+// REU (clean background and the sample stashed) and audio (a configured
+// channel) are optional. A failure leaves their flags clear.
+sdk_init:
+    jsr REU_AVAIL
     cmp #1
     beq !+
     rts

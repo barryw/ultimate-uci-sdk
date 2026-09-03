@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-"""Run boing.prg in VICE, grab screenshots at different times, read the status
-block, and check: two-colour checker ball with four seamless rows, a dark grey
-shadow to its lower right and nowhere else (no trails), grid still there,
-frames advancing, y bouncing, bounces counted. VICE has the REU (shadow) but no
-UCI (turbo) and no Ultimate Audio, so the flags byte must read 2."""
+"""Verify that Boing refuses to start without UCI, then bypass that guard in
+VICE to check its video and motion. Hardware tests cover the real turbo path."""
 import re, subprocess, sys, tempfile, pathlib, shutil
 from PIL import Image
 HERE = pathlib.Path(__file__).resolve().parent
@@ -24,7 +21,12 @@ def run():
     sym = {k: int(v, 16) for k, v in re.findall(r"\.label (\w+)=\$([0-9a-fA-F]+)", (HERE / "boing.sym").read_text())}
     work = pathlib.Path(tempfile.mkdtemp(prefix="boing-"))
     shutil.copy(HERE / "boing.prg", work / "t.prg")
-    mon, shots = [], []
+    (work / "guard.txt").write_text("until %04x\nquit\n" % sym["no_ultimate"])
+    subprocess.run(["x64sc", "-console", "-warp", "+sound", "-moncommands", "guard.txt", "-autostart", "t.prg"],
+                   cwd=work, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60, check=True)
+    print("no-UCI startup: correctly returned to BASIC")
+    mon = ["until %04x" % sym["main"], "r pc = %04x" % sym["start"]]
+    shots = []
     for n, frames in enumerate((30, 24, 106, 100, 200)):
         mon += ["until %04x" % sym["irq_vbl"]] * frames
         shot = HERE / ("vice-%d.png" % n)

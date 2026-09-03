@@ -40,12 +40,12 @@ the sound PCM through the Ultimate's audio engine.
 ## The SDK's part
 
 Through the standalone blob at `$8000` (built into `bindings/blob/build-boing/`
-with `BASE=8000 VARS=43008`, so its RAM at `$a800` is clear of the code and of
+with `BASE=8000 VARS=43328`, so its RAM at `$a940` is clear of the code and of
 both VIC areas): `ultimate_turbo_available/set/badlines` for the top speed with
 badlines off, `reu_available/stash/fetch` for the background copy, the sample
 and the shadow restore, and `ultimate_audio_init/configure/start/stop` for the
-boing. Every one is guarded: no REU means no shadow and no sound, no turbo
-means it runs slower, and the ball itself needs none of them.
+boing. UCI and max turbo are required; without either the program returns to
+BASIC. No REU means no shadow and no sound.
 
 ## Memory map
 
@@ -58,7 +58,7 @@ means it runs slower, and the ball itself needs none of them.
 | `$5000-$54ff` | the shifted-ellipse scratch |
 | `$5500-$58e7` | a clean copy of the screen cells |
 | `$6000-$7f3f` | the hires bitmap (`bg.bin`) |
-| `$8000-$a54a` | the SDK blob, its RAM at `$a800` |
+| `$8000-$a91e` | the SDK blob, its RAM at `$a940-$a9fe` |
 | `$aa00-$b911` | the boing sample (`boing.pcm`), stashed to the REU at start |
 
 VIC bank 1 throughout; `$D018 = $08`. There is no room on a 64 KB machine for
@@ -67,14 +67,36 @@ sprite sets are placed, which is why the shadow's restore comes from the REU.
 
 ## Verified in VICE
 
-`make check` runs five screenshots across a bounce. Every frame: the ball is
+`make check` first verifies that the program refuses to start without UCI, then
+bypasses that startup guard inside VICE and runs five screenshots across a
+bounce. Every frame: the ball is
 88 x 84 with about 2,960 white and 2,950 red pixels, the wall and floor grid
 are intact, the shadow appears in flight and leaves no trail, the frame counter
-advances, y bounces, and a wall bounce is counted. VICE has the REU (so the
-shadow works) but no UCI and no Ultimate Audio, so the status flags read 2
-(REU only) and there is no sound there. `boing.prg` is 45,329 bytes loaded.
+advances, y bounces, and a wall bounce is counted. VICE has the REU but no
+Ultimate Audio, so there is no sound there. Real turbo and audio are covered by
+the Ultimate hardware test.
 
-## Running on hardware
+## Build once, run anywhere on an Ultimate
+
+From the repository root:
+
+```sh
+make boing
+```
+
+`demos/boing/boing.prg` contains the program, graphics, SDK blob and sound.
+Copy that one file to a USB stick or the Ultimate's internal storage, select it
+in the Ultimate file browser and run it. A D64 adds no benefit.
+
+Enable *Command Interface* and *Turbo Control → U64 Turbo Registers*; the demo
+refuses to start without both. Enable *RAM Expansion Unit* and *Map Ultimate
+Audio $DF20-DFFF* for the shadow and sound.
+
+If `boing-orig8.pcm` is present locally, the build uses it at 8,363 Hz;
+otherwise it builds the synthesised fallback. The original Amiga sample is
+not distributable with the SDK.
+
+## Run and verify over the network
 
 `make run U64_HOST=<ip>` (or `python3 hwtest.py --host <ip>`): the PRG is over
 the REST runner's 16 KB body limit, so it goes to the Ultimate's `/Temp` RAM

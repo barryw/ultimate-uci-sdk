@@ -9,6 +9,8 @@
 #   make hardware    build the on-device test program      (cc65)
 #   make hardware-run U64_HOST=<ip>   drive it over the REST API
 #   make time-run U64_HOST=<ip>       time a UCI round trip in frames
+#   make boing       build the self-contained Boing Ball PRG
+#   make boing-run U64_HOST=<ip>      build and run it on an Ultimate
 #   make protocol    regenerate the protocol constants     (Python 3)
 #   make release VERSION=vX.Y.Z   package every release artifact
 #   make all         everything that needs no hardware
@@ -63,6 +65,14 @@ vsprites: blob
 
 vsprites-run: blob
 	$(MAKE) -C demos/vsprites run U64_HOST=$(U64_HOST)
+
+# The Boing ball uses its own blob layout, so its Makefile builds that directly.
+#   make boing-run U64_HOST=192.168.1.62
+boing:
+	$(MAKE) -C demos/boing
+
+boing-run:
+	$(MAKE) -C demos/boing run U64_HOST=$(U64_HOST)
 
 emulator: lib
 	$(MAKE) -C tests/emulator run
@@ -124,5 +134,5 @@ clean:
 	$(MAKE) -C bindings/cc65 clean
 	$(MAKE) -C bindings/blob clean
 
-.PHONY: all test unittest lib blob examples demos demo-run vsprites vsprites-run emulator hardware hardware-run \
+.PHONY: all test unittest lib blob examples demos demo-run vsprites vsprites-run boing boing-run emulator hardware hardware-run \
 		basic-run time-run protocol coverage release clean

@@ -1,9 +1,11 @@
-# Boing ball. make; make check (VICE screenshots + status readback);
+# Boing ball. make (self-contained boing.prg);
+# make check (VICE screenshots + status readback);
 # make run U64_HOST=<ip> (FTP to /Temp, run from file, read the status block).
 KICK   ?= kickass
 ROOT   := ../..
-# The blob at $8000 with its variables at $a800, built into its own directory
-# so the default $7000 build's objects (variables at $9f00) are not disturbed.
+SAMPLE ?= $(if $(wildcard boing-orig8.pcm),boing-orig8.pcm 8363)
+# The blob at $8000 with its variables packed at $a940-$a9fe, immediately
+# before the sample at $aa00. A separate build keeps the default blob untouched.
 BLOB   := $(ROOT)/bindings/blob/build-boing/ultimate-8000.bin
 
 all: boing.prg
@@ -16,7 +18,7 @@ boing.pcm boing_pcm.inc: mkpcm.py genboing.py
 	python3 mkpcm.py $(SAMPLE)
 
 $(BLOB): FORCE
-	$(MAKE) -C $(ROOT)/bindings/blob BUILD=build-boing BASE=8000 VARS=43008
+	$(MAKE) -C $(ROOT)/bindings/blob BUILD=build-boing BASE=8000 VARS=43328
 
 boing.prg: boing.asm ball.bin disc.bin bg.bin bgscr.bin shadow.bin boing.pcm $(BLOB)
 	$(KICK) boing.asm -o $@ -symbolfile

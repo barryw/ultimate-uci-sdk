@@ -13,7 +13,7 @@ Bench: Ultimate 64 Elite at 192.168.1.62, firmware 3.15, core 1.4F, NTSC.
 | `docs/uci.md`, `docs/superpowers/specs/2026-09-01-software-sprites-design.md` | Mechanism, measurements, colour options, demo results | Written |
 | `demos/vsprites/` | Bobs on a grid, blob turbo calls, auto-scaling bob count | 60 bobs at 60 fps on the Elite; VICE check passes |
 | `experiments/bobs/` | The throughput experiment, six colour modes, harness, VICE byte-exact checker | Done; keep as the test bed |
-| `experiments/boing/` | Amiga Boing ball: 16 sprites a frame from 8, blitter shadow, perspective floor, original sample through Ultimate Audio | Runs on the Elite, three clean launches in a row |
+| `demos/boing/` | Amiga Boing ball: 16 sprites a frame from 8, blitter shadow, perspective floor, original sample through Ultimate Audio | Runs on the Elite, three clean launches in a row |
 
 ## The SDK bug, in one paragraph
 
@@ -78,7 +78,7 @@ detail in `docs/uci.md` under "Recovering a wedged interface".
 
 ## The Boing ball, specifically
 
-- `experiments/boing/NOTES.md` is current and detailed. Read it first.
+- `demos/boing/README.md` is current and detailed. Read it first.
 - The sound is `boing.samples` from the Amiga Workbench Demos disk
   (`sca.ch/amiga/disks/WorkbenchDemos.adf`, unpacked with `xdftool`):
   8-byte header, then signed 8-bit PCM, played at 8,363 Hz. **Commodore-Amiga's
@@ -103,7 +103,7 @@ detail in `docs/uci.md` under "Recovering a wedged interface".
 1. `make -C tests/emulator run` and `make unittest` to confirm green, then
    commit in sensible pieces: the abort fix with its tests and docs; the
    vsprites demo; the experiments; the design doc and this handover. Keep
-   `experiments/boing/boing.samples` and `boing*.pcm` out (already ignored).
+   `demos/boing/boing.samples` and `boing*.pcm` out (already ignored).
 2. Decide on the two audio/blob findings above: settle-and-stop inside
    `ultimate_audio_configure`, and a note on the Z flag of the byte-returning
    entry points.
@@ -117,6 +117,6 @@ detail in `docs/uci.md` under "Recovering a wedged interface".
 make -C tests/emulator run                      # 9 suites, needs Docker
 make hardware-run U64_HOST=192.168.1.62         # the on-device suite
 make vsprites-run U64_HOST=192.168.1.62         # demo, prints bobs and fps
-make -C experiments/boing run U64_HOST=192.168.1.62   # boing, requires audio mapping
+make boing-run U64_HOST=192.168.1.62                   # boing, requires audio mapping
 python3 experiments/bobs/bobtest.py --host 192.168.1.62 --prg experiments/bobs/bobs32.prg --sweep
 ```
