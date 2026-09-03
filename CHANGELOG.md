@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.6.1](https://github.com/barryw/ultimate-uci-sdk/compare/cf11c808d8e64258d5c7bfdec94c54e9343f155a..v0.6.1) - 2026-09-03
+#### Documentation
+- (**boing**) open capture in raw player - ([b63e317](https://github.com/barryw/ultimate-uci-sdk/commit/b63e317260126cfb9c986652d0b9f1012c8e3ef6)) - Barry Walker
+- (**boing**) add linked demo capture - ([cf11c80](https://github.com/barryw/ultimate-uci-sdk/commit/cf11c808d8e64258d5c7bfdec94c54e9343f155a)) - Barry Walker
+
+- - -
+
 ## [v0.6.0](https://github.com/barryw/ultimate-uci-sdk/compare/26c22daa54d35eee66524d49049bf5addffa3e9b..v0.6.0) - 2026-09-03
 #### Features
 - (**audio**) ultimate_audio_load_wav, a WAV file into the REU and a voice - ([d0da050](https://github.com/barryw/ultimate-uci-sdk/commit/d0da05072529ef283b96f25457e3d21a6cac07d2)) - Barry Walker, Claude Fable 5.1
