@@ -2,6 +2,35 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.6.0](https://github.com/barryw/ultimate-uci-sdk/compare/26c22daa54d35eee66524d49049bf5addffa3e9b..v0.6.0) - 2026-09-03
+#### Features
+- (**audio**) ultimate_audio_load_wav, a WAV file into the REU and a voice - ([d0da050](https://github.com/barryw/ultimate-uci-sdk/commit/d0da05072529ef283b96f25457e3d21a6cac07d2)) - Barry Walker, Claude Fable 5.1
+- (**bindings**) audio_load_wav for C and the blob, in an extension table at +$300 - ([a22c328](https://github.com/barryw/ultimate-uci-sdk/commit/a22c328a58349e2b0d67d8ad94053b88a1668654)) - Barry Walker, Claude Fable 5.1
+- (**bindings**) BLOB_* jump table and parameter block offsets, generated - ([4cae868](https://github.com/barryw/ultimate-uci-sdk/commit/4cae868ee20b7f29f42631617615df9fa31794e0)) - Barry Walker, Claude Fable 5.1
+- (**demo**) ship self-contained Boing demo - ([c90cfea](https://github.com/barryw/ultimate-uci-sdk/commit/c90cfeaedffe073a304f688898e1207e979359d5)) - Barry Walker
+#### Bug Fixes
+- (**abi**) a byte result in A leaves the flags set from A - ([5770367](https://github.com/barryw/ultimate-uci-sdk/commit/577036719bffe377f098e7d65bd2e61f47be8c0f)) - Barry Walker, Claude Fable 5.1
+- (**audio**) configure settles after the stop and after the writes - ([e2be280](https://github.com/barryw/ultimate-uci-sdk/commit/e2be280b09f927dbefece2419a69317fd741cb6d)) - Barry Walker, Claude Fable 5.1
+#### Documentation
+- (**asm**) audio_load_wav also clobbers ult_arg2 and ult_attrib - ([9760298](https://github.com/barryw/ultimate-uci-sdk/commit/97602984d5ee93ca815c39d2659e6769266c3a0a)) - Barry Walker, Claude Fable 5.1
+- (**plan**) Task 5 commits only what passes - ([c8ac6ae](https://github.com/barryw/ultimate-uci-sdk/commit/c8ac6ae9cdeff9d309409071e70e71fb4d4b2277)) - Barry Walker, Claude Fable 5.1
+- (**plan**) implementation plan for the four SDK fixes from the Boing demo - ([33ed5ba](https://github.com/barryw/ultimate-uci-sdk/commit/33ed5ba4944904f3c4534caa621aa5a1c970a2ce)) - Barry Walker, Claude Fable 5.1
+- (**spec**) the WAV loader takes 8-bit files too, and Boing ships its recording - ([87b9584](https://github.com/barryw/ultimate-uci-sdk/commit/87b9584cc65bdebea957e5271b725de4e0f81836)) - Barry Walker, Claude Fable 5.1
+- (**spec**) four fixes, not three - ([ab9277f](https://github.com/barryw/ultimate-uci-sdk/commit/ab9277ff84ae578eeafec25ffe41bcab0f4d3bba)) - Barry Walker, Claude Fable 5.1
+- (**spec**) ultimate_audio_load_wav, and Boing loads its sample from a file - ([5448a37](https://github.com/barryw/ultimate-uci-sdk/commit/5448a37cdef62eeb6de03beeda53a81740990056)) - Barry Walker, Claude Fable 5.1
+- (**spec**) SDK fixes from the Boing demo, and a generic sprite multiplexer - ([26c22da](https://github.com/barryw/ultimate-uci-sdk/commit/26c22daa54d35eee66524d49049bf5addffa3e9b)) - Barry Walker, Claude Fable 5.1
+#### Tests
+- (**blob**) pin the two closed jump tables' full ranges again - ([2874b5f](https://github.com/barryw/ultimate-uci-sdk/commit/2874b5f36f4e4290ff4da3de423dbd4b91a5622c)) - Barry Walker, Claude Fable 5.1
+- (**wav**) the sign pass in the simulator, and six doc corrections - ([cb7dfc7](https://github.com/barryw/ultimate-uci-sdk/commit/cb7dfc746605e85a79001a9512f3375b6e073a1a)) - Barry Walker, Claude Fable 5.1
+- (**wav**) fixtures for ultimate_audio_load_wav, and UA_RATE_CLOCK - ([799acbd](https://github.com/barryw/ultimate-uci-sdk/commit/799acbd284182dd0312ca1885e07523a36f8bd13)) - Barry Walker, Claude Fable 5.1
+#### Refactoring
+- (**vsprites**) generated BLOB_* offsets, no cmp #0 - ([18dab01](https://github.com/barryw/ultimate-uci-sdk/commit/18dab01687ddf971f4741a91067f7c540fd9157d)) - Barry Walker, Claude Fable 5.1
+#### Miscellaneous
+- track the KickAssembler sources the blanket *.asm rule hid - ([49c5e3c](https://github.com/barryw/ultimate-uci-sdk/commit/49c5e3cb5dc162a98d464e8a363d091513a221d5)) - Barry Walker, Claude Fable 5.1
+- baseline of two sessions' uncommitted work - ([2625b93](https://github.com/barryw/ultimate-uci-sdk/commit/2625b9337a83d337ebd1681f9244566a4b5fa995)) - Barry Walker, Claude Fable 5.1
+
+- - -
+
 ## [v0.5.0](https://github.com/barryw/ultimate-uci-sdk/compare/ee9a66d194cd87c0a9563ef843dac00f63857261..v0.5.0) - 2026-08-28
 #### Features
 - (**protocol**) constants for the commands the firmware has and the SDK lacked - ([ee9a66d](https://github.com/barryw/ultimate-uci-sdk/commit/ee9a66d194cd87c0a9563ef843dac00f63857261)) - Christian Gleissner
