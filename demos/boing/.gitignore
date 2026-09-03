@@ -3,3 +3,5 @@ boing-orig8.pcm
 boing.pcm
 boing8.pcm
 boing_pcm.inc
+*.png
+!boing-demo.png

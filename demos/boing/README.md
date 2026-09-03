@@ -1,5 +1,9 @@
 # Boing ball out of multiplexed hardware sprites
 
+[![Boing ball running on an Ultimate 64](boing-demo.png)](boing-demo.mp4)
+
+*Click the image for a 12-second hardware capture with sound.*
+
 The Amiga Boing ball on a C64: a red-and-white checkered sphere rolling and
 bouncing over a perspective grid, its shadow tracking it, a boing on every
 bounce. The ball is hardware sprites, the shadow a blitter bob in the bitmap,
