@@ -1,8 +1,6 @@
 # Boing ball out of multiplexed hardware sprites
 
-[![Boing ball running on an Ultimate 64](boing-demo.png)](https://github.com/barryw/ultimate-uci-sdk/raw/refs/heads/main/demos/boing/boing-demo.mp4)
-
-*Click the image for a 12-second Ultimate 64 capture with sound.*
+![Boing ball running on an Ultimate 64](boing-demo.png)
 
 The Amiga Boing Ball recreated on a C64: a rotating red-and-white ball,
 perspective grid, moving shadow, and PCM boing on every bounce.
