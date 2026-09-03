@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turn a sample into what the demo plays: signed 16-bit little-endian mono PCM
+"""Turn a sample into what the demo plays: signed 8-bit mono PCM
 in boing.pcm, and boing_pcm.inc with its byte length and 6.25 MHz rate divider.
 
     python3 mkpcm.py boing.wav        # any mono/stereo 8/16-bit PCM WAV
@@ -34,7 +34,7 @@ def main():
         import genboing; genboing.main()
         samples, rate = from_raw8("boing8.pcm", 11025)
     # Signed 8-bit, resident in the PRG in two pieces around the I/O area:
-    # 9,728 bytes at $aa00-$d0ff and up to 7,424 at $e000-$fcff.
+    # 9,728 bytes at $aa00-$cfff and up to 7,424 at $e000-$fcff.
     PIECE_A, PIECE_B_MAX = 9728, 7424
     data = bytes(max(-128, min(127, v >> 8)) & 0xFF for v in samples)[:PIECE_A + PIECE_B_MAX]
     open("boing.pcm", "wb").write(data)

@@ -1,16 +1,17 @@
 // vsprites.asm - software sprites on an Ultimate 64, an SDK demo.
 //
-// Balls, diamonds and rings, 32 x 32 hires pixels each, drawn as masked bobs
+// Balls, diamonds and rings, 32 x 32 hires pixels each, drawn as masked vsprites
 // into a double-buffered multicolour bitmap: restore the background under each
 // one, move it, draw it again with D = (D AND mask) OR image, wait for the
-// raster, flip. The Amiga blitter's job, done by the 6510.
+// raster, flip. Similar to Amiga blitter objects, but done by the 6510 without
+// a blitter.
 //
 // The SDK's part is small and the point: ultimate_turbo_available() says
 // whether the machine has turbo registers, ultimate_turbo_set() asks for the
 // top speed and ultimate_turbo_badlines() stops the VIC stealing cycles. The
-// demo then adds bobs until the frame is about seven-eighths full and takes
-// them away when it overflows, so the same program shows two bobs on a stock
-// 1 MHz C64, about forty at 48 MHz on an Elite, and more on a 64 MHz machine.
+// demo then adds vsprites until the frame is about seven-eighths full and takes
+// them away when it overflows, so the same program shows two vsprites on a stock
+// 1 MHz C64, 60 on the tested 48 MHz Elite, and more on a 64 MHz machine.
 // The border turns grey while the frame is being drawn: that band is the
 // render time, the black below it what is left.
 //
@@ -44,21 +45,21 @@
 .const SHAPES      = 3
 .const IMG_BYTES   = BOB_BYTES * BOB_H
 .const SHIFT_BYTES = IMG_BYTES * 2           // image then mask
-.const SEGS        = BOB_H / 8               // cell rows a cell-aligned bob spans
+.const SEGS        = BOB_H / 8               // cell rows a cell-aligned vsprite spans
 
 .const XMAX        = 160 - BOB_W
 .const YMAX        = 200 - BOB_H
 
 .const COL_BG      = $00          // bit pair 00: $d021
-.const COL_1       = $0b          // 01: dark grey, the grid and the bobs' outlines
-.const COL_2       = $0e          // 10: light blue, the bobs' bodies
+.const COL_1       = $0b          // 01: dark grey, grid and vsprite outlines
+.const COL_2       = $0e          // 10: light blue, vsprite bodies
 .const COL_3       = $01          // 11: white, the highlights
 
 .const VBLANK_LINE = 250
 .const START_BOBS  = 4
 
 // zero page
-.label zpB    = $02   // 16-bit: bob base address (base_0)
+.label zpB    = $02   // 16-bit: vsprite base address (base_0)
 .label zpD    = $04   // 16-bit: current dst operand
 .label zpS    = $06   // 16-bit: current src (image) operand
 .label zpYin  = $08
@@ -76,7 +77,7 @@
 //   +4..5   frame counter (16-bit LE), one per rendered frame
 //   +6..9   CIA cycles spent rendering the last frame (32-bit LE)
 //   +10..11 CIA cycles in one raster frame, measured at start (16-bit LE)
-//   +12     bobs drawn in the last frame
+//   +12     vsprites drawn in the last frame
 //   +13     bank on screen: 0 = bank 1, 1 = bank 2
 //   +14     state: 1 = running
 //   +15     $d031 as read at start: $ff when the machine has no turbo
@@ -212,9 +213,9 @@ ndirty:    .byte 0, 0            // dirty entries per buffer
 drawn_now: .byte 0
 
 // ---------------------------------------------------------------------------
-// Fill the frame: one more bob when the last render used under three
-// quarters of a frame, one fewer when it used more than seven eighths. A bob
-// is about one per cent of a 48 MHz frame, so this settles in a second.
+// Fill the frame: one more vsprite when the last render used under three
+// quarters of a frame, one fewer when it used more than seven eighths. A
+// vsprite is about one per cent of a 48 MHz frame, so this settles in a second.
 scale_bobs:
     lda ST_RENDER+2
     ora ST_RENDER+3
@@ -403,8 +404,8 @@ fill_colour:
     rts
 
 // ---------------------------------------------------------------------------
-// Bobs: position, velocity, shape. Every slot is set up at the start, so a
-// bob that scale_bobs brings in later is already somewhere sensible.
+// Vsprites: position, velocity, shape. Every slot is set up at the start, so a
+// vsprite that scale_bobs brings in later is already somewhere sensible.
 init_bobs:
     ldx #0
 !:  jsr lfsr
@@ -510,7 +511,7 @@ storey:
     rts
 
 // ---------------------------------------------------------------------------
-// Bob address arithmetic. For a bob at (x, y) in the buffer whose bitmap is at
+// Vsprite address arithmetic. For a vsprite at (x, y) in the buffer at
 // BUF, row r of column c lives at
 //     BUF + ((y+r)>>3)*320 + (x>>2 + c)*8 + ((y+r)&7)
 // Rows that share a cell row are consecutive bytes, so with
@@ -518,7 +519,7 @@ storey:
 // the byte for row r in cell-row segment j is simply base_j + r, and one
 // index register walks image, mask and destination together.
 //
-// compute_base: X = bob index -> zpB = base_0 (without BUF), zpYin, zpE0
+// compute_base: X = vsprite index -> zpB = base_0 (without BUF), zpYin, zpE0
 compute_base:
     lda by, x
     sta zpTmp
@@ -670,7 +671,7 @@ rsegs:     .byte 0
 rseg:      .byte 0
 
 // ---------------------------------------------------------------------------
-// Draw every bob into the back buffer and record where, for the restore.
+// Draw every vsprite into the back buffer and record where, for the restore.
 draw_all:
     lda front
     eor #1
@@ -835,7 +836,7 @@ dirtyB_hi:  .fill MAXBOBS, 0
 dirtyB_yin: .fill MAXBOBS, 0
 
 // ---------------------------------------------------------------------------
-// Bob images, generated at assembly time. pix() returns the colour index
+// Vsprite images, generated at assembly time. pix() returns the colour index
 // (0 transparent, 1..3 = bit pairs 01, 10, 11) of a shape. Each shape is
 // stored four times, pre-shifted by 0..3 multicolour pixels into a 5-byte-wide
 // column-major image followed by its mask (11 where transparent).

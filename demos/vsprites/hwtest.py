@@ -8,7 +8,7 @@ inside it), so it goes to the Ultimate's /Temp RAM disk over FTP and runs from
 there with runners:run_prg?file=. The demo publishes a status block in the
 cassette buffer; this reads it back over REST. Turbo Control is required to be
 "U64 Turbo Registers" for the run and put back afterwards, because the check
-is that the demo reaches the frame rate and the bob count only turbo allows.
+is that the demo reaches the frame rate and vsprite count only turbo allows.
 
 Part of the Ultimate SDK. SPDX-License-Identifier: MIT
 """
@@ -39,7 +39,7 @@ class Status:
         self.frames = raw[4] | (raw[5] << 8)
         self.render = struct.unpack("<I", raw[6:10])[0]
         self.frame = raw[10] | (raw[11] << 8)
-        self.bobs = raw[12]
+        self.vsprites = raw[12]
         self.front = raw[13]
         self.state = raw[14]
         self.turbo = raw[15]
@@ -124,12 +124,12 @@ def main():
         run_from_file(u, REMOTE)
         s = wait_running(u)
         print("running: frame = %d CIA cycles, $d031 = $%02x" % (s.frame, s.turbo))
-        time.sleep(4.0)                      # let the bob count settle
+        time.sleep(4.0)                      # let the vsprite count settle
         a = status(u); t0 = time.time()
         time.sleep(2.0)
         b = status(u); t1 = time.time()
         fps = ((b.frames - a.frames) & 0xFFFF) / (t1 - t0)
-        print("%d bobs at %.1f fps, render %d of %d cycles" % (b.bobs, fps, b.render, b.frame))
+        print("%d vsprites at %.1f fps, render %d of %d cycles" % (b.vsprites, fps, b.render, b.frame))
         if args.png:
             snapshot(u, args.png)
             print("wrote", args.png)
@@ -140,11 +140,11 @@ def main():
         if fps < 50:
             print("not ok - expected at least 50 fps, measured %.1f" % fps)
             ok = False
-        if b.bobs < 30:
-            print("not ok - expected at least 30 bobs at full turbo, got %d" % b.bobs)
+        if b.vsprites < 30:
+            print("not ok - expected at least 30 vsprites at full turbo, got %d" % b.vsprites)
             ok = False
         if ok:
-            print("ok - vsprites fills the frame at %.1f fps with %d bobs" % (fps, b.bobs))
+            print("ok - vsprites fills the frame at %.1f fps with %d vsprites" % (fps, b.vsprites))
         return 0 if ok else 1
     finally:
         restore_settings(u, changed,

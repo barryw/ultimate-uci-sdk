@@ -11,9 +11,9 @@ Bench: Ultimate 64 Elite at 192.168.1.62, firmware 3.15, core 1.4F, NTSC.
 | `tests/emulator/abort-latency.suite`, harness `t_status_reg`, Makefile `ABORT_LATENCY` | Reproduces the abort race with a slow simulated firmware | Fails before the fix, passes after; whole emulator run passes (9 suites) |
 | `tests/hardware/ucitest.c` | "first-command-after-init" at 1 MHz and at max turbo | Passes; the bench has 10 unrelated pre-existing failures (below) |
 | `docs/uci.md`, `docs/superpowers/specs/2026-09-01-software-sprites-design.md` | Mechanism, measurements, colour options, demo results | Written |
-| `demos/vsprites/` | Bobs on a grid, blob turbo calls, auto-scaling bob count | 60 bobs at 60 fps on the Elite; VICE check passes |
+| `demos/vsprites/` | Vsprites on a grid, blob turbo calls, auto-scaling count | 60 vsprites at 60 fps on the Elite; VICE check passes |
 | `experiments/bobs/` | The throughput experiment, six colour modes, harness, VICE byte-exact checker | Done; keep as the test bed |
-| `demos/boing/` | Amiga Boing ball: 16 sprites a frame from 8, blitter shadow, perspective floor, original sample through Ultimate Audio | Runs on the Elite, three clean launches in a row |
+| `demos/boing/` | Amiga Boing ball: 16 sprites a frame from 8, software-composited vsprite shadow, perspective floor, original sample through Ultimate Audio | Runs on the Elite, three clean launches in a row |
 
 ## The SDK bug, in one paragraph
 
@@ -44,7 +44,7 @@ detail in `docs/uci.md` under "Recovering a wedged interface".
 
 - CIA timers count at 1 MHz under turbo; a NTSC frame is 17,092 CIA cycles at
   every speed, so CIA cycles are microseconds.
-- Turbo speed-up is linear with no RAM wait states. One 16x16 multicolour bob
+- Turbo speed-up is linear with no RAM wait states. One 16x16 multicolour vsprite
   costs about 6,250 6510 cycles (127 us at 48 MHz); 32-line, 218 us. Badlines
   cost about 1 ms a frame at any speed; `$D031` bit 7 recovers it.
 - REU DMA under turbo is about five times faster than stock and no faster than
@@ -116,7 +116,7 @@ detail in `docs/uci.md` under "Recovering a wedged interface".
 ```
 make -C tests/emulator run                      # 9 suites, needs Docker
 make hardware-run U64_HOST=192.168.1.62         # the on-device suite
-make vsprites-run U64_HOST=192.168.1.62         # demo, prints bobs and fps
+make vsprites-run U64_HOST=192.168.1.62         # demo, prints vsprites and fps
 make boing-run U64_HOST=192.168.1.62                   # boing, requires audio mapping
 python3 experiments/bobs/bobtest.py --host 192.168.1.62 --prg experiments/bobs/bobs32.prg --sweep
 ```

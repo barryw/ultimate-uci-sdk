@@ -1,5 +1,5 @@
 // boing.asm - the Amiga Boing ball out of multiplexed hardware sprites, with a
-// blitter shadow, a perspective floor, and the boing as PCM.
+// software-composited vsprite shadow, a perspective floor, and the boing as PCM.
 //
 // The ball is 2 sprite columns by 4 sprite rows, every position drawn twice:
 // a white sprite with the white tiles and a red sprite with the red ones.
@@ -9,8 +9,9 @@
 // layer is stored per rotation frame; red = disc AND NOT white, built at run
 // time into one of two live sprite sets and flipped at vblank.
 //
-// The shadow is a blitter bob: an ellipse ORed into the hires bitmap to the
-// ball's lower right, the covered cells recoloured dark grey. One bitmap, so
+// The shadow is a vsprite similar to an Amiga blitter object, but composited
+// by the 6510 without a blitter: an ellipse ORed into the hires bitmap to the
+// ball's lower right, with covered cells recoloured dark grey. One bitmap, so
 // each frame restores what the shadow covered last time from a clean copy of
 // the background held in the REU, then draws it again - done right after the
 // vblank sync, and the ball's sprites float over it. The boing plays through
