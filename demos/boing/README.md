@@ -1,6 +1,6 @@
 # Boing ball out of multiplexed hardware sprites
 
-[![Boing ball running on an Ultimate 64](boing-demo.png)](boing-demo.mp4?raw=1)
+[![Boing ball running on an Ultimate 64](boing-demo.png)](https://github.com/barryw/ultimate-uci-sdk/raw/refs/heads/main/demos/boing/boing-demo.mp4)
 
 *Click the image for a 12-second Ultimate 64 capture with sound.*
 
