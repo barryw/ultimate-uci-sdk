@@ -46,8 +46,7 @@ CONSTANT = "constant"
 # the ROM's own TAB( and SPC( instead and take the paren into their name, which
 # keeps UW and UL usable as ordinary variables.
 KEYWORDS = [
-    ("UCI",    STATEMENT, "execute any command on any target; also the "
-                          "function form, which returns the reply length"),
+    ("UCI",    STATEMENT, "execute any command on any target"),
     ("UERR",   FUNCTION,  "ULTIMATE_* result code, 0 is OK"),
     ("UDEV",   FUNCTION,  "raw device code the target reported"),
     ("ULEN",   FUNCTION,  "reply length in bytes"),

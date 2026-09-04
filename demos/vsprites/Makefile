@@ -19,9 +19,10 @@ $(PRG): vsprites.asm $(BLOB)
 	$(KICK) vsprites.asm -o $@ -symbolfile
 
 check: $(PRG)
-	x64sc -console -warp +sound -limitcycles 14000000 \
+	rm -f vsprites-vice.png
+	-x64sc -console -warp +sound -limitcycles 14000000 \
 	  -exitscreenshot vsprites-vice.png -autostart $(PRG) >/dev/null 2>&1
-	@ls -la vsprites-vice.png
+	@test -s vsprites-vice.png
 
 run: $(PRG)
 	@test -n "$(U64_HOST)" || { echo "U64_HOST is required"; exit 2; }

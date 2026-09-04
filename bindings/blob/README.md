@@ -7,6 +7,7 @@ can use it — with no linking at all.
     make -C bindings/blob                 # build/ultimate-7000.bin at $7000
     make -C bindings/blob BASE=6000       # at $6000
     make -C bindings/blob BASE=6000 VARS=36864 ZP=163
+    make -C bindings/blob BASE=8000 VARS=22784 LIMIT=44336
 
 A build is the 256-byte jump table page, the 512-byte parameter block — fixed
 at those sizes so every offset below holds regardless of how little of them is
@@ -50,9 +51,11 @@ effect, because it resets the string pointer from the new top. BASIC then has
 `$9F00` are both above the line. For a blob built with `BASE=6000`, poke 96
 instead.
 
-`blob.cfg.in` sizes the code area from `VARS`, so a build that does not fit
-**fails to link** rather than producing a binary whose first command overwrites
-its own request block.
+`blob.cfg.in` sizes the code area from `LIMIT`, which defaults to `VARS`, so a
+build that does not fit **fails to link** rather than producing a binary whose
+first command overwrites its own request block. A packed program may use
+`LIMIT` when its SDK variables live somewhere other than directly above the
+blob.
 
 **A byte result sets the flags.** Every entry that answers with a byte in `A`
 leaves N and Z set from it, so `jsr BLOB + $1C` / `beq ok` tests the result
@@ -202,6 +205,7 @@ it never moves anything above it.
 | Offset | Entry | In | Out |
 |---|---|---|---|
 | `+$300` | `audio_load_wav` | `bp_name` = the WAV, `bp_reu` = REU address | `bp_audio` address, length, rate and flags filled; `bp_result` |
+| `+$303` | `vsprite_draw` | `bp_addr` = `VSPRITE_SIZE` descriptor | `bp_result`; bitmap changed in place |
 
 A directory walk is one live exchange: `+$55` then `+$58` until it answers
 `ULTIMATE_END` (`10`), with no other command in between. `+$7F` and `+$82` work

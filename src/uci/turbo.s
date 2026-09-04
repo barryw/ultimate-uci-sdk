@@ -5,8 +5,8 @@
 ; never write a register - is about not reimplementing the transport. Here
 ; there is no transport to reimplement: the control target's full command set is
 ; in docs/generated/protocol-constants.md and nothing in it touches CPU speed.
-; Turbo is memory-mapped I/O and nothing else. reu.s in Phase 3 is the only
-; other module with this exemption, for the same reason.
+; Turbo is memory-mapped I/O and nothing else. REU transfers and Ultimate Audio
+; are the other direct-hardware features; none of these operations exists on UCI.
 ;
 ;   $D031  bits 0-3  speed index into the machine's own table
 ;          bit 7     1 = badlines off, so the VIC stops stealing cycles

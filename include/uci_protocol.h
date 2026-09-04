@@ -120,8 +120,8 @@
 /* Bit flags for DOS_CMD_OPEN_FILE. */
 #define DOS_FA_READ          0x01  /* Open for reading */
 #define DOS_FA_WRITE         0x02  /* Open for writing, do not truncate */
-#define DOS_FA_CREATE_NEW    0x04  /* Create/truncate to zero bytes */
-#define DOS_FA_CREATE_ALWAYS 0x08  /* May overwrite an existing file */
+#define DOS_FA_CREATE_NEW    0x04  /* Create only when the name does not exist */
+#define DOS_FA_CREATE_ALWAYS 0x08  /* Create or truncate an existing file */
 
 /* ---- DOS file information reply ---- */
 /* Byte offsets into the reply of DOS_CMD_FILE_STAT and DOS_CMD_FILE_INFO. */
@@ -342,9 +342,9 @@
 #define U64_TURBO_UNAVAILABLE 0xFF  /* what both registers read when turbo is off in config */
 
 /* ---- REU registers (NOT UCI) ---- */
-/* The second and last thing the SDK reaches without the command interface, */
-/* for the same reason as turbo: no UCI command moves bytes between C64 RAM */
-/* and the REU. The register set is the 1750's, implemented in */
+/* Another part of the SDK that works without the command interface, for */
+/* the same reason as turbo: no UCI command moves bytes between C64 RAM and */
+/* the REU. The register set is the 1750's, implemented in */
 /* fpga/cart_slot/vhdl_source/reu.vhd, and the command interface overlays */
 /* $DF1B-$DF1F above it - the REU decodes $DF00-$DF17 only, so the two */
 /* coexist. A transfer runs under DMA with the CPU halted, so it is */
@@ -426,6 +426,25 @@
 #define UA_VOICE_REPEAT_B 0x10  /* dword, little endian */
 #define UA_VOICE_RATE     0x14  /* word, little endian */
 #define UA_VOICE_SIZE     0x16  /* bytes */
+
+/* ---- Software vsprite draw layout ---- */
+/* Byte offsets in ultimate_vsprite. The C ABI build asserts the structure */
+/* still matches these. */
+#define VSPRITE_BITMAP   0x00  /* word: destination bitmap base */
+#define VSPRITE_SOURCE   0x02  /* word: column-major image or source bitmap base */
+#define VSPRITE_MASK     0x04  /* word: column-major mask for VSPRITE_F_MASKED */
+#define VSPRITE_SCREEN   0x06  /* word: optional screen base for VSPRITE_F_COLOR */
+#define VSPRITE_X        0x08  /* byte: destination cell column, 0-39 */
+#define VSPRITE_Y        0x09  /* byte: destination raster line, 0-199 */
+#define VSPRITE_WIDTH    0x0A  /* byte: width in bitmap byte columns */
+#define VSPRITE_HEIGHT   0x0B  /* byte: height in raster lines */
+#define VSPRITE_COLOR    0x0C  /* byte: screen value for touched cells */
+#define VSPRITE_FLAGS    0x0D  /* byte: VSPRITE_F_* operation flags */
+#define VSPRITE_SIZE     0x0E  /* bytes */
+#define VSPRITE_F_MASKED 0x01  /* draw (destination AND mask) OR source */
+#define VSPRITE_F_COPY   0x02  /* copy the same rectangle from a source bitmap */
+#define VSPRITE_F_COLOR  0x04  /* write color to screen cells touched by nonzero source */
+#define VSPRITE_F_ALL    0x07  /* all supported flag bits */
 
 /* ---- Ultimate 64 speed indices ---- */
 /* Index into the machine's speed table. **Only these four mean the same */

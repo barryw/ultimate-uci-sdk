@@ -25,8 +25,9 @@ creates the PDF.
 - State each technical fact once.
 - Put a short explanation before or after every example naming the feature it
   demonstrates.
-- Put deterministic BASIC output directly below `RUN` in the same `screen`.
-  Use `outputbox` only for results from source listings.
+- Use `outputbox` only for literal text the C64 displays; use `resultbox` for
+  return values, memory changes and descriptions of visible effects.
+- Use `tip` only when the feature's role in a larger program is not obvious.
 - Keep each technical section's source check in a non-printing
   `\evidence{...}` marker.
 - Prefer generated contracts and executable tests to narrative documentation;
@@ -52,12 +53,14 @@ PRINT UREU
 ```
 
 `screen` is for what you type at the machine; `listingbox` is for source you
-keep in a file; `outputbox` shows what the operation returns or displays.
-`\key{return}` draws a keycap, and `note` and `warning` are the two callout
-environments.
+keep in a file; `outputbox` is literal C64 text; `resultbox` describes a
+non-text result. `\key{return}` draws a keycap; `note`, `tip`, and `warning`
+are the callout environments.
 
 ## Verify a change
 
 Build the PDF with `make -C guide`. Run `make unittest` for generated tables,
 keyword dispatch, register boundaries and blob ABI checks; run `make test` when
-an example or claim depends on assembled SDK behaviour.
+an example or claim depends on assembled SDK behaviour. For real hardware, run
+`make hardware-run`, `make basic-run`, `make vsprites-run`, and `make boing-run`
+with `U64_HOST=<address>`; each runner restores the settings it changes.

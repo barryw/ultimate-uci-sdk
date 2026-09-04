@@ -14,7 +14,7 @@ crunched form; `LIST` prints the name.
 
 | Token | Keyword | Kind | Crunched form | Notes |
 | --- | --- | --- | --- | --- |
-| `$CC` | `UCI` | statement | same | execute any command on any target; also the function form, which returns the reply length |
+| `$CC` | `UCI` | statement | same | execute any command on any target |
 | `$CD` | `UERR` | function | same | ULTIMATE_* result code, 0 is OK |
 | `$CE` | `UDEV` | function | same | raw device code the target reported |
 | `$CF` | `ULEN` | function | `U[LEN]` | reply length in bytes |

@@ -1,6 +1,7 @@
 # Tests
 
-Two layers. Each catches a class of bug the other structurally cannot.
+Two behavioral layers. Each catches a class of bug the other structurally
+cannot.
 
 | Layer | Needs | Runs | Finds |
 |---|---|---|---|
@@ -32,6 +33,7 @@ container so CI and a laptop use the identical tool:
 | `sdk.suite` | `u64sim` | the SDK itself: bring-up, framing, replies, status decoding |
 | `sdk-placed.suite` | `u64sim` | the same, with the SDK's RAM relocated (generated from `sdk.suite`) |
 | `timeout.suite` | `u64sim`, latency raised past the budget | that a device which stops answering is given up on |
+| `abort-latency.suite` | `u64sim`, delayed abort service | that initialization waits for firmware to finish an abort before sending the first command |
 | `absent.suite` | `sim` — nothing at `$DF1B-$DF1F` | that a machine with no Ultimate fails fast instead of hanging |
 | `blob.suite` | `u64sim` | the standalone binary through its jump table and parameter block, with no symbols at all |
 | `blob-relocated.suite` | `u64sim` | the blob moved to another address, then compared byte for byte against a blob the linker built for that address |
@@ -99,17 +101,17 @@ parses without guessing:
 ok 1 - signature-present
 ok 2 - init
 ...
-ok 22 - turbo-speed-changes # SKIP turbo control is off in the ultimate settings
-1..50
-# 49 passed, 0 failed, 1 skipped
+1..126
+# 118 passed, 0 failed, 8 skipped
 ```
 
 Firmware-dependent checks are skipped rather than failed, so the same binary
 gives a meaningful result on a 1541 Ultimate-II and on a Commodore 64 Ultimate.
 
-Last run: **Ultimate 64 Elite, firmware 3.15 — 5/5 scenarios, 0 failed**, with
-40 checks in the plain scenario, 52 with the RAM expansion switched on and 47
-with turbo. Mutating checks write to `/Temp`, the FAT filesystem the firmware
+Last run: **Ultimate 64 Elite, firmware 3.15, FPGA 124/core 1.4F — 7/7
+scenarios, 0 failed**. The peer-enabled run included up to 180 checks per
+configuration.
+Mutating checks write to `/Temp`, the FAT filesystem the firmware
 formats in RAM at boot, so nothing they do can fill a medium or outlive a power
 cycle.
 
@@ -128,9 +130,11 @@ still decoded and printed when something fails.
 |---|---|
 | `uci-disabled` | with the interface switched off the SDK reports no device and returns, rather than hanging or misreading open bus |
 | `uci-enabled` | the baseline, every check the machine's settings allow |
+| `reu-size-is-measured` | the SDK measures the configured 128 KB, 2 MB and 16 MB expansion sizes without corrupting their first bytes |
 | `uci-with-reu` | the interface overlays the last five REU registers, so an enabled REU must not disturb it |
 | `softiec-survives-drive-disabled` | target `$05` stays reachable over UCI with the IEC drive switched off, so the SDK's SoftwareIEC path needs no setting from the user |
-| `turbo-registers` | with "Turbo Control" on, the speed really changes: a fixed loop timed against the raster |
+| `ultimate-audio` | the mapped PCM engine consumes a silent REU sample and raises and clears its end flag |
+| `turbo-registers` | with "Turbo Control" on, every public speed index reads back and badline control changes measured work; `make vsprites-run` checks actual throughput against host time |
 
 Every setting it touches is read first and restored afterwards, including on
 Ctrl-C. Nothing is written to the Ultimate's flash.

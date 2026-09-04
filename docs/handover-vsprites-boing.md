@@ -71,10 +71,10 @@ detail in `docs/uci.md` under "Recovering a wedged interface".
   includes; "pre-fix" comparisons must revert the one `jsr` in the working
   copy, and delete `bindings/blob/build/*.o` first, or the stale object is
   silently reused.
-- The hardware suite currently fails 10 checks on this bench, identical before
-  and after the abort fix: the turbo work-ratio check (equal work at "1" and
-  "4 MHz" inside ucitest, though `$D031` speed changes work in the demos) and
-  nine `/Temp` DOS operations answering device error 7. Not investigated.
+- Do not benchmark turbo with CIA timers or the VIC raster counter: those clocks
+  scale with the Ultimate CPU and report the same ratio at every speed. The
+  vsprites hardware runner uses host wall time and proves the practical change:
+  39 vsprites per frame with register turbo on versus 1 with it off on this bench.
 
 ## The Boing ball, specifically
 

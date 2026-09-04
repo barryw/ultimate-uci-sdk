@@ -8,8 +8,10 @@
 ; **Two of these send three runs of caller bytes, and the request block has two
 ; spans.** RENAME_FILE is <old> $00 <new> and COPY_FILE is <src> $00 <dst>.
 ; Nothing is copied to achieve that: the first name goes out as the argument
-; span with its own terminator counted in the length, which is the separator the
-; firmware splits on, and the second goes out as the payload span without one.
+; span with its terminator counted in the length, which is the separator the
+; firmware splits on, and the second goes out as the payload span with its
+; terminator counted too. Current firmware does not consistently add a missing
+; final terminator before handing names to the filesystem.
 ;
 ; **The stat reply is a fixed header followed by a name with no terminator.**
 ; Twelve bytes of size, date, time, extension and attributes, and whatever is
@@ -73,10 +75,11 @@ _ultimate_home:
 
 ; ---------------------------------------------------------------------------
 ; ultimate_rename   ult_buf = old name, ult_arg2 = new name
-; ultimate_copy     ult_buf = source,   ult_arg2 = destination
+; ultimate_copy     ult_buf = source,   ult_arg2 = destination path
 ;                -> A = ULTIMATE_* result
 ;
-; Both names are in the current directory unless they carry a path of their own.
+; Rename uses two names in the current directory. Copy preserves the source
+; name and puts it at the directory path named by ult_arg2.
 ; The Ultimate does the copying, so no bytes pass through the C64.
 ; ---------------------------------------------------------------------------
 ultimate_rename:
@@ -128,6 +131,7 @@ dos_two_names:
         bne @len
 @got:   cpy #$00
         beq dosinfo_invalid             ; and an empty second name names nothing
+        iny                             ; include its terminator on the wire
         sty ult_req + UCI_REQ_PAYLOADLEN
         jmp ult_dos_exec
 
@@ -179,8 +183,11 @@ dos_stat:
         lda ult_buf + 1
         sta ult_req + UCI_REQ_ARGS + 1
         lda ult_buflen
+        clc                             ; firmware needs the NUL on FILE_STAT
+        adc #$01
         sta ult_req + UCI_REQ_ARGLEN
         lda ult_buflen + 1
+        adc #$00
         sta ult_req + UCI_REQ_ARGLEN + 1
 
 @buffers:

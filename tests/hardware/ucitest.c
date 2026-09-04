@@ -146,20 +146,8 @@ static const uint8_t net_hello[] = { 0x68, 0x69, 0x0D, 0x0A };  /* "hi" CRLF */
 #endif
 
 /*
- * A fixed amount of CPU work, measured in 256ths of a raster frame.
- *
- * This is how "did turbo actually do anything?" gets answered. Setting $D031
- * and reading it back proves only that a register remembers what was written
- * to it - the machine has to be seen doing more work between two raster lines.
- *
- * The loop touches RAM and nothing else on purpose. The Ultimate 64 keeps I/O
- * at the stock rate under turbo so that timing-sensitive code keeps working, so
- * a loop that poked the VIC or a CIA would measure the part that deliberately
- * did not speed up.
- *
- * Both halves come off the same counter - see cycles.h - so this is a ratio,
- * and it does not matter whether turbo speeds the CPU up relative to the CIA or
- * slows the CIA down relative to the CPU.
+ * A fixed amount of CPU work, measured in 256ths of a raster frame. This is
+ * used below for the badline check, where both measurements run at 1 MHz.
  */
 #define WORK_ITERATIONS 2000
 #define WORK_UNITS      256
@@ -183,6 +171,7 @@ static uint16_t work_per_frame(void)
         return 0;
     return (uint16_t)((work * WORK_UNITS) / frame);
 }
+
 /*
  * Somewhere to load into that is neither the program nor its data. $C000 is the
  * 4K block a cc65 .prg never touches, and this test never runs the bytes it
@@ -234,21 +223,26 @@ static const char scratch_path[] = {
  * bytes because cc65 charmaps a string literal into PETSCII on its way to the
  * wire.
  */
-static const char stat_src[] = {
-    0x2F, 0x54, 0x65, 0x6D, 0x70, 0x2F,         /* /Temp/ */
-    0x73, 0x74, 0x31, 0x2E, 0x74, 0x6D, 0x70, 0x00      /* st1.tmp */
+static const char temp_root[] = {
+    0x2F, 0x54, 0x65, 0x6D, 0x70, 0x00          /* /Temp */
 };
-static const char stat_dst[] = {
-    0x2F, 0x54, 0x65, 0x6D, 0x70, 0x2F,
-    0x73, 0x74, 0x32, 0x2E, 0x74, 0x6D, 0x70, 0x00      /* st2.tmp */
+static const char stat_src[] = {
+    0x53, 0x54, 0x31, 0x2E, 0x54, 0x4D, 0x50, 0x00      /* ST1.TMP */
 };
 static const char stat_ren[] = {
-    0x2F, 0x54, 0x65, 0x6D, 0x70, 0x2F,
-    0x73, 0x74, 0x33, 0x2E, 0x74, 0x6D, 0x70, 0x00      /* st3.tmp */
+    0x53, 0x54, 0x33, 0x2E, 0x54, 0x4D, 0x50, 0x00      /* ST3.TMP */
 };
 static const char temp_subdir[] = {
+    0x53, 0x55, 0x42, 0x2E, 0x54, 0x4D, 0x50, 0x00      /* SUB.TMP */
+};
+static const char copy_destination[] = {
     0x2F, 0x54, 0x65, 0x6D, 0x70, 0x2F,
-    0x73, 0x75, 0x62, 0x2E, 0x74, 0x6D, 0x70, 0x00      /* sub.tmp */
+    0x53, 0x55, 0x42, 0x2E, 0x54, 0x4D, 0x50, 0x00      /* /Temp/SUB.TMP */
+};
+static const char parent_dir[] = { 0x2E, 0x2E, 0x00 };  /* .. */
+static const char http_local_url[] = {
+    0x68, 0x74, 0x74, 0x70, 0x3A, 0x2F, 0x2F,          /* http:// */
+    0x31, 0x32, 0x37, 0x2E, 0x30, 0x2E, 0x30, 0x2E, 0x31, 0x2F, 0x00
 };
 
 static ultimate_fileinfo finfo;
@@ -582,36 +576,46 @@ int main(void)
 
     /*
      * 21-27: turbo. Not a UCI command - there is none - so this is the SDK's
-     * only hardware-register service, and the only one whose whole point is a
-     * thing a register readback cannot show.
+     * only hardware-register service. Every named speed is written and read
+     * back here. The Ultimate's CIA and raster clocks scale with its CPU, so
+     * they cannot measure turbo against themselves; demos/vsprites/hwtest.py
+     * proves actual throughput by comparing the completed workload over host
+     * wall time. This suite can still measure badline stalls at one speed.
      *
      * It runs only when the machine's owner has set "Turbo Control" to
      * "U64 Turbo Registers". A program cannot set that for itself, which is the
      * whole reason ultimate_turbo_available() exists, so skipping here is a
      * normal outcome and not a gap. hwtest.py has a scenario that switches the
      * setting on, runs this, and puts it back.
-     */
+    */
     if (!ultimate_turbo_available()) {
-        skip("turbo-speed-changes", "turbo control is off in the ultimate settings");
+        skip("turbo-registers", "turbo control is off in the ultimate settings");
     } else {
         uint8_t  entry = ultimate_turbo_get();
-        uint16_t slow, fast, nobad;
+        uint16_t slow, nobad;
 
         turbo_ran = 1;
         cycles_calibrate();     /* before the first work_per_frame(), or the
                                    timer's own cost is never subtracted */
-        check("turbo-set-1mhz", ULTIMATE_OK, ultimate_turbo_set(U64_SPEED_1MHZ));
-        check("turbo-get-1mhz", U64_SPEED_1MHZ, ultimate_turbo_get());
+        check("turbo-set-1mhz", ULTIMATE_OK,
+              ultimate_turbo_set(U64_SPEED_1MHZ));
+        check("turbo-get-1mhz", U64_SPEED_1MHZ,
+              ultimate_turbo_get());
         slow = work_per_frame();
 
+        check("turbo-set-2mhz", ULTIMATE_OK, ultimate_turbo_set(U64_SPEED_2MHZ));
+        check("turbo-get-2mhz", U64_SPEED_2MHZ, ultimate_turbo_get());
+        check("turbo-set-3mhz", ULTIMATE_OK, ultimate_turbo_set(U64_SPEED_3MHZ));
+        check("turbo-get-3mhz", U64_SPEED_3MHZ, ultimate_turbo_get());
         check("turbo-set-4mhz", ULTIMATE_OK, ultimate_turbo_set(U64_SPEED_4MHZ));
         check("turbo-get-4mhz", U64_SPEED_4MHZ, ultimate_turbo_get());
-        fast = work_per_frame();
+        check("turbo-set-max", ULTIMATE_OK, ultimate_turbo_set(U64_SPEED_MAX));
+        check("turbo-get-max", U64_SPEED_MAX, ultimate_turbo_get());
 
-        printf("# work/frame: %u at 1mhz, %u at 4mhz\n", slow, fast);
-        /* four times the clock; two times the work is the honest floor. */
-        check("turbo-speed-changes", 1,
-              (fast != 0 && (slow / fast) >= 2) ? 1 : 0);
+        check("turbo-return-to-1mhz", ULTIMATE_OK,
+              ultimate_turbo_set(U64_SPEED_1MHZ));
+        check("turbo-get-after-return", U64_SPEED_1MHZ,
+              ultimate_turbo_get());
 
         /*
          * Badlines off is the other half of the register, and the half that is
@@ -619,7 +623,6 @@ int main(void)
          * 25 character rows, which is about 6% of a frame. The threshold is 3%,
          * comfortably above the 2% this measurement moves by between runs.
          */
-        ultimate_turbo_set(U64_SPEED_1MHZ);
         check("badlines-off", ULTIMATE_OK, ultimate_turbo_badlines(0));
         nobad = work_per_frame();
         check("badlines-on", ULTIMATE_OK, ultimate_turbo_badlines(1));
@@ -643,6 +646,61 @@ int main(void)
 
         /* Put the machine back at the speed it was found at. */
         ultimate_turbo_set(entry);
+    }
+
+    /* Every vsprite operation, against three bytes restored immediately. */
+    {
+        static const uint8_t source[] = { 0x0F };
+        static const uint8_t masked_source[] = { 0x05 };
+        static const uint8_t mask[] = { 0x0F };
+        ultimate_vsprite sprite;
+        uint8_t *bitmap = (uint8_t *)0xC000;
+        uint8_t *copy_bitmap = (uint8_t *)0xC100;
+        uint8_t *screen = (uint8_t *)0xC200;
+        uint8_t saved_bitmap = bitmap[0];
+        uint8_t saved_copy = copy_bitmap[0];
+        uint8_t saved_screen = screen[0];
+
+        memset(&sprite, 0, sizeof(sprite));
+        sprite.bitmap = bitmap;
+        sprite.source = source;
+        sprite.x = 0;
+        sprite.y = 0;
+        sprite.width = 1;
+        sprite.height = 1;
+
+        bitmap[0] = 0xF0;
+        check("vsprite-or", ULTIMATE_OK, ultimate_vsprite_draw(&sprite));
+        check("vsprite-or-result", 0xFF, bitmap[0]);
+
+        bitmap[0] = 0xF0;
+        sprite.source = masked_source;
+        sprite.mask = mask;
+        sprite.flags = VSPRITE_F_MASKED;
+        check("vsprite-masked", ULTIMATE_OK, ultimate_vsprite_draw(&sprite));
+        check("vsprite-masked-result", 0x05, bitmap[0]);
+
+        bitmap[0] = 0x00;
+        copy_bitmap[0] = 0xA5;
+        sprite.source = copy_bitmap;
+        sprite.mask = NULL;
+        sprite.flags = VSPRITE_F_COPY;
+        check("vsprite-copy", ULTIMATE_OK, ultimate_vsprite_draw(&sprite));
+        check("vsprite-copy-result", 0xA5, bitmap[0]);
+
+        bitmap[0] = 0x00;
+        screen[0] = 0x00;
+        sprite.source = source;
+        sprite.screen = screen;
+        sprite.color = 0x2E;
+        sprite.flags = VSPRITE_F_COLOR;
+        check("vsprite-color", ULTIMATE_OK, ultimate_vsprite_draw(&sprite));
+        check("vsprite-color-bitmap", 0x0F, bitmap[0]);
+        check("vsprite-color-screen", 0x2E, screen[0]);
+
+        bitmap[0] = saved_bitmap;
+        copy_bitmap[0] = saved_copy;
+        screen[0] = saved_screen;
     }
 
     /*
@@ -730,6 +788,10 @@ int main(void)
         check("write-data", ULTIMATE_OK, err);
         check("write-close", ULTIMATE_OK, ultimate_close());
 
+        check("open-write-only", ULTIMATE_OK,
+              ultimate_open(scratch_path, DOS_FA_WRITE));
+        check("close-write-only", ULTIMATE_OK, ultimate_close());
+
         /* Reopen for reading, seek past the first two bytes, and read the rest.
            A read that ignored the seek would answer four bytes from $DE. */
         check("reopen-for-read", ULTIMATE_OK,
@@ -756,6 +818,14 @@ int main(void)
         check("delete-removed-it", ULTIMATE_ERR_DEVICE, err);
         if (err == ULTIMATE_OK)
             ultimate_close();
+
+        check("open-create-new", ULTIMATE_OK,
+              ultimate_open(scratch_path, DOS_FA_WRITE | DOS_FA_CREATE_NEW));
+        check("close-create-new", ULTIMATE_OK, ultimate_close());
+        check("create-new-refuses-existing", ULTIMATE_ERR_DEVICE,
+              ultimate_open(scratch_path, DOS_FA_WRITE | DOS_FA_CREATE_NEW));
+        check("create-new-cleanup", ULTIMATE_OK,
+              ultimate_delete(scratch_path));
     }
 after_write:
 
@@ -940,6 +1010,36 @@ after_write:
                                          sizeof(reu_work)));
                 check("audio-configure", ULTIMATE_OK,
                       ultimate_audio_configure(&voice));
+
+                voice.flags = UA_CTRL_16BIT;
+                voice.volume = UA_VOLUME_MAX;
+                voice.pan = UA_PAN_LEFT;
+                check("audio-16bit-mono", ULTIMATE_OK,
+                      ultimate_audio_configure(&voice));
+                voice.flags = UA_CTRL_INTERLEAVE;
+                voice.pan = UA_PAN_CENTER;
+                check("audio-8bit-stereo", ULTIMATE_OK,
+                      ultimate_audio_configure(&voice));
+                voice.flags = UA_CTRL_16BIT | UA_CTRL_INTERLEAVE;
+                voice.pan = UA_PAN_RIGHT;
+                check("audio-16bit-stereo", ULTIMATE_OK,
+                      ultimate_audio_configure(&voice));
+                voice.flags = UA_CTRL_REPEAT;
+                voice.repeat_a = 0;
+                voice.repeat_b = sizeof(reu_work);
+                check("audio-repeat", ULTIMATE_OK,
+                      ultimate_audio_configure(&voice));
+                check("audio-repeat-start", ULTIMATE_OK,
+                      ultimate_audio_start(voice.channel, voice.flags));
+                check("audio-repeat-stop", ULTIMATE_OK,
+                      ultimate_audio_stop(voice.channel));
+
+                voice.flags = UA_CTRL_IRQ;
+                voice.volume = 0;
+                voice.pan = UA_PAN_CENTER;
+                voice.repeat_b = 0;
+                check("audio-irq-configure", ULTIMATE_OK,
+                      ultimate_audio_configure(&voice));
                 __asm__("sei");
                 start_err = ultimate_audio_start(voice.channel, voice.flags);
                 for (polls = 0; polls != 0xFFFF; ++polls)
@@ -980,7 +1080,12 @@ after_write:
      * /Temp, used, and deleted. big.bin-style fixtures are not needed - the
      * file this stats is one it wrote a moment earlier, so the size it checks
      * is a size it knows.
+     *
+     * FILE_STAT, COPY_FILE and RENAME_FILE take names in the current
+     * directory on current firmware; unlike OPEN_FILE, they do not resolve an
+     * absolute path. Enter /Temp once and use names for this whole group.
      * ------------------------------------------------------------------ */
+    check("chdir-temp", ULTIMATE_OK, ultimate_chdir(temp_root));
     err = ultimate_open(stat_src,
                         DOS_FA_CREATE_ALWAYS | DOS_FA_WRITE | DOS_FA_READ);
     if (err != ULTIMATE_OK) {
@@ -996,7 +1101,7 @@ after_write:
         check("stat", ULTIMATE_OK, err);
         check("stat-reports-the-size", 4, (int)finfo.size);
         check("stat-is-not-a-directory", 0, finfo.attrib & DOS_ATTR_DIR);
-        check("stat-terminated-the-name", 0x73, (int)finfo.name[0]);   /* 's' */
+        check("stat-terminated-the-name", 0x53, (int)finfo.name[0]);   /* 'S' */
 
         check("fstat-opens", ULTIMATE_OK, ultimate_open(stat_src, DOS_FA_READ));
         finfo.size = 0xFFFFFFFFUL;
@@ -1010,30 +1115,28 @@ after_write:
          * counted in the argument length, and a length one byte short makes
          * the firmware read the two names as one.
          */
-        check("copy", ULTIMATE_OK, ultimate_copy(stat_src, stat_dst));
+        check("copy-directory", ULTIMATE_OK, ultimate_mkdir(temp_subdir));
+        check("copy", ULTIMATE_OK,
+              ultimate_copy(stat_src, copy_destination));
+        check("copy-enter-directory", ULTIMATE_OK,
+              ultimate_chdir(temp_subdir));
         finfo.size = 0xFFFFFFFFUL;
-        check("copy-made-a-copy", ULTIMATE_OK, ultimate_stat(stat_dst, &finfo));
+        check("copy-made-a-copy", ULTIMATE_OK, ultimate_stat(stat_src, &finfo));
         check("copy-copied-the-bytes", 4, (int)finfo.size);
 
-        check("rename", ULTIMATE_OK, ultimate_rename(stat_dst, stat_ren));
+        check("rename", ULTIMATE_OK, ultimate_rename(stat_src, stat_ren));
         check("rename-moved-it", ULTIMATE_OK, ultimate_stat(stat_ren, &finfo));
         check("rename-left-nothing-behind", ULTIMATE_ERR_DEVICE,
-              ultimate_stat(stat_dst, &finfo));
+              ultimate_stat(stat_src, &finfo));
 
         check("delete-the-copy", ULTIMATE_OK, ultimate_delete(stat_ren));
+        check("copy-leave-directory", ULTIMATE_OK, ultimate_chdir(parent_dir));
         check("delete-the-source", ULTIMATE_OK, ultimate_delete(stat_src));
-
-        err = ultimate_mkdir(temp_subdir);
-        check("mkdir", ULTIMATE_OK, err);
-        if (err != ULTIMATE_OK) {
-            skip("mkdir-made-a-directory", "the directory was not created");
-            skip("mkdir-cleanup", "the directory was not created");
-        } else {
-            check("mkdir-made-a-directory", DOS_ATTR_DIR,
-                  ultimate_stat(temp_subdir, &finfo) == ULTIMATE_OK
-                      ? (finfo.attrib & DOS_ATTR_DIR) : 0);
-            check("mkdir-cleanup", ULTIMATE_OK, ultimate_delete(temp_subdir));
-        }
+        check("copy-directory-exists", DOS_ATTR_DIR,
+              ultimate_stat(temp_subdir, &finfo) == ULTIMATE_OK
+                  ? (finfo.attrib & DOS_ATTR_DIR) : 0);
+        check("copy-directory-cleanup", ULTIMATE_OK,
+              ultimate_delete(temp_subdir));
     }
 
     /*
@@ -1357,7 +1460,33 @@ after_write:
 #ifdef HTTP_PEER_HOST
         uint16_t got = 0;
         uint8_t  handle = 0xFF;
+#endif
+        /* Creating a request does not send it, so every verb can be checked
+           without a server. Close each handle before trying the next. */
+        {
+            static const uint8_t verbs[] = {
+                HTTP_VERB_GET, HTTP_VERB_PUT, HTTP_VERB_POST,
+                HTTP_VERB_PATCH, HTTP_VERB_DELETE, HTTP_VERB_HEAD,
+                HTTP_VERB_OPTIONS, HTTP_VERB_CONNECT, HTTP_VERB_TRACE
+            };
+            uint8_t i;
+            uint8_t handle;
+            uint8_t verbs_ok = 1;
 
+            for (i = 0; i < sizeof(verbs); ++i) {
+                handle = 0xFF;
+                if (ultimate_http_open(verbs[i], http_local_url, &handle)
+                        != ULTIMATE_OK ||
+                    ultimate_http_close(handle) != ULTIMATE_OK) {
+                    verbs_ok = 0;
+                    break;
+                }
+            }
+            check("http-all-verbs-open-and-close", 1, verbs_ok);
+            ultimate_http_free_all();
+        }
+
+#ifdef HTTP_PEER_HOST
         build_url("/hello");
         printf("# url=%s\n", http_url);
 
@@ -1480,6 +1609,32 @@ after_write:
                 check("http-body-binary", ULTIMATE_OK,
                       ultimate_http_body_binary(body, blob, sizeof(blob)));
                 check("http-body-binary-free", ULTIMATE_OK,
+                      ultimate_http_body_free(body));
+            }
+
+            body = HTTP_BODY_NONE;
+            err = ultimate_http_body(HTTP_BODY_JSON_ARRAY, &body);
+            check("http-body-json-array-create", ULTIMATE_OK, err);
+            if (err != ULTIMATE_OK) {
+                skip("http-body-json-array", "no body was created");
+                skip("http-body-json-array-free", "no body was created");
+            } else {
+                check("http-body-json-array", ULTIMATE_OK,
+                      ultimate_http_body_int(body, "", 1));
+                check("http-body-json-array-free", ULTIMATE_OK,
+                      ultimate_http_body_free(body));
+            }
+
+            body = HTTP_BODY_NONE;
+            err = ultimate_http_body(HTTP_BODY_URL_ENCODED, &body);
+            check("http-body-url-encoded-create", ULTIMATE_OK, err);
+            if (err != ULTIMATE_OK) {
+                skip("http-body-url-encoded", "no body was created");
+                skip("http-body-url-encoded-free", "no body was created");
+            } else {
+                check("http-body-url-encoded", ULTIMATE_OK,
+                      ultimate_http_body_string(body, "name", "ada"));
+                check("http-body-url-encoded-free", ULTIMATE_OK,
                       ultimate_http_body_free(body));
             }
 

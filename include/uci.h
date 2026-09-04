@@ -6,11 +6,10 @@
  * new bindings, and for programs that need to issue a raw UCI command.
  *
  * Rules this layer obeys:
- *   - no heap, no stdlib, no hidden buffers: every byte lands in a buffer the
- *     caller owns
+ *   - no heap or stdlib; reply data lands in caller-owned buffers, while a
+ *     fixed internal prefix preserves enough status for decoding
  *   - no interrupts required, no zero page beyond what the compiler uses
- *   - every entry point is bounded in time: it either completes or returns
- *     ULTIMATE_ERR_TIMEOUT
+ *   - waits use the caller-selected timeout budget; zero means wait forever
  *
  * Part of the Ultimate SDK. SPDX-License-Identifier: MIT
  */
@@ -136,7 +135,8 @@ uint8_t uci_more_blocks(void);
 
 /*
  * Ask the Ultimate to abandon the exchange in progress and force the transport
- * back to idle. Safe to call at any time; bounded like everything else.
+ * back to idle. Safe to call at any time; bounded when the timeout budget is
+ * nonzero.
  */
 uint8_t uci_abort(void);
 
@@ -145,12 +145,12 @@ uint8_t uci_abort(void);
  *
  * The wall-clock meaning of a unit depends on the CPU speed, which on Ultimate
  * hardware ranges from 1 MHz to 48 MHz - see docs/compatibility.md. Services
- * that wait on the network or on a disk raise this themselves; restore it with
- * uci_set_timeout(UCI_TIMEOUT_DEFAULT) afterwards.
+ * that perform socket creation or an HTTP exchange change this themselves and
+ * restore the caller's value afterwards.
  *
- * uci_init() installs UCI_TIMEOUT_DEFAULT, so a program that never calls
- * uci_set_timeout() still gets the bounded-time guarantee. UCI_TIMEOUT_DEFAULT
- * and UCI_TIMEOUT_FOREVER come from uci_protocol.h.
+ * uci_init() installs UCI_TIMEOUT_DEFAULT, so raw calls are bounded unless a
+ * program deliberately selects UCI_TIMEOUT_FOREVER. UCI_TIMEOUT_DEFAULT and
+ * UCI_TIMEOUT_FOREVER come from uci_protocol.h.
  */
 void    uci_set_timeout(uint8_t units);
 uint8_t uci_get_timeout(void);
@@ -181,11 +181,13 @@ uint8_t uci_status_format(uint8_t target);
  * record the numeric device code. Exposed because it is worth unit-testing on
  * its own and because services occasionally re-decode a stashed status.
  *
- * The encoding is determined from the bytes: three leading ASCII digits is the
- * HTTP form, two is the "NN,TEXT" form, and a leading non-digit is a single
- * binary byte. The three cannot be confused for one another. Pass the first
- * four bytes of the status at minimum - a shorter prefix can look like a
- * different encoding.
+ * The encoding is determined from the bytes: an HTTP response line contributes
+ * the three digits after its first space; three leading ASCII digits are the
+ * firmware HTTP form; two are the "NN,TEXT" form; and a SoftwareIEC reply is a
+ * single binary byte. Other nonnumeric target text is a device failure with no
+ * numeric code. Pass the complete status when possible: numeric forms need four
+ * bytes, while an HTTP response line must include its status digits. A nonzero
+ * statuslen requires a non-NULL status pointer.
  *
  * An empty status buffer is success: several commands stay quiet when all is
  * well.

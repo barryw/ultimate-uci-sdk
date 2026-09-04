@@ -163,6 +163,7 @@ sharing them.
 | `ultimate_audio_irq_status` | — | `A` = end-of-sample channel mask |
 | `ultimate_audio_irq_clear` | `A` = channel | `A` = result code |
 | `ultimate_audio_load_wav` | `ult_buf` = name, `ult_reu` = REU address, `A`/`X` = `ultimate_audio_voice` | `A` = result code; the voice's address, length, rate and flags filled |
+| `ultimate_vsprite_draw` | `A`/`X` = `VSPRITE_SIZE` descriptor | `A` = result code; bitmap changed in place |
 | `ultimate_net_ifcount` | — | `A` = result, `ult_iface` = interfaces |
 | `ultimate_net_macaddr` | `ult_iface`, `ult_buf` = 6 bytes | `A` = result code |
 | `ultimate_net_ipconfig` | `ult_iface`, `ult_buf` = 12 bytes | `A` = result code |
@@ -187,12 +188,13 @@ sharing them.
 | `uci_get_timeout_a` | — | `A` = current budget |
 | `uci_last_code` | — | `A` = low, `X` = high of the raw device code |
 
-**Two of these wait without a limit.** `ultimate_net_connect`, its UDP twin and
-`ultimate_http_exchange` contain a name lookup and a TCP connect, and a connect
+**Three of these wait without a limit.** `ultimate_net_connect`, its UDP twin
+and `ultimate_http_exchange` contain a name lookup and a TCP connect, and a connect
 to an address with nothing at it was measured at 30.8 seconds - which no value
 of the timeout byte can express. They run on `UCI_TIMEOUT_FOREVER` and put the
-caller's budget back afterwards. Everything else here is bounded. See
-docs/uci.md.
+caller's budget back afterwards. Other returning calls are bounded when the
+budget is nonzero. `ultimate_reboot` does not return, and `ultimate_freeze`
+waits for the user. See docs/uci.md.
 
 **Stopping a directory walk early needs `uci_abort`.** `ultimate_readdir` is one
 live exchange with the firmware, which holds a reply block until it is released

@@ -17,7 +17,8 @@
 // vblank sync, and the ball's sprites float over it. The boing plays through
 // the Ultimate's PCM engine from the REU on every bounce.
 //
-// The SDK (the standalone blob at $8000, its RAM at $a940): turbo, REU
+// The SDK (the standalone blob at $8000, its RAM at $5900): turbo, REU,
+// software-vsprite drawing,
 // stash/fetch, audio init/configure/start/stop. UCI and turbo are mandatory;
 // without either the SYS returns to BASIC. REU and audio remain optional.
 //
@@ -36,7 +37,7 @@
 .const SHADOW   = $4c00        // 12 x 84 ellipse, row-major, from shadow.bin
 .const SCRATCH  = $5000        // 13 x 84, the ellipse shifted, column-major
 .const SCR_CLEAN = $5500       // the 1000 screen RAM bytes, restored per cell
-.const PCM      = $aa00        // boing.pcm, stashed to the REU at start
+.const PCM      = $ad30        // boing.pcm, stashed to the REU at start
 .const PCM2     = $e000        // second piece, under the KERNAL ($01 = $35)
 .const PTR_A    = (LIVE_A - $4000) / 64   // 16
 .const PTR_B    = (LIVE_B - $4000) / 64   // 32
@@ -53,6 +54,7 @@
 .const AUDIO_CONF    = BLOB + $2f1
 .const AUDIO_START   = BLOB + $2f4
 .const AUDIO_STOP    = BLOB + $2f7
+.const VSPRITE_DRAW  = BLOB + uci.BLOB_VSPRITE_DRAW
 .const BP            = BLOB + $100
 .const BP_RESULT     = BP + $00
 .const BP_ADDR       = BP + $03
@@ -76,13 +78,7 @@
 .const SH_COLS  = 13
 
 .label zpS   = $02
-.label zpP   = $04
 .label zpN   = $06
-.label zpD   = $08
-.label zpSrc = $0a
-.label zpEnd = $0c
-.label zpCov = $0d
-.label zpCol = $0e
 .label zpScr = $10
 .label zpRow = $13
 .label zpSeg = $14
@@ -743,6 +739,7 @@ shnew:
     bcs !+
     sta sh_nseg
 !:  jsr shadow_draw
+shadow_done:
     lda #1
     sta sh_valid
     rts
@@ -869,135 +866,20 @@ shadow_draw:
     lda #0
     rol                 // column 32 and up: c0*8 needs a ninth bit
     sta sh_r_c0x8h
-    ldy sh_cr0
-    lda row312_lo, y
-    clc
-    adc sh_sy
-    sta zpD
-    lda row312_hi, y
-    adc #0
-    sta zpD+1
-    lda zpD
-    clc
-    adc sh_r_c0x8
-    sta zpD
-    lda zpD+1
-    adc sh_r_c0x8h
-    clc
-    adc #>BITMAP
-    sta zpD+1
-    lda row40_lo, y
-    clc
-    adc sh_c0
-    sta zpScr
-    lda row40_hi, y
-    adc #>SCREEN
-    sta zpScr+1
-    lda #<SCRATCH
-    sta zpSrc
-    lda #>SCRATCH
-    sta zpSrc+1
-    lda #0
-    sta zpCol
-dcol:
-    lda zpSrc
-    sta dsrc1+1
-    sta dsrc2+1
-    lda zpSrc+1
-    sta dsrc1+2
-    sta dsrc2+2
-    lda zpD
-    sta dld+1
-    sta dst+1
-    sta zpP
-    lda zpD+1
-    sta dld+2
-    sta dst+2
-    sta zpP+1
-    lda zpScr
-    sta zpS
-    lda zpScr+1
-    sta zpS+1
-    lda #8
-    sec
-    sbc sh_yin
-    sta zpEnd
-    lda sh_nseg
-    sta zpN
-    ldx #0
-dseg:
-    lda #0
-    sta zpCov
-dbyte:
-dsrc1:
-    lda $ffff, x
-    ora zpCov
-    sta zpCov
-dsrc2:
-    lda $ffff, x
-dld:
-    ora $ffff, x
-dst:
-    sta $ffff, x
-    inx
-    cpx zpEnd
-    bne dbyte
-    lda zpCov
-    beq !+
-    ldy #0
-    lda #SHADOW_CELL
-    sta (zpS), y
-!:  dec zpN
-    beq dcol_done
-    cpx #SH_ROWS
-    beq dcol_done
-    lda zpP
-    clc
-    adc #<312
-    sta zpP
-    sta dld+1
-    sta dst+1
-    lda zpP+1
-    adc #>312
-    sta zpP+1
-    sta dld+2
-    sta dst+2
-    lda zpS
-    clc
-    adc #40
-    sta zpS
-    bcc !+
-    inc zpS+1
-!:  lda zpEnd
-    clc
-    adc #8
-    cmp #SH_ROWS
-    bcc !+
-    lda #SH_ROWS
-!:  sta zpEnd
-    jmp dseg
-dcol_done:
-    lda zpD
-    clc
-    adc #8
-    sta zpD
-    bcc !+
-    inc zpD+1
-!:  lda zpSrc
-    clc
-    adc #SH_ROWS
-    sta zpSrc
-    bcc !+
-    inc zpSrc+1
-!:  inc zpScr
-    bne !+
-    inc zpScr+1
-!:  inc zpCol
-    lda zpCol
-    cmp sh_ncols
-    beq !+
-    jmp dcol
-!:  rts
+    lda sh_c0
+    sta vs_desc + uci.VSPRITE_X
+    lda sh_sy
+    sta vs_desc + uci.VSPRITE_Y
+    lda sh_ncols
+    sta vs_desc + uci.VSPRITE_WIDTH
+    lda #<vs_desc
+    sta BP_ADDR
+    lda #>vs_desc
+    sta BP_ADDR+1
+    jsr VSPRITE_DRAW
+    lda BP_RESULT
+    sta ST_RESULT
+    rts
 
 // ---------------------------------------------------------------------------
 // The boing: channel 0, 8-bit mono, one shot, from the REU. Reconfigured on
@@ -1078,8 +960,6 @@ play_boing:
 // ---------------------------------------------------------------------------
 spr_colour: .byte $01, $02, $01, $02, $01, $02, $01, $02
 
-row312_lo:  .fill 25, <(i*312)
-row312_hi:  .fill 25, >(i*312)
 row320_lo:  .fill 25, <(i*320)
 row320_hi:  .fill 25, >(i*320)
 row40_lo:   .fill 25, <(i*40)
@@ -1121,6 +1001,13 @@ sh_r_c0x8h: .byte 0
 sh_r_ncols: .byte 0
 sh_r_cr0:   .byte 0
 sh_r_nseg:  .byte 0
+
+vs_desc:
+    .word BITMAP
+    .word SCRATCH
+    .word 0
+    .word SCREEN
+    .byte 0, 0, SH_COLS, SH_ROWS, SHADOW_CELL, uci.VSPRITE_F_COLOR
 
 .align $100
 disc:

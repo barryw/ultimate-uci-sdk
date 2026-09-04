@@ -22,7 +22,7 @@ The assembly core costs the reach and keeps everything else:
 
 | | C core | assembly core |
 |---|---|---|
-| size | — | 1694 bytes for the transport, 498 for the service layer, and 98-731 for each service on top |
+| size | — | measured by the build; not duplicated here because each service changes it |
 | assembly callers | must initialise cc65's software stack | need nothing at all |
 | RAM | BSS, wherever the linker puts it | `UCI_VARS` places every byte, or BSS by default |
 | zero page | the C runtime's | four bytes, at an address you choose |
@@ -114,12 +114,11 @@ probing report a working SoftwareIEC target as absent — on hardware, with ever
 host and emulator test passing.
 
 The fix was not to special-case that command. `uci_decode_status()` classifies a
-status by its leading bytes, and the four encodings are mutually exclusive on
-sight: `HTTP/` is the response line an exchange answers with, three leading
-ASCII digits is the firmware's own `NNN TEXT`, two is `NN,TEXT`, and any other
-leading non-digit is a single binary byte. The binary codes in use are
-`$00`-`$09` and `$80`, none of which is an ASCII digit or an `H`, so nothing can
-be read two ways.
+status by its leading bytes: `HTTP/` is the response line an exchange answers
+with, three leading ASCII digits is the firmware's own `NNN TEXT`, two is
+`NN,TEXT`, and a SoftwareIEC reply is a single binary byte. Other nonnumeric
+text from a target is a device error with no numeric code. The binary codes in
+use are `$00`-`$09` and `$80`, none of which is an ASCII digit or an `H`.
 
 The fourth was added the same way and for the same reason: an HTTP exchange
 answers with the whole response header block rather than a code, and until the
@@ -131,26 +130,26 @@ applying them to some other target would be inventing an error rather than
 reporting one. But it no longer decides how to parse.
 
 Two things follow. A firmware that makes the target consistent, in either
-direction, needs no change here. And because the classification depends on the
-leading bytes, the SDK always captures the first four status bytes itself rather
-than decoding from the caller's buffer — otherwise a caller passing a two-byte
-status buffer would turn `404 ENTRY NOT FOUND` into a cheerful `40`.
+direction, needs no change here. And because classification includes an HTTP
+response line, the SDK always captures the first sixteen status bytes itself
+rather than decoding from the caller's buffer — otherwise a short caller buffer
+could change the result.
 
 ## Caller-owned buffers, everywhere
 
 ```c
-uint8_t ultimate_read(uint8_t handle, void *buf, uint16_t len, uint16_t *got);
+uint8_t ultimate_read(uint8_t *buf, uint16_t len, uint16_t *outlen);
 ```
 
 not
 
 ```c
-uint8_t *ultimate_read(uint8_t handle, uint16_t len);   /* no */
+uint8_t *ultimate_read(uint16_t len);   /* no */
 ```
 
 No allocator, no hidden static buffers a second call would stomp, no surprises
 about where memory came from on a machine with 38 kilobytes of it. The SDK's
-entire private state is 25 bytes.
+private state is the generated `UCI_VARS_SIZE` block plus four zero-page bytes.
 
 Two conventions make this pleasant rather than tedious:
 
@@ -201,15 +200,16 @@ why that is reliable and for the trap it contains.
 
 ## Timeouts
 
-Every wait is bounded. `uci_set_timeout()` takes a budget in units of 256 status
-polls; zero means wait forever, which is a legitimate choice for a command whose
-duration genuinely cannot be bounded.
+Ordinary waits are bounded. `uci_set_timeout()` takes a budget in units of 256
+status polls; zero means wait forever, which is a legitimate choice for a
+command whose duration genuinely cannot be bounded.
 
 Polls, not milliseconds, because there is no timer a game can safely borrow.
 The consequence is that the budget scales with CPU speed, and Ultimate hardware
-spans 1 MHz to 48 MHz — see [compatibility.md](compatibility.md). Services that
-wait on a network or a disk raise the budget themselves and put it back
-afterwards.
+spans 1 MHz to 48 MHz — see [compatibility.md](compatibility.md). Socket creation
+and HTTP exchange temporarily select the unbounded setting because firmware can
+take longer than the largest finite budget; they restore the caller's setting.
+Reboot cannot return, and freeze waits for the user.
 
 ## Naming
 
@@ -221,9 +221,9 @@ not cover yet — both fine, and both worth being able to see at a glance.
 
 Not "you can call the C functions if you set up the stack". The assembly binding
 provides a request block at a fixed address, entry points that take their
-arguments in registers, and a documented register contract. The one thing it
-does inherit from the C core is the runtime initialisation requirement, which
-[asm-abi.md](asm-abi.md) states up front rather than leaving to be discovered.
+arguments in registers, and a documented register contract. It needs no C
+runtime, software stack, start-up code or initialised data; [asm-abi.md](asm-abi.md)
+states the complete contract.
 
 ## Room left deliberately
 

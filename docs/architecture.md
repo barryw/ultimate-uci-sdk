@@ -11,8 +11,8 @@
                           thin adapters, no protocol knowledge
                                      |
                           Layer 2: services
-                          dos, file, network, http, control
-                          (today: detection and identity)
+                          files, disks, control, network, HTTP,
+                          palette, clock, REU, audio, vsprites
                                      |
                           Layer 1: UCI core
                           framing, handshake, timeouts, error translation
@@ -26,7 +26,7 @@ binding that reimplements the handshake is a bug, not a feature.
 
 ## Layer 1 — UCI core
 
-`src/uci/uci_core.s`. About 1470 lines of 6502, assembling to 1694 bytes.
+`src/uci/uci_core.s`, implemented in 6502 assembly.
 
 Owns: command framing, the four-state handshake, bounded waiting, queue
 draining, abort and recovery, and the translation of firmware status replies
@@ -37,38 +37,40 @@ call it.
 
 Constraints it holds itself to:
 
-- No heap. No hidden buffers. Every byte lands somewhere the caller owns, except
-  a four-byte scratch used when the caller wants no status buffer at all.
-- `UCI_VARS_SIZE` (191) bytes of static RAM across the whole SDK: 30 in the
-  transport, 47 in the service layer (16 of which is the buffer capability
-  probing compares against), 44 for the service layer's own request block and
-  the caller-facing one `bindings/asm/ultimate_asm.s` exports as `uci_req`, 24
-  shared by the palette, DOS, file, REU, net and http services, and 45 more for
-  the second caller string and the staging buffer the clock and the HTTP body
-  builder marshal through, plus one byte for Ultimate Audio availability.
+- No heap. Reply data lands in caller-owned buffers. The transport keeps a
+  16-byte status prefix so decoding does not depend on the caller's buffer size.
+- `UCI_VARS_SIZE` (currently 191) bytes of static RAM across the whole SDK. The
+  generated constant and assembly-time layout assertion are authoritative.
 - Four bytes of zero page, and the caller picks the address.
 - No interrupts. The IRQ-on-completion bit exists in the hardware and is exposed
   as a constant, but nothing in the SDK requires an interrupt handler.
-- Every entry point terminates. There is no unbounded loop anywhere, including
-  the ones the hardware's queue behaviour would otherwise make infinite — see
+- Ordinary calls use a bounded polling budget. Network connect, its UDP twin and
+  HTTP exchange wait without that limit because firmware connection attempts can
+  exceed it; reboot does not return, and freeze waits for the user. See
   [uci.md](uci.md), "Queue pointer saturation".
 
 ## Layer 2 — services
 
-`src/uci/ultimate.s` today: bring-up, capability detection, identity.
-
-This is where the growth happens. Each service turns a family of UCI commands
-into an API that reads naturally on a C64, and each one is built from
-`uci_exec()` alone:
+Each service turns a family of UCI commands or a documented hardware block into
+an API that reads naturally on a C64:
 
 ```
+src/uci/ultimate.s  bring-up, capability detection and identity
 src/uci/dos.s       open, close, read, write, seek, delete, directories
+src/uci/dosinfo.s   metadata, rename, copy, directories and home
+src/uci/disk.s      mount, unmount and swap disk images
 src/uci/file.s      load, bload, save - two-tier, over dos or SoftwareIEC
 src/uci/reu.s       stash and fetch over DMA, the DOS REU pair, and how big it is
 src/uci/palette.s   the running palette, on the control target
 src/uci/turbo.s     CPU speed, which is not a UCI command at all
 src/uci/net.s       TCP and UDP sockets, on the network target
-src/uci/http.s      fetching things over HTTP
+src/uci/http.s      HTTP requests
+src/uci/httpbody.s  firmware-side HTTP request bodies
+src/uci/control.s   reset, freeze and drive state
+src/uci/clock.s     the battery-backed clock
+src/uci/audio.s     direct Ultimate Audio voice control
+src/uci/wav.s       PCM WAV loading into the REU
+src/uci/vsprite.s   local bitmap compositing, with no Ultimate required
 ```
 
 Services are where target-specific knowledge lives — that `82` means something
@@ -92,12 +94,10 @@ answers with its response line rather than a status code and the *generic form*
 was reporting a device error for every request that worked. A service-layer
 patch would have left `uci_exec()` callers wrong. See docs/uci.md.
 
-**Two services do not go through `uci_exec` at all, and the list is closed.**
-`turbo.s` and `reu.s` drive hardware registers directly, because the operations
-they expose — CPU speed, and moving bytes between C64 RAM and the expansion —
-have no UCI command behind them. The test that admits one is exactly that: does
-the operation exist on the interface at all. `tools/test_registers.py` enforces
-the boundary.
+Turbo control, REU stash/fetch and Ultimate Audio drive documented hardware
+registers directly because no UCI command provides those operations. Software
+vsprites only modify caller-owned bitmap memory. `tools/test_registers.py`
+enforces the REU and audio register boundaries.
 
 ## Layer 3 — bindings
 
@@ -112,20 +112,21 @@ whatever thin thing makes the one implementation reachable from that toolchain.
 | Oscar64, llvm-mos, KickC | `bindings/blob` — the same, since none of them can link a ca65 object | working |
 | BASIC | `src/basic` — a wedge that owns four RAM vectors and adds 23 keywords | working, `.prg` and `.crt` |
 
-None of these contain protocol knowledge. `bindings/asm/ultimate_asm.s` is 30
-lines of `jmp`, and the blob is the library's own object files linked at a base
+None of these contain protocol knowledge. `bindings/asm/ultimate_asm.s` is a
+thin adapter, and the blob is the library's own object files linked at a base
 address — not a port, and not a second implementation.
 
-## Testing, in two layers
+## Testing
 
 | Layer | Where | Runs | Catches |
 |---|---|---|---|
+| Host invariants | `tools/test_*.py` | Python | generated tables, ABI/layout drift, source boundaries and packaging rules |
 | Emulator | `tests/emulator` | sim6502 in Docker | the assembled code itself, against a device that makes it wait |
 | Hardware | `tests/hardware` | a real Ultimate | firmware reality, on whatever version the machine runs |
 
-There is no host layer, and there deliberately is not one. The SDK is 6502
-assembly, so the only machine that can run its logic is a 6502 — a host test
-would have to reimplement the thing it is testing.
+Host tests protect generated and structural contracts; they do not pretend to
+execute SDK logic. The SDK is 6502 assembly, so behavioral tests run that code
+under sim6502 and on hardware.
 
 The layer that existed before the assembly rewrite is the argument for that.
 It compiled the SDK's C source with a host compiler, where a string literal is
@@ -142,12 +143,9 @@ instructions the C64 will really execute.
 
 ## What is deliberately not here
 
-**Game and demo services.** Sprite multiplexers, REU streaming, DMA helpers,
-turbo control, audio. These belong in an Ultimate Game SDK built on this one.
-Keeping them out is what lets the core stay small enough to audit.
-
-**A BASIC extension.** The public API is shaped so one can be written against
-it, and nothing in it assumes a C caller.
+**A game engine.** Movement, frame timing, object lists and hardware-sprite
+multiplexing remain application policy. The SDK supplies reusable primitives
+such as turbo, audio, REU transfers and software-vsprite compositing.
 
 **Anything that assumes the newest hardware.** See
 [compatibility.md](compatibility.md).

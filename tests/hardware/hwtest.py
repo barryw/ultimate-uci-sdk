@@ -359,9 +359,9 @@ SCENARIOS = [
     },
     {
         "name": "turbo-registers",
-        "why": "turbo is memory-mapped I/O rather than a UCI command, and the "
-               "only way to show it works is to time a loop against the raster "
-               "with the registers switched on - which only their owner can do",
+        "why": "turbo is memory-mapped I/O rather than a UCI command; this "
+               "checks every public speed index and the badline control, while "
+               "the vsprites runner checks actual throughput against host time",
         "steps": [
             ({CMD_IF: "Enabled", REU: "Disabled", AUDIO: "Disabled",
               TURBO: "U64 Turbo Registers"}, expect_turbo_measured),

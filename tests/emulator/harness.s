@@ -43,6 +43,7 @@
         .import ultimate_palette_set_color, ultimate_palette_reset
         .import ultimate_turbo_available, ultimate_turbo_get
         .import ultimate_turbo_set, ultimate_turbo_badlines
+        .import ultimate_vsprite_draw
         .import ultimate_chdir, ultimate_getpath
         .import ultimate_opendir, ultimate_readdir
         .import ultimate_open, ultimate_close, ultimate_read
@@ -91,6 +92,7 @@
         .export t_palette_get_null, t_palette_set_null
         .export t_turbo_available, t_turbo_get
         .export t_turbo_set, t_turbo_badlines
+        .export t_vsprite_draw, t_vsprite_null
         .export t_chdir, t_getpath, t_opendir, t_readdir
         .export t_open, t_close, t_read
         .export t_create, t_write, t_seek, t_delete
@@ -144,6 +146,8 @@
         .export timeout_val
         .export pal_index
         .export turbo_arg
+        .export vsprite, vs_bitmap, vs_source, vs_mask, vs_screen
+        .export vs_x, vs_y, vs_width, vs_height, vs_color, vs_flags
 
         ; --- the request block and the buffers it points at ---
         .export req
@@ -203,6 +207,18 @@ seek_pos:     .res 4      ; t_seek's 32-bit position, little endian
 reu_at:       .res 4      ; the REU address a transfer uses
 reu_len:      .res 4      ; and how many bytes it moves
 voice:        .res UA_VOICE_SIZE  ; the ultimate_audio_voice t_audio_load_wav fills
+vsprite:      .res VSPRITE_SIZE
+
+vs_bitmap = vsprite + VSPRITE_BITMAP
+vs_source = vsprite + VSPRITE_SOURCE
+vs_mask   = vsprite + VSPRITE_MASK
+vs_screen = vsprite + VSPRITE_SCREEN
+vs_x      = vsprite + VSPRITE_X
+vs_y      = vsprite + VSPRITE_Y
+vs_width  = vsprite + VSPRITE_WIDTH
+vs_height = vsprite + VSPRITE_HEIGHT
+vs_color  = vsprite + VSPRITE_COLOR
+vs_flags  = vsprite + VSPRITE_FLAGS
 
 ; The second name rename and copy take, and the block a stat reply is received
 ; into. `reply` holds the first name, as it does for every other DOS entry
@@ -451,6 +467,22 @@ t_turbo_set:
 t_turbo_badlines:
         lda turbo_arg
         jsr ultimate_turbo_badlines
+        sta result
+        rts
+
+; --- software vsprites ---
+
+t_vsprite_draw:
+        lda #<vsprite
+        ldx #>vsprite
+        jsr ultimate_vsprite_draw
+        sta result
+        rts
+
+t_vsprite_null:
+        lda #$00
+        ldx #$00
+        jsr ultimate_vsprite_draw
         sta result
         rts
 

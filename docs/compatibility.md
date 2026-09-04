@@ -7,10 +7,14 @@ New machines get extra capabilities. Nothing gets an incompatible ecosystem.
 
 | Machine | Firmware | Result |
 |---|---|---|
-| Ultimate 64 Elite | 3.15 (FPGA 123, core 1.4E) | `protocol.suite` 9/9, `ucitest.prg` 0 failed — 45 passed and 4 skipped with no peer built in, 68 passed with the socket and HTTP peers |
+| Ultimate 64 Elite | 3.15 (FPGA 124, core 1.4F) | hardware runner 7/7 scenarios, 0 failed; peer-enabled configurations reached 180 checks |
 
 Everything else in this document comes from the firmware and FPGA sources rather
 than from a machine on a bench. Reports from other hardware are welcome.
+
+Ultimate Audio, including WAV loading and the Boing demo's PCM playback, was
+also verified on that Elite. That result does not imply the audio registers are
+present on every model; applications must probe them.
 
 ## Hardware
 
@@ -26,7 +30,9 @@ same protocol. The SDK's foundation layer targets all of them.
 | Ultimate 64 Elite / Elite-II | yes | |
 | Commodore 64 Ultimate | yes | up to 48 MHz; more RAM |
 
-Nothing in the SDK requires a machine newer than a 1541 Ultimate-II.
+The command-interface foundation requires nothing newer than a 1541
+Ultimate-II. Optional direct hardware features such as turbo and Ultimate Audio
+return `ULTIMATE_ERR_NOT_SUPPORTED` when their registers are unavailable.
 
 ## The first compatibility question is not the model
 
@@ -146,8 +152,9 @@ err = ultimate_http_get(...);
 uci_set_timeout(UCI_TIMEOUT_DEFAULT);
 ```
 
-Services that wait on the outside world will do this for you. Until they exist,
-do it yourself.
+Socket creation and HTTP exchange do this for you and restore the old budget.
+Raw UCI callers must make the same choice explicitly when a firmware operation
+can outlast the finite budget.
 
 ## Interoperating with the REU
 
@@ -161,6 +168,25 @@ UCI command that moves bytes between C64 RAM and the expansion. Nothing else in
 the range is written from anywhere. `tools/test_registers.py` asserts both
 halves of that: no `$DFxx` literal exists in the SDK at all, and the REU
 register names appear in `reu.s` and in no other file.
+
+## Ultimate Audio
+
+Ultimate Audio is direct hardware, not a UCI target. Its seven voices read PCM
+samples from REU memory through registers mapped at `$DF20-$DFFF`.
+
+Call `ultimate_audio_init()` before using it. The probe is inaudible and caches
+the result for `ultimate_audio_available()`; reading the version register alone
+is not a reliable presence test. Treat `ULTIMATE_ERR_NOT_SUPPORTED` as a normal
+result and fall back or exit cleanly.
+
+After a successful probe, load a supported WAV with `ultimate_audio_load_wav()`
+or fill an `ultimate_audio_voice` descriptor for raw PCM, then call
+`ultimate_audio_configure()` and `ultimate_audio_start()`. The complete field,
+format, repeat, pan, rate and interrupt contracts are in `include/ultimate.h`
+and the C and assembly chapters of the guide.
+
+This path has been verified on the Ultimate 64 Elite listed above. Do not infer
+support from a model name; probe the registers.
 
 ## Where the SDK is stricter than the documentation
 

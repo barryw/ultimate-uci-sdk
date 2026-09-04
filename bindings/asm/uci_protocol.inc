@@ -121,8 +121,8 @@ DOS_CMD_ECHO           = $F0  ; <data...> - Echo the command back as data
 ; Bit flags for DOS_CMD_OPEN_FILE.
 DOS_FA_READ          = $01  ; Open for reading
 DOS_FA_WRITE         = $02  ; Open for writing, do not truncate
-DOS_FA_CREATE_NEW    = $04  ; Create/truncate to zero bytes
-DOS_FA_CREATE_ALWAYS = $08  ; May overwrite an existing file
+DOS_FA_CREATE_NEW    = $04  ; Create only when the name does not exist
+DOS_FA_CREATE_ALWAYS = $08  ; Create or truncate an existing file
 
 ; ---- DOS file information reply ----
 ; Byte offsets into the reply of DOS_CMD_FILE_STAT and DOS_CMD_FILE_INFO.
@@ -343,9 +343,9 @@ U64_TURBO_NO_BADLINES = $80  ; set to stop the VIC stealing cycles
 U64_TURBO_UNAVAILABLE = $FF  ; what both registers read when turbo is off in config
 
 ; ---- REU registers (NOT UCI) ----
-; The second and last thing the SDK reaches without the command interface,
-; for the same reason as turbo: no UCI command moves bytes between C64 RAM
-; and the REU. The register set is the 1750's, implemented in
+; Another part of the SDK that works without the command interface, for
+; the same reason as turbo: no UCI command moves bytes between C64 RAM and
+; the REU. The register set is the 1750's, implemented in
 ; fpga/cart_slot/vhdl_source/reu.vhd, and the command interface overlays
 ; $DF1B-$DF1F above it - the REU decodes $DF00-$DF17 only, so the two
 ; coexist. A transfer runs under DMA with the CPU halted, so it is
@@ -427,6 +427,25 @@ UA_VOICE_REPEAT_A = $0C  ; dword, little endian
 UA_VOICE_REPEAT_B = $10  ; dword, little endian
 UA_VOICE_RATE     = $14  ; word, little endian
 UA_VOICE_SIZE     = $16  ; bytes
+
+; ---- Software vsprite draw layout ----
+; Byte offsets in ultimate_vsprite. The C ABI build asserts the structure
+; still matches these.
+VSPRITE_BITMAP   = $00  ; word: destination bitmap base
+VSPRITE_SOURCE   = $02  ; word: column-major image or source bitmap base
+VSPRITE_MASK     = $04  ; word: column-major mask for VSPRITE_F_MASKED
+VSPRITE_SCREEN   = $06  ; word: optional screen base for VSPRITE_F_COLOR
+VSPRITE_X        = $08  ; byte: destination cell column, 0-39
+VSPRITE_Y        = $09  ; byte: destination raster line, 0-199
+VSPRITE_WIDTH    = $0A  ; byte: width in bitmap byte columns
+VSPRITE_HEIGHT   = $0B  ; byte: height in raster lines
+VSPRITE_COLOR    = $0C  ; byte: screen value for touched cells
+VSPRITE_FLAGS    = $0D  ; byte: VSPRITE_F_* operation flags
+VSPRITE_SIZE     = $0E  ; bytes
+VSPRITE_F_MASKED = $01  ; draw (destination AND mask) OR source
+VSPRITE_F_COPY   = $02  ; copy the same rectangle from a source bitmap
+VSPRITE_F_COLOR  = $04  ; write color to screen cells touched by nonzero source
+VSPRITE_F_ALL    = $07  ; all supported flag bits
 
 ; ---- Ultimate 64 speed indices ----
 ; Index into the machine's speed table. **Only these four mean the same
@@ -596,6 +615,7 @@ BLOB_AUDIO_STOP                 = $02F7
 BLOB_ULTIMATE_AUDIO_IRQ_STATUS  = $02FA
 BLOB_AUDIO_IRQ_CLEAR            = $02FD
 BLOB_AUDIO_LOAD_WAV             = $0300
+BLOB_VSPRITE_DRAW               = $0303
 
 ; ---- Blob parameter block ----
 ; Fields of the blob's parameter block, also from the blob's base: sta

@@ -4,8 +4,8 @@
 KICK   ?= kickass
 ROOT   := ../..
 SAMPLE ?= $(if $(wildcard boing-orig8.pcm),boing-orig8.pcm 8363)
-# The blob at $8000 with its variables packed at $a940-$a9fe, immediately
-# before the sample at $aa00. A separate build keeps the default blob untouched.
+# The blob at $8000 with code below $ad30 and its variables in the free page at
+# $5900. A separate build keeps the default blob untouched.
 BLOB   := $(ROOT)/bindings/blob/build-boing/ultimate-8000.bin
 
 all: boing.prg
@@ -18,7 +18,7 @@ boing.pcm boing_pcm.inc: mkpcm.py genboing.py
 	python3 mkpcm.py $(SAMPLE)
 
 $(BLOB): FORCE
-	$(MAKE) -C $(ROOT)/bindings/blob BUILD=build-boing BASE=8000 VARS=43328
+	$(MAKE) -C $(ROOT)/bindings/blob BUILD=build-boing BASE=8000 VARS=22784 LIMIT=44336
 
 boing.prg: boing.asm ball.bin disc.bin bg.bin bgscr.bin shadow.bin boing.pcm $(BLOB)
 	$(KICK) boing.asm -o $@ -symbolfile

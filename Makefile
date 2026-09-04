@@ -13,7 +13,7 @@
 #   make boing-run U64_HOST=<ip>      build and run it on an Ultimate
 #   make protocol    regenerate the protocol constants     (Python 3)
 #   make release VERSION=vX.Y.Z   package every release artifact
-#   make all         everything that needs no hardware
+#   make all         library, examples, emulator tests, wedge and SID demo
 #
 # SPDX-License-Identifier: MIT
 
@@ -22,11 +22,9 @@
 
 all: lib examples emulator wedge demos
 
-# The SDK itself is 6502 assembly, so the only place that logic can be tested
-# is on a 6502 - that is what `emulator` is for. `unittest` covers the one
-# piece of this repo that is ordinary host Python: the settings guard in
-# tools/u64_settings.py. It needs neither Docker nor network, so adding it
-# here does not change what `make test` depends on.
+# The SDK itself is 6502 assembly, so behavioral tests run it on a 6502 through
+# `emulator`. `unittest` checks host-side generators, layouts, source boundaries
+# and packaging rules. It needs neither Docker nor network.
 test: unittest emulator
 
 # The wedge first: tools/test_make_crt.py compares the .prg and the cartridge

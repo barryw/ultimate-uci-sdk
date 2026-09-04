@@ -112,3 +112,23 @@ UCI_STATIC_ASSERT(audio_repeat_b, offsetof(ultimate_audio_voice, repeat_b),
 UCI_STATIC_ASSERT(audio_rate, offsetof(ultimate_audio_voice, rate),
                   UA_VOICE_RATE);
 UCI_STATIC_ASSERT(audio_size, sizeof(ultimate_audio_voice), UA_VOICE_SIZE);
+
+/* The software-vsprite renderer reads this descriptor directly. */
+UCI_STATIC_ASSERT(vsprite_bitmap, offsetof(ultimate_vsprite, bitmap),
+                  VSPRITE_BITMAP);
+UCI_STATIC_ASSERT(vsprite_source, offsetof(ultimate_vsprite, source),
+                  VSPRITE_SOURCE);
+UCI_STATIC_ASSERT(vsprite_mask, offsetof(ultimate_vsprite, mask), VSPRITE_MASK);
+UCI_STATIC_ASSERT(vsprite_screen, offsetof(ultimate_vsprite, screen),
+                  VSPRITE_SCREEN);
+UCI_STATIC_ASSERT(vsprite_x, offsetof(ultimate_vsprite, x), VSPRITE_X);
+UCI_STATIC_ASSERT(vsprite_y, offsetof(ultimate_vsprite, y), VSPRITE_Y);
+UCI_STATIC_ASSERT(vsprite_width, offsetof(ultimate_vsprite, width),
+                  VSPRITE_WIDTH);
+UCI_STATIC_ASSERT(vsprite_height, offsetof(ultimate_vsprite, height),
+                  VSPRITE_HEIGHT);
+UCI_STATIC_ASSERT(vsprite_color, offsetof(ultimate_vsprite, color),
+                  VSPRITE_COLOR);
+UCI_STATIC_ASSERT(vsprite_flags, offsetof(ultimate_vsprite, flags),
+                  VSPRITE_FLAGS);
+UCI_STATIC_ASSERT(vsprite_size, sizeof(ultimate_vsprite), VSPRITE_SIZE);

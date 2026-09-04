@@ -50,6 +50,7 @@
         .import ultimate_audio_stop, ultimate_audio_irq_status
         .import ultimate_audio_irq_clear
         .import ultimate_audio_load_wav
+        .import ultimate_vsprite_draw
         .import ultimate_net_ifcount, ultimate_net_macaddr
         .import ultimate_net_ipconfig, ultimate_net_connect
         .import ultimate_net_udp, ultimate_net_close
@@ -271,6 +272,7 @@ blob_audio_table:                   ; +$2E8 from the blob base
         .segment "BLOBEXT"
 blob_ext_table:                     ; +$300 from the blob base
         jmp blob_audio_load_wav         ; +$300
+        jmp blob_vsprite_draw           ; +$303
 
 ; ---------------------------------------------------------------------------
 ; The shims.
@@ -337,6 +339,12 @@ blob_audio_load_wav:
         lda #<bp_audio
         ldx #>bp_audio
         jsr ultimate_audio_load_wav
+        jmp blob_done
+
+blob_vsprite_draw:
+        lda bp_addr
+        ldx bp_addr + 1
+        jsr ultimate_vsprite_draw
         jmp blob_done
 
 blob_open:

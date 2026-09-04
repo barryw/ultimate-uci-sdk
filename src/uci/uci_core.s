@@ -1162,10 +1162,12 @@ _uci_status_format:
 ; id reads the '0' of "00,OK" as binary $30 and fails the one command documented
 ; as unable to fail.
 ;
-; The three encodings are mutually exclusive on sight:
+; The structured encodings are mutually exclusive on sight:
+;   "HTTP/"                            -> response line and header block
 ;   three leading ASCII digits         -> "NNN TEXT"
 ;   two digits, third not a digit      -> "NN,TEXT"
-;   a leading byte that is not a digit -> a single binary byte
+;   one byte on SoftwareIEC            -> binary status
+; Other nonnumeric target text is a device error without a numeric code.
 ;
 ; The binary codes in use are $00-$09 and $80, none of which is an ASCII digit,
 ; so no status can be read two ways. The target hint only decides whether a

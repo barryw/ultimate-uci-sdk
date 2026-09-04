@@ -55,6 +55,88 @@ suites {
       assert([result] == $01, "ultimate_available follows a successful init")
     }
 
+    ; ------------------------------------------------------- software vsprites
+
+    test("vsprite-rejects-null", "a null descriptor is rejected") {
+      jsr([t_vsprite_null], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $05, "ULTIMATE_ERR_INVALID_ARGUMENT")
+    }
+
+    test("vsprite-masked", "a masked image crosses bitmap cell rows exactly") {
+      memfill($4000, $0200, $aa)
+      memfill($3000, 12, $05)
+      memfill($3100, 12, $f0)
+      [vs_bitmap] = $00
+      [vs_bitmap] + 1 = $40
+      [vs_source] = $00
+      [vs_source] + 1 = $30
+      [vs_mask] = $00
+      [vs_mask] + 1 = $31
+      [vs_screen] = $00
+      [vs_screen] + 1 = $00
+      [vs_x] = 2
+      [vs_y] = 5
+      [vs_width] = 2
+      [vs_height] = 6
+      [vs_color] = $00
+      [vs_flags] = $01
+      jsr([t_vsprite_draw], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert($4014 == $aa, "byte before the image is untouched")
+      assert($4015 == $a5, "first column, first cell row")
+      assert($4017 == $a5, "first segment ends at the cell boundary")
+      assert($4150 == $a5, "first column continues in the next cell row")
+      assert($401d == $a5, "second byte column starts eight bytes later")
+      assert($4158 == $a5, "second column also crosses the cell row")
+      assert($415b == $aa, "byte after the image is untouched")
+    }
+
+    test("vsprite-copy", "a clean bitmap rectangle restores through VIC layout") {
+      memfill($4000, $0200, $00)
+      memfill($6000, $0200, $5a)
+      [vs_bitmap] = $00
+      [vs_bitmap] + 1 = $40
+      [vs_source] = $00
+      [vs_source] + 1 = $60
+      [vs_x] = 2
+      [vs_y] = 5
+      [vs_width] = 2
+      [vs_height] = 6
+      [vs_flags] = $02
+      jsr([t_vsprite_draw], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert($4015 == $5a, "first copied byte")
+      assert($4150 == $5a, "copy crosses a cell row")
+      assert($4158 == $5a, "copy crosses a column")
+      assert($415b == $00, "copy stays inside the rectangle")
+    }
+
+    test("vsprite-color", "OR drawing colors only cells with visible pixels") {
+      memfill($4000, $0200, $00)
+      memfill($2000, 80, $11)
+      memfill($3000, 6, $00)
+      $3003 = $80
+      [vs_bitmap] = $00
+      [vs_bitmap] + 1 = $40
+      [vs_source] = $00
+      [vs_source] + 1 = $30
+      [vs_mask] = $00
+      [vs_mask] + 1 = $00
+      [vs_screen] = $00
+      [vs_screen] + 1 = $20
+      [vs_x] = 2
+      [vs_y] = 5
+      [vs_width] = 1
+      [vs_height] = 6
+      [vs_color] = $bc
+      [vs_flags] = $04
+      jsr([t_vsprite_draw], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $00, "ULTIMATE_OK")
+      assert($2002 == $11, "transparent first cell keeps its color")
+      assert($202a == $bc, "nonzero second cell receives the requested color")
+      assert($4150 == $80, "the source was ORed into the bitmap")
+    }
+
     ; The bounded-time guarantee has to hold for a program that never calls
     ; uci_set_timeout - and with UCI_VARS the variables are in RAM the caller
     ; owns, which nothing zeroes. So bring-up installs the budget.
@@ -1061,7 +1143,7 @@ suites {
 
     ; --- turbo ---
     ;
-    ; The SDK's only entry points that touch a hardware register directly.
+    ; The turbo entry points touch these hardware registers directly.
     ;
     ; $D031 under sim6502 is ordinary read/write memory rather than a VIC that
     ; returns $FF for its unimplemented registers, and that is what makes these

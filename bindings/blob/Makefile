@@ -11,7 +11,9 @@ TARGET ?= c64
 CA65   ?= ca65
 LD65   ?= ld65
 
-# Where the code goes, as four hex digits, and where its RAM goes, in decimal.
+# Where the code goes, as four hex digits, and where its RAM and code limit go,
+# in decimal. LIMIT normally follows VARS; a packed demo may place the variables
+# elsewhere and give the code its own ceiling.
 #
 # **The default is $7000, because the SDK no longer fits in the 8K at $8000.**
 # It was $C000 until file.s landed and overflowed the 4K there, and $8000 until
@@ -35,6 +37,7 @@ LD65   ?= ld65
 #   make BASE=6000 VARS=36864      wherever suits the program using it
 BASE ?= 7000
 VARS ?= 40704
+LIMIT ?= $(VARS)
 ZP   ?= 251
 
 AFLAGS := -t $(TARGET) -I $(ROOT)/bindings/asm -I $(ROOT)/src/uci \
@@ -49,6 +52,7 @@ SRC := $(addprefix $(ROOT)/,$(UCI_SRC)) blob.s
 
 BUILD := build
 OBJ   := $(addprefix $(BUILD)/,$(notdir $(SRC:.s=.o)))
+SETTINGS := $(BUILD)/settings
 
 BIN := $(BUILD)/ultimate-$(BASE).bin
 
@@ -63,24 +67,27 @@ all: $(BIN) $(RELOC) $(BUILD)/ultimate-6000.bin
 $(BUILD):
 	mkdir -p $(BUILD)
 
-# Makefile, because -D UCI_VARS is baked into every object: changing VARS has to
-# rebuild them, or the code keeps addressing the variables where they used to be
-# and every command comes back INVALID_ARGUMENT.
-$(BUILD)/%.o: $(ROOT)/src/uci/%.s Makefile | $(BUILD)
+# Command-line settings are recorded so changing one invalidates the objects
+# and linker configs without rebuilding an unchanged blob on every invocation.
+$(SETTINGS): FORCE | $(BUILD)
+	@printf '%s\n' 'BASE=$(BASE) VARS=$(VARS) LIMIT=$(LIMIT) ZP=$(ZP)' | cmp -s - $@ || \
+	  printf '%s\n' 'BASE=$(BASE) VARS=$(VARS) LIMIT=$(LIMIT) ZP=$(ZP)' > $@
+
+$(BUILD)/%.o: $(ROOT)/src/uci/%.s Makefile $(SETTINGS) | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
-$(BUILD)/ultimate_asm.o: $(ROOT)/bindings/asm/ultimate_asm.s Makefile | $(BUILD)
+$(BUILD)/ultimate_asm.o: $(ROOT)/bindings/asm/ultimate_asm.s Makefile $(SETTINGS) | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
-$(BUILD)/blob.o: blob.s Makefile | $(BUILD)
+$(BUILD)/blob.o: blob.s Makefile $(SETTINGS) | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
 # Where the code may run to: the start of the SDK's variables, less the header
 # and parameter pages that sit in front of it. ld65 then refuses a build whose
 # code would reach the variables instead of quietly producing one that does.
-MAINSIZE = $(shell printf '$$%04x' $$(( $(VARS) - 0x$(BASE) - 0x300 )))
+MAINSIZE = $(shell printf '$$%04x' $$(( $(LIMIT) - 0x$(BASE) - 0x300 )))
 
-$(BUILD)/blob-$(BASE).cfg: blob.cfg.in Makefile | $(BUILD)
+$(BUILD)/blob-$(BASE).cfg: blob.cfg.in Makefile $(SETTINGS) | $(BUILD)
 	sed -e 's/@BASE@/$$$(BASE)/' -e 's/@MAINSIZE@/$(MAINSIZE)/' $< > $@
 
 # The size is reported rather than written down anywhere, because a byte count
@@ -90,7 +97,7 @@ $(BIN): $(OBJ) $(BUILD)/blob-$(BASE).cfg
 	$(LD65) -C $(BUILD)/blob-$(BASE).cfg -o $@ $(OBJ)
 	@echo "$@: $$(wc -c < $@) bytes at \$$$(BASE), variables at $(VARS)"
 
-$(BUILD)/probe-$(PROBE_BASE).cfg: blob.cfg.in Makefile | $(BUILD)
+$(BUILD)/probe-$(PROBE_BASE).cfg: blob.cfg.in Makefile $(SETTINGS) | $(BUILD)
 	sed -e 's/@BASE@/$$$(PROBE_BASE)/' -e 's/@MAINSIZE@/$(MAINSIZE)/' $< > $@
 
 $(BUILD)/ultimate-$(PROBE_BASE).bin: $(OBJ) $(BUILD)/probe-$(PROBE_BASE).cfg
@@ -105,7 +112,7 @@ $(RELOC): $(BIN) $(BUILD)/ultimate-$(PROBE_BASE).bin
 # against: the relocator's output must be byte-identical to what the linker
 # itself produces for that address. Same objects, different config - same
 # pattern as the probe build above.
-$(BUILD)/blob-6000.cfg: blob.cfg.in Makefile | $(BUILD)
+$(BUILD)/blob-6000.cfg: blob.cfg.in Makefile $(SETTINGS) | $(BUILD)
 	sed -e 's/@BASE@/$$6000/' -e 's/@MAINSIZE@/$(MAINSIZE)/' $< > $@
 
 $(BUILD)/ultimate-6000.bin: $(OBJ) $(BUILD)/blob-6000.cfg
@@ -114,4 +121,6 @@ $(BUILD)/ultimate-6000.bin: $(OBJ) $(BUILD)/blob-6000.cfg
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all clean
+FORCE:
+
+.PHONY: all clean FORCE

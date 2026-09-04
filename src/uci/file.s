@@ -28,7 +28,7 @@
 ;   same thing on purpose.
 ;
 ; LOAD_EX returns the end address in status bytes 1 and 2. The transport keeps
-; the first four status bytes for its own decoder, so they are there to be read
+; a status prefix for its own decoder, so they are there to be read
 ; without the caller providing a buffer for them.
 ;
 ; SPDX-License-Identifier: MIT

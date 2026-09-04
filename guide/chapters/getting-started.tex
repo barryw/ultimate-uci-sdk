@@ -34,8 +34,10 @@ its configuration, so the SDK does not prescribe one.
 With the interface disabled, the five registers are not mapped and
 \cmd{ultimate\_init()} returns \cmd{ULTIMATE\_ERR\_NO\_DEVICE}.
 
-REU transfers and Ultimate~64 turbo control use their own registers, not the
-command interface. Each still depends on its corresponding machine setting.
+REU transfers, Ultimate~64 turbo control and Ultimate Audio use their own
+registers, not the command interface. Each still depends on its corresponding
+machine setting. Software-vsprite drawing is local 6510 code and needs none of
+those settings.
 
 \evidence{\cmd{docs/compatibility.md};
 \cmd{tests/hardware/hwtest.py}; \cmd{tools/test\_registers.py}}
@@ -104,9 +106,9 @@ Build the library once before either of the two checks below:
 make lib
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 bindings/cc65/build/ultimate.lib is created.
-\end{outputbox}
+\end{resultbox}
 
 This complete program initializes the SDK and reports any failure. Save it as
 \cmd{hello.c}:
@@ -125,8 +127,9 @@ int main(void)\\
 \}
 \end{listingbox}
 
+It prints nothing on success. With UCI disabled, it prints:
+
 \begin{outputbox}
-No text on success. On failure, for example:\\
 ULTIMATE: NO ULTIMATE FOUND
 \end{outputbox}
 
@@ -137,11 +140,12 @@ cl65 -t c64 -I include -o hello.prg hello.c \textbackslash\\
 \hspace*{2em}bindings/cc65/build/ultimate.lib
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 hello.prg is created with no compiler errors.
-\end{outputbox}
+\end{resultbox}
 
-\evidence{\cmd{include/ultimate.h}; \cmd{examples/cc65/Makefile}}
+\evidence{\cmd{include/ultimate.h}; \cmd{guide/examples/hello.c};
+\cmd{guide/Makefile}}
 
 \Needspace{14\baselineskip}
 \subsection*{Assembly check}
@@ -203,6 +207,8 @@ will not link, or will link and print nothing.
 start-up code, which is the simplest way to get a running \cmd{.prg}. The SDK
 itself needs no C runtime; Chapter~4 covers linking without one.
 
+\evidence{\cmd{guide/examples/hello.s}; \cmd{guide/Makefile}}
+
 \cmd{-{}-asm-include-dir} is how \cmd{ultimate.inc} is found.
 
 The message text is lowercase in the source and prints as capitals. ca65's C64
@@ -242,8 +248,10 @@ This example demonstrates recovery only; it does not send a command.
 
 Use \cmd{ultimate\_detect()} for command-interface targets,
 \cmd{ultimate\_reu\_available()} for the REU, and
-\cmd{ultimate\_turbo\_available()} for turbo. Do not infer capabilities from a
-model name.
+\cmd{ultimate\_turbo\_available()} for turbo. Call
+\cmd{ultimate\_audio\_init()} and then
+\cmd{ultimate\_audio\_available()} for mapped Ultimate Audio. Do not infer
+capabilities from a model name.
 
 \subsection*{A short buffer}
 

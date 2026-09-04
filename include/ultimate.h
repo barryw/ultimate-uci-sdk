@@ -76,8 +76,9 @@ uint8_t ultimate_available(void);
  *
  * Costs one UCI round trip per target, so call it once at startup and keep the
  * result. Returns ULTIMATE_OK even when some targets are missing - that is the
- * normal case on older firmware. Returns ULTIMATE_ERR_NO_DEVICE if there is no
- * interface at all.
+ * normal case on older firmware. Returns ULTIMATE_ERR_INVALID_ARGUMENT for a
+ * null pointer, ULTIMATE_ERR_NO_DEVICE if there is no interface at all, or
+ * ULTIMATE_ERR_TIMEOUT if the interface does not return to idle.
  *
  * Probing borrows the shared buffer variables the assembly interface uses -
  * ult_buf, ult_buflen and ult_outlen - so an assembly caller has to set them
@@ -190,8 +191,8 @@ uint8_t ultimate_palette_reset(void);
  * The Ultimate 64's CPU speed.
  *
  * Not a UCI command - there is none for speed - but memory-mapped I/O at
- * $D031, which is why these four are the SDK's only entry points that touch a
- * hardware register directly. See src/uci/turbo.s.
+ * $D031. REU transfers and Ultimate Audio are the other public services that
+ * touch hardware registers directly. See src/uci/turbo.s.
  *
  * **Turbo may simply not be there**, and a program cannot switch it on for
  * itself: it depends on the machine's "Turbo Control" setting, which its owner
@@ -233,6 +234,38 @@ uint8_t ultimate_turbo_set(uint8_t index);
  * characters it is about to draw.
  */
 uint8_t ultimate_turbo_badlines(uint8_t on);
+
+/*
+ * Draw one software-composited vsprite into a standard 40-column C64 bitmap.
+ * This is a local 6510 primitive: it does not require UCI or Ultimate hardware.
+ *
+ * source is column-major for normal and masked draws: all rows of the first
+ * byte column, then all rows of the next. For VSPRITE_F_COPY it is another
+ * C64 bitmap base and the same rectangle is copied from it. A zero flags byte
+ * ORs source into the bitmap. VSPRITE_F_MASKED performs
+ * (destination & mask) | source. VSPRITE_F_COLOR also writes color to each
+ * screen cell touched by a nonzero source byte.
+ *
+ * x is a bitmap byte/cell column (0..39), not a pixel coordinate. The caller
+ * selects or builds any sub-cell shifted image before calling. Width and
+ * height must fit inside the 320x200 bitmap. VSPRITE_F_COLOR is used with the
+ * default OR operation, not with MASKED or COPY. This routine self-modifies
+ * for speed and therefore must execute from RAM; it is not reentrant.
+ */
+typedef struct {
+    uint8_t       *bitmap;
+    const uint8_t *source;
+    const uint8_t *mask;
+    uint8_t       *screen;
+    uint8_t        x;
+    uint8_t        y;
+    uint8_t        width;
+    uint8_t        height;
+    uint8_t        color;
+    uint8_t        flags;
+} ultimate_vsprite;
+
+uint8_t ultimate_vsprite_draw(const ultimate_vsprite *sprite);
 
 /*
  * Files and directories, on the Ultimate's own filesystem.
@@ -329,18 +362,20 @@ typedef struct {
     char     name[ULTIMATE_NAME_MAX + 1];
 } ultimate_fileinfo;
 
-/* By name, in the current directory or by path. */
+/* By name in the current directory. */
 uint8_t ultimate_stat(const char *name, ultimate_fileinfo *info);
 
 /* The same, for the file ultimate_open() left open. */
 uint8_t ultimate_fstat(ultimate_fileinfo *info);
 
 /*
- * Rename or copy, both names in the current directory unless they carry a path.
- * The Ultimate does the copying, so no bytes pass through the C64.
+ * Rename changes one current-directory name to another. Copy puts a source
+ * from the current directory into the named destination path and preserves
+ * its filename. The Ultimate does the copying, so no bytes pass through the
+ * C64.
  */
 uint8_t ultimate_rename(const char *from, const char *to);
-uint8_t ultimate_copy(const char *from, const char *to);
+uint8_t ultimate_copy(const char *name, const char *destination_path);
 
 /* Make one directory, in the current one. */
 uint8_t ultimate_mkdir(const char *name);
@@ -500,6 +535,12 @@ uint8_t ultimate_reu_save(uint32_t reuaddr, uint32_t len);
  *
  *     rate = round(6250000 / samples_per_second)
  *
+ * channel is 0..UA_CHANNELS-1, volume is 0..UA_VOLUME_MAX, and pan is
+ * UA_PAN_LEFT..UA_PAN_RIGHT (7 and 8 are both centered). flags may contain
+ * format, interleave, repeat and IRQ bits, but not UA_CTRL_GATE. The REU range
+ * may end at 16 MB but must not wrap past it. 16-bit and interleaved lengths
+ * are even. Repeat requires repeat_a < repeat_b <= length.
+ *
  * Configure leaves the gate closed. Call ultimate_audio_start() after every
  * voice in a stereo pair is configured, keeping their starts close together.
  * UA_CTRL_IRQ asserts the C64's IRQ line as well as latching the status bit;
@@ -538,7 +579,8 @@ uint8_t ultimate_audio_version(void);
  */
 uint8_t ultimate_audio_configure(const ultimate_audio_voice *voice);
 
-/* Start a configured channel with the same UA_CTRL_* flags used above. */
+/* Start a configured channel with the same UA_CTRL_FLAGS bits used above;
+ * do not pass UA_CTRL_GATE, which this call adds itself. */
 uint8_t ultimate_audio_start(uint8_t channel, uint8_t flags);
 
 /* Stop one channel immediately. */
@@ -670,7 +712,8 @@ uint8_t ultimate_ramdisk_info(uint8_t *info);
  * 30.8 s to an address with nothing at it before the firmware gives up. No
  * value of the uci_set_timeout() budget reaches that, so ultimate_net_connect()
  * and ultimate_net_udp() wait without a limit of their own and restore your
- * budget afterwards. They are the only entry points in the SDK that do.
+ * budget afterwards. They are the only network entry points that do; HTTP
+ * exchange has the same exception.
  *
  * bufsize in ultimate_net_read() is the size of the buffer, and at most
  * UCI_NET_READ_PREFIX fewer bytes than that are stored: the firmware sends its
@@ -814,7 +857,8 @@ uint8_t ultimate_http_body_bool(uint8_t handle, const char *key, uint8_t value);
 uint8_t ultimate_http_body_string(uint8_t handle, const char *key,
                                   const char *value);
 
-/* Add a container, and enter it. Inside an array the key is ignored. */
+/* Add a container, and enter it. key must be non-NULL; inside an array point
+ * it at an empty string, since the pointed-to key is ignored there. */
 uint8_t ultimate_http_body_object(uint8_t handle, const char *key);
 uint8_t ultimate_http_body_array(uint8_t handle, const char *key);
 

@@ -25,6 +25,8 @@
 \RequirePackage{enumitem}
 \RequirePackage{microtype}
 \RequirePackage{needspace}
+\RequirePackage{makeidx}
+\RequirePackage[columns=1]{idxlayout}
 \tcbuselibrary{skins,breakable}
 
 % ---------------------------------------------------------------------------
@@ -155,8 +157,9 @@
   before upper={\catcode`\_=12\relax\def\ {\newline}},
   #1}
 
-% Observable output or returned values from the listing immediately above.
-% This is deliberately smaller than a full C64-screen illustration.
+% Literal text emitted by the listing immediately above. If the listing does
+% not print it, use resultbox instead; this distinction keeps prose about a
+% side effect from looking like text the reader should see on the C64.
 \newtcolorbox{outputbox}[1][]{%
   enhanced,
   title=OUTPUT,
@@ -168,6 +171,23 @@
   before={\par\nopagebreak[4]\noindent},
   fonttitle=\sffamily\bfseries\small,
   fontupper=\ttfamily\small\color{c64text}\linespread{1.0}\selectfont,
+  before upper={\catcode`\_=12\relax},
+  #1}
+
+% An observable return value, memory change or hardware effect. Deliberately
+% paper-coloured and proportional: it describes what happened but is not C64
+% screen output.
+\newtcolorbox{resultbox}[1][]{%
+  enhanced,
+  title=RESULT,
+  colback=notegrey, colframe=guideblue,
+  coltitle=guideblue, colbacktitle=notegrey,
+  boxrule=0pt, leftrule=1.6pt, arc=0pt, outer arc=0pt,
+  left=3mm, right=3mm, top=1.5mm, bottom=1.5mm,
+  before skip=0.5\baselineskip, after skip=1.0\baselineskip,
+  before={\par\nopagebreak[4]\noindent},
+  fonttitle=\sffamily\bfseries\small,
+  fontupper=\sffamily\small\linespread{1.0}\selectfont,
   before upper={\catcode`\_=12\relax},
   #1}
 
@@ -203,6 +223,17 @@
    \small\textbf{Careful:}\hspace{0.4em}}
   {\end{tcolorbox}\par\vspace{0.3\baselineskip}}
 
+% Practical placement in a larger program, used only where the API's role is
+% not already self-evident from the example.
+\newenvironment{tip}
+  {\par\vspace{0.7\baselineskip}\noindent
+   \begin{tcolorbox}[enhanced, breakable, colback=guideblue!5,
+     colframe=guideblue!5, boxrule=0pt, arc=0pt, outer arc=0pt,
+     borderline west={2pt}{0pt}{guideblue},
+     left=3mm, right=3mm, top=2mm, bottom=2mm]
+   \small\textbf{Program tip:}\hspace{0.4em}}
+  {\end{tcolorbox}\par\vspace{0.3\baselineskip}}
+
 % ---------------------------------------------------------------------------
 % Small conveniences used throughout the text.
 % ---------------------------------------------------------------------------
@@ -225,6 +256,41 @@
   {\par\vspace{0.5\baselineskip}\small
    \begin{tabular}{@{}#1@{}}\toprule}
   {\bottomrule\end{tabular}\par\vspace{0.7\baselineskip}}
+
+% ---------------------------------------------------------------------------
+% Per-entry API reference.
+%
+% Tutorial chapters keep the normal roomy setting. Reference chapters use a
+% slightly tighter measure so a complete, independently usable entry does not
+% waste a page merely because its call has one argument.
+% ---------------------------------------------------------------------------
+\newenvironment{referencechapter}
+  {\small\sloppy\setlength{\parindent}{0pt}\setlength{\parskip}{0.28\baselineskip}%
+   \linespread{1.02}\selectfont}
+  {}
+
+\newcommand{\apientry}[3]{%
+  \Needspace{13\baselineskip}%
+  \phantomsection
+  \index{#1@#2 (#3)}%
+  {\headingfont\color{guideblue}\fontsize{18}{21}\selectfont #2\par}%
+  {\small\color{black!65}#3\par}\vspace{0.25\baselineskip}}
+
+\newcommand{\basicapi}[2]{\apientry{#1}{\bas{#1}}{BASIC #2}}
+\newcommand{\capi}[1]{\apientry{#1}{\cmd{#1()}}{C function}}
+\newcommand{\cmacroapi}[1]{\apientry{#1}{\cmd{#1()}}{C function-like macro}}
+\newcommand{\asmapi}[1]{\apientry{#1}{\cmd{#1}}{Assembly routine}}
+
+\newcommand{\entryfield}[2]{\textbf{#1:}\enspace #2\par}
+
+\newcommand{\entryhead}[1]{%
+  \vspace{0.30\baselineskip}{\headingfont\color{guideblue}#1\par}%
+  \vspace{-0.22\baselineskip}}
+
+\newenvironment{apitable}[1]
+  {\par\vspace{0.12\baselineskip}\footnotesize
+   \begin{tabular}{@{}#1@{}}\toprule}
+  {\bottomrule\end{tabular}\par\vspace{0.22\baselineskip}}
 
 % ---------------------------------------------------------------------------
 % The covers.

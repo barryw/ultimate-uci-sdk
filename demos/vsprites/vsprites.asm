@@ -8,10 +8,11 @@
 //
 // The SDK's part is small and the point: ultimate_turbo_available() says
 // whether the machine has turbo registers, ultimate_turbo_set() asks for the
-// top speed and ultimate_turbo_badlines() stops the VIC stealing cycles. The
-// demo then adds vsprites until the frame is about seven-eighths full and takes
-// them away when it overflows, so the same program shows two vsprites on a stock
-// 1 MHz C64, 60 on the tested 48 MHz Elite, and more on a 64 MHz machine.
+// top speed, ultimate_turbo_badlines() stops the VIC stealing cycles, and
+// ultimate_vsprite_draw() does the restore and masked compositing. The demo
+// adds vsprites until the frame is about seven-eighths full and takes them away
+// when it overflows, so the same program shows one vsprite on a stock
+// 1 MHz C64 and 39 on the tested 48 MHz Elite.
 // The border turns grey while the frame is being drawn: that band is the
 // render time, the black below it what is left.
 //
@@ -26,6 +27,8 @@
 .const ULT_TURBO_AVAILABLE = BLOB + uci.BLOB_ULTIMATE_TURBO_AVAILABLE
 .const ULT_TURBO_SET       = BLOB + uci.BLOB_ULTIMATE_TURBO_SET
 .const ULT_TURBO_BADLINES  = BLOB + uci.BLOB_ULTIMATE_TURBO_BADLINES
+.const ULT_VSPRITE_DRAW    = BLOB + uci.BLOB_VSPRITE_DRAW
+.const BP_ADDR             = BLOB + uci.BLOB_BP_ADDR
 
 .const STATUS      = $033c        // cassette buffer: the host can watch, see below
 .const MAXBOBS     = 128
@@ -45,8 +48,6 @@
 .const SHAPES      = 3
 .const IMG_BYTES   = BOB_BYTES * BOB_H
 .const SHIFT_BYTES = IMG_BYTES * 2           // image then mask
-.const SEGS        = BOB_H / 8               // cell rows a cell-aligned vsprite spans
-
 .const XMAX        = 160 - BOB_W
 .const YMAX        = 200 - BOB_H
 
@@ -59,17 +60,10 @@
 .const START_BOBS  = 4
 
 // zero page
-.label zpB    = $02   // 16-bit: vsprite base address (base_0)
-.label zpD    = $04   // 16-bit: current dst operand
-.label zpS    = $06   // 16-bit: current src (image) operand
-.label zpYin  = $08
-.label zpE0   = $09
-.label zpCol  = $0b
 .label zpBob  = $0c
 .label zpPtr  = $0d   // 16-bit scratch pointer
 .label zpTmp  = $0f
 .label zpN    = $10
-.label zpEnd  = $11
 
 // ---------------------------------------------------------------------------
 // Status block, for a host watching over the REST API. Offsets from STATUS.
@@ -148,6 +142,10 @@ main:
     jsr copy_background_to_both
     jsr fill_colour
     jsr init_bobs
+    lda #<vs_desc
+    sta BP_ADDR
+    lda #>vs_desc
+    sta BP_ADDR+1
 
     // VIC: multicolour bitmap, bank 1 in front, bank 2 as the back buffer
     lda $dd02
@@ -205,7 +203,6 @@ rti_handler:
 dd00_for_front:  .byte %00000010, %00000000   // bank 1 ($4000), bank 3 ($c000)
 d018_for_front:  .byte D018_A, D018_B
 bitmap_hi_for_buf: .byte >BITMAP_A, >BITMAP_B
-clean_delta_hi:  .byte >((CLEAN - BITMAP_A) & $ffff), >((CLEAN - BITMAP_B) & $ffff)
 
 front:     .byte 0               // buffer index on screen
 nbobs:     .byte 0
@@ -214,8 +211,7 @@ drawn_now: .byte 0
 
 // ---------------------------------------------------------------------------
 // Fill the frame: one more vsprite when the last render used under three
-// quarters of a frame, one fewer when it used more than seven eighths. A
-// vsprite is about one per cent of a 48 MHz frame, so this settles in a second.
+// quarters of a frame, one fewer when it used more than seven eighths.
 scale_bobs:
     lda ST_RENDER+2
     ora ST_RENDER+3
@@ -511,167 +507,63 @@ storey:
     rts
 
 // ---------------------------------------------------------------------------
-// Vsprite address arithmetic. For a vsprite at (x, y) in the buffer at
-// BUF, row r of column c lives at
-//     BUF + ((y+r)>>3)*320 + (x>>2 + c)*8 + ((y+r)&7)
-// Rows that share a cell row are consecutive bytes, so with
-//     base_j = BUF + y + (x>>2)*8 + (cellrow + j)*312
-// the byte for row r in cell-row segment j is simply base_j + r, and one
-// index register walks image, mask and destination together.
-//
-// compute_base: X = vsprite index -> zpB = base_0 (without BUF), zpYin, zpE0
-compute_base:
-    lda by, x
-    sta zpTmp
-    and #7
-    sta zpYin
-    lda #8
-    sec
-    sbc zpYin
-    sta zpE0            // rows 0..E0-1 are in the first cell row; then 8 each
-    lda zpTmp
-    lsr
-    lsr
-    lsr
-    tay                 // cell row
-    lda rowbase_lo, y
-    clc
-    adc zpTmp           // + y
-    sta zpB
-    lda rowbase_hi, y
-    adc #0
-    sta zpB+1
-    lda bx, x
-    lsr
-    lsr
-    tay
-    lda xoff_lo, y      // + (x>>2)*8
-    clc
-    adc zpB
-    sta zpB
-    lda xoff_hi, y
-    adc zpB+1
-    sta zpB+1
-    rts
-
-// ---------------------------------------------------------------------------
-// Restore every rectangle drawn into the back buffer the last time it was
-// drawn to. Whole 8-byte cell-row segments are copied: cheaper than exact rows
-// and harmless, because every restore happens before any draw.
+// Restore and draw through the SDK's reusable software-vsprite primitive.
+// Movement, buffering and the object list remain demo policy.
 restore_back:
     lda front
     eor #1
-    tay                 // back buffer index
+    tay
     lda ndirty, y
     bne !+
     rts
 !:  sta zpN
     lda bitmap_hi_for_buf, y
-    sta rbuf_hi
-    lda clean_delta_hi, y
-    sta rdelta_hi
+    sta vs_desc + uci.VSPRITE_BITMAP + 1
+    lda #<CLEAN
+    sta vs_desc + uci.VSPRITE_SOURCE
+    lda #>CLEAN
+    sta vs_desc + uci.VSPRITE_SOURCE + 1
     tya
     asl
     tay
-    lda dl_lo_tab, y
-    sta rd_lo+1
-    lda dl_lo_tab+1, y
-    sta rd_lo+2
-    lda dl_hi_tab, y
-    sta rd_hi+1
-    lda dl_hi_tab+1, y
-    sta rd_hi+2
-    lda dl_yin_tab, y
-    sta rd_yin+1
-    lda dl_yin_tab+1, y
-    sta rd_yin+2
+    lda dirty_x_tab, y
+    sta rd_x+1
+    lda dirty_x_tab+1, y
+    sta rd_x+2
+    lda dirty_y_tab, y
+    sta rd_y+1
+    lda dirty_y_tab+1, y
+    sta rd_y+2
+    lda #uci.VSPRITE_F_COPY
+    sta vs_desc + uci.VSPRITE_FLAGS
     ldx #0
 rloop:
     stx zpBob
-rd_lo:
+rd_x:
     lda $ffff, x
-    sta zpD
-rd_hi:
+    sta vs_desc + uci.VSPRITE_X
+rd_y:
     lda $ffff, x
-    sta zpD+1
-rd_yin:
-    lda $ffff, x
-    sta zpYin
-    // aligned start = base_0 - yin + BUF
-    lda zpD
-    sec
-    sbc zpYin
-    sta zpD
-    bcs !+
-    dec zpD+1
-!:  lda zpD+1
-    clc
-    adc rbuf_hi
-    sta zpD+1
-    lda #SEGS
-    ldy zpYin
+    pha
+    and #$f8
+    sta vs_desc + uci.VSPRITE_Y
+    pla
+    and #7
     beq !+
-    lda #SEGS+1
-!:  sta rsegs
-    lda #BOB_BYTES
-    sta zpCol
-rcol:
-    lda zpD
-    sta zpS
-    lda zpD+1
-    sta zpS+1
-    lda rsegs
-    sta rseg
-rseg_loop:
-    lda zpS
-    sta rs0+1
-    sta rd0+1
-    lda zpS+1
-    sta rd0+2
-    clc
-    adc rdelta_hi
-    sta rs0+2
-    ldy #7
-rcopy:
-rs0:
-    lda $ffff, y
-rd0:
-    sta $ffff, y
-    dey
-    bpl rcopy
-    lda zpS
-    clc
-    adc #<320
-    sta zpS
-    lda zpS+1
-    adc #>320
-    sta zpS+1
-    dec rseg
-    bne rseg_loop
-    lda zpD
-    clc
-    adc #8
-    sta zpD
-    bcc !+
-    inc zpD+1
-!:  dec zpCol
-    beq !+
-    jmp rcol
-!:  ldx zpBob
+    lda #BOB_H+8
+    bne set_restore_height
+!:  lda #BOB_H
+set_restore_height:
+    sta vs_desc + uci.VSPRITE_HEIGHT
+    jsr ULT_VSPRITE_DRAW
+    ldx zpBob
     inx
     cpx zpN
-    beq rdone
+    beq !+
     jmp rloop
-rdone:
+!:
     rts
 
-rbuf_hi:   .byte 0
-rdelta_hi: .byte 0
-rsegs:     .byte 0
-rseg:      .byte 0
-
-// ---------------------------------------------------------------------------
-// Draw every vsprite into the back buffer and record where, for the restore.
 draw_all:
     lda front
     eor #1
@@ -681,146 +573,73 @@ draw_all:
     sta drawn_now
     sta zpN
     lda bitmap_hi_for_buf, y
-    sta dbuf_hi
+    sta vs_desc + uci.VSPRITE_BITMAP + 1
     tya
     asl
     tay
-    lda dl_lo_tab, y
-    sta dw_lo+1
-    lda dl_lo_tab+1, y
-    sta dw_lo+2
-    lda dl_hi_tab, y
-    sta dw_hi+1
-    lda dl_hi_tab+1, y
-    sta dw_hi+2
-    lda dl_yin_tab, y
-    sta dw_yin+1
-    lda dl_yin_tab+1, y
-    sta dw_yin+2
+    lda dirty_x_tab, y
+    sta dw_x+1
+    lda dirty_x_tab+1, y
+    sta dw_x+2
+    lda dirty_y_tab, y
+    sta dw_y+1
+    lda dirty_y_tab+1, y
+    sta dw_y+2
+    lda #BOB_H
+    sta vs_desc + uci.VSPRITE_HEIGHT
+    lda #uci.VSPRITE_F_MASKED
+    sta vs_desc + uci.VSPRITE_FLAGS
     ldx #0
 dloop:
     stx zpBob
-    jsr compute_base
-    lda zpB
-dw_lo:
-    sta $ffff, x
-    lda zpB+1
-dw_hi:
-    sta $ffff, x
-    lda zpYin
-dw_yin:
-    sta $ffff, x
-    // dst = base_0 + BUF
-    lda zpB+1
-    clc
-    adc dbuf_hi
-    sta zpB+1
-    // src = image for this shape and shift
     lda bx, x
     and #3
     sta zpTmp
+    lda bx, x
+    lsr
+    lsr
+    sta vs_desc + uci.VSPRITE_X
+dw_x:
+    sta $ffff, x
+    lda by, x
+    sta vs_desc + uci.VSPRITE_Y
+dw_y:
+    sta $ffff, x
     lda bshape, x
     asl
     asl
     ora zpTmp
     tay
     lda imgbase_lo, y
-    sta zpS
+    sta vs_desc + uci.VSPRITE_SOURCE
+    clc
+    adc #<IMG_BYTES
+    sta vs_desc + uci.VSPRITE_MASK
     lda imgbase_hi, y
-    sta zpS+1
-    lda #BOB_BYTES
-    sta zpCol
-dcol:
-    lda zpS
-    sta dimg+1
-    clc
-    adc #IMG_BYTES
-    sta dmsk+1
-    lda zpS+1
-    sta dimg+2
-    adc #0
-    sta dmsk+2
-    lda zpB
-    sta zpD
-    sta dld+1
-    sta dst+1
-    lda zpB+1
-    sta zpD+1
-    sta dld+2
-    sta dst+2
-    lda zpE0
-    sta zpEnd
-    ldx #0
-dseg:
-dld:
-    lda $ffff, x
-dmsk:
-    and $ffff, x
-dimg:
-    ora $ffff, x
-dst:
-    sta $ffff, x
-    inx
-    cpx zpEnd
-    bne dseg
-    cpx #BOB_H
-    beq dcol_done
-    lda zpD
-    clc
-    adc #<312
-    sta zpD
-    sta dld+1
-    sta dst+1
-    lda zpD+1
-    adc #>312
-    sta zpD+1
-    sta dld+2
-    sta dst+2
-    lda zpEnd
-    clc
-    adc #8
-    cmp #BOB_H
-    bcc !+
-    lda #BOB_H
-!:  sta zpEnd
-    jmp dseg
-dcol_done:
-    lda zpB
-    clc
-    adc #8
-    sta zpB
-    bcc !+
-    inc zpB+1
-!:  lda zpS
-    clc
-    adc #BOB_H
-    sta zpS
-    bcc !+
-    inc zpS+1
-!:  dec zpCol
-    beq !+
-    jmp dcol
-!:  ldx zpBob
+    sta vs_desc + uci.VSPRITE_SOURCE + 1
+    adc #>IMG_BYTES
+    sta vs_desc + uci.VSPRITE_MASK + 1
+    jsr ULT_VSPRITE_DRAW
+    ldx zpBob
     inx
     cpx zpN
     beq !+
     jmp dloop
 !:  rts
 
-dbuf_hi: .byte 0
-
 // ---------------------------------------------------------------------------
 // Tables
-dl_lo_tab:  .word dirtyA_lo, dirtyB_lo
-dl_hi_tab:  .word dirtyA_hi, dirtyB_hi
-dl_yin_tab: .word dirtyA_yin, dirtyB_yin
-
-rowbase_lo: .fill 25, <(i*312)
-rowbase_hi: .fill 25, >(i*312)
-xoff_lo:    .fill 40, <(i*8)
-xoff_hi:    .fill 40, >(i*8)
+dirty_x_tab: .word dirtyA_x, dirtyB_x
+dirty_y_tab: .word dirtyA_y, dirtyB_y
 imgbase_lo: .fill SHAPES*4, <(bobdata + i*SHIFT_BYTES)
 imgbase_hi: .fill SHAPES*4, >(bobdata + i*SHIFT_BYTES)
+
+vs_desc:
+    .word BITMAP_A
+    .word CLEAN
+    .word 0
+    .word 0
+    .byte 0, 0, BOB_BYTES, BOB_H, 0, 0
 
 .align $100
 bx:         .fill MAXBOBS, 0
@@ -828,12 +647,10 @@ by:         .fill MAXBOBS, 0
 bdx:        .fill MAXBOBS, 0
 bdy:        .fill MAXBOBS, 0
 bshape:     .fill MAXBOBS, 0
-dirtyA_lo:  .fill MAXBOBS, 0
-dirtyA_hi:  .fill MAXBOBS, 0
-dirtyA_yin: .fill MAXBOBS, 0
-dirtyB_lo:  .fill MAXBOBS, 0
-dirtyB_hi:  .fill MAXBOBS, 0
-dirtyB_yin: .fill MAXBOBS, 0
+dirtyA_x:   .fill MAXBOBS, 0
+dirtyA_y:   .fill MAXBOBS, 0
+dirtyB_x:   .fill MAXBOBS, 0
+dirtyB_y:   .fill MAXBOBS, 0
 
 // ---------------------------------------------------------------------------
 // Vsprite images, generated at assembly time. pix() returns the colour index

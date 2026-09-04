@@ -32,8 +32,8 @@ _uci_decode_status:
         ; The decoder counts in bytes. The status queue is 256 bytes, so a
         ; length of exactly 256 is reachable and would arrive here as a low
         ; byte of zero - which the decoder reads as an empty status, and an
-        ; empty status is success. Clamp instead: only the first four bytes
-        ; decide the encoding, so 255 decodes the same as 256 would.
+        ; empty status is success. Clamp instead: every supported status shape
+        ; fits well below 255 bytes, so 255 decodes the same as 256 would.
         cpx #$00
         beq @fits
         lda #$FF
@@ -763,7 +763,7 @@ _ultimate_fstat:
         rts
 
 ; uint8_t ultimate_rename(const char *from, const char *to);
-; uint8_t ultimate_copy  (const char *from, const char *to);
+; uint8_t ultimate_copy  (const char *name, const char *destination_path);
 ;
 ; A/X holds the second name; the C stack holds the first at 0..1.
 _ultimate_rename:

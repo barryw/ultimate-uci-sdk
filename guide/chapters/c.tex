@@ -3,7 +3,7 @@
 \guidechapter{PROGRAMMING IN C}{%
   \item Startup, discovery and diagnostics
   \item Files, disk images, the clock and the REU
-  \item Machine and drive control
+  \item Machine, drive, graphics and PCM audio control
   \item Network and HTTP services
   \item The complete low-level UCI API
 }
@@ -21,15 +21,17 @@ uint8\_t err = ultimate\_init();\
 if (err != ULTIMATE\_OK)\
 \hspace*{1em}printf("init: \%s\textbackslash n", ultimate\_strerror(err));
 \end{listingbox}
+The call prints nothing on success. With UCI disabled, it prints:
 
 \begin{outputbox}
-No text on success. On failure, for example:\\
-INIT: TIMEOUT
+INIT: NO ULTIMATE FOUND
 \end{outputbox}
 
-Output boxes show a representative successful run on an Ultimate 64 Elite.
-Model names, paths, directory entries, addresses and network replies vary with
-the machine and the files or servers used.
+An \textsc{Output} box contains only text the listing actually prints on the
+C64. A \textsc{Result} box describes a return value, memory change or visible
+hardware effect. Captured output below came from an Ultimate 64 Elite; model
+names, paths, directory entries, addresses and network replies vary with the
+machine and the files or servers used.
 
 The C64 holds text in PETSCII, the PET Standard Code of Information
 Interchange. The Ultimate speaks ASCII. The two codes agree on the digits and
@@ -98,9 +100,11 @@ if (err != ULTIMATE\_OK) \{\
 \}
 \end{listingbox}
 
-\begin{outputbox}
-TIMEOUT (DEVICE 0)
-\end{outputbox}
+\begin{resultbox}
+The message names the SDK error and includes the last raw device status.
+When the target supplied no numeric status, that value is
+\cmd{UCI\_DEVICE\_CODE\_NONE} (65535).
+\end{resultbox}
 
 \cmd{ultimate\_strerror()} returns stable SDK text.
 \cmd{ultimate\_device\_code()} returns the last target-specific numeric status
@@ -135,10 +139,11 @@ else if (err == ULTIMATE\_OK)\
 SID 1: \$D400 TYPE \$83\\
 SID 2: \$D400 TYPE \$83\\
 SID 3: \$D400 TYPE \$85\\
-SID 4: \$D400 TYPE \$85\\
-If firmware removes the command instead:\\
-LEGACY SID QUERY UNAVAILABLE
+SID 4: \$D400 TYPE \$85
 \end{outputbox}
+
+Firmware without that command instead prints
+\cmd{LEGACY SID QUERY UNAVAILABLE}.
 
 Firmware still implements this query, but its documentation marks
 \cmd{CTRL\_CMD\_GET\_HWINFO} deprecated and publishes no replacement
@@ -174,10 +179,10 @@ err = ultimate\_palette\_set\_color(6, 255, 0, 0);\
 err = ultimate\_palette\_reset();
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 SET COLOUR 6 TO RED: ULTIMATE_OK\\
 RESTORE BUILT-IN PALETTE: ULTIMATE_OK
-\end{outputbox}
+\end{resultbox}
 
 \cmd{ultimate\_palette\_get()} reads all sixteen RGB triples and
 \cmd{ultimate\_palette\_set()} writes all of them. The single-colour call sets
@@ -204,11 +209,26 @@ if (ultimate\_turbo\_available()) \{\
 \}
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 AVAILABLE = 1\\
 PREVIOUS SPEED = U64_SPEED_1MHZ\\
 SET 4 MHZ, THEN RESTORE SPEED AND BADLINES: ULTIMATE_OK
-\end{outputbox}
+\end{resultbox}
+
+Every portable speed and the machine-specific maximum use the same call:
+
+\begin{listingbox}
+err = ultimate\_turbo\_set(U64\_SPEED\_1MHZ);\
+err = ultimate\_turbo\_set(U64\_SPEED\_2MHZ);\
+err = ultimate\_turbo\_set(U64\_SPEED\_3MHZ);\
+err = ultimate\_turbo\_set(U64\_SPEED\_4MHZ);\
+err = ultimate\_turbo\_set(U64\_SPEED\_MAX);
+\end{listingbox}
+
+\begin{resultbox}
+The first four constants mean the same speed on every Ultimate 64. MAX selects
+the fastest index implemented by this machine.
+\end{resultbox}
 
 \cmd{ultimate\_turbo\_available()} is the capability check and
 \cmd{ultimate\_turbo\_get()} reads the index. The set call changes only speed.
@@ -217,6 +237,103 @@ non-zero restores them. The final set restores the speed read at entry.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/turbo.s}}
 
+\Needspace{38\baselineskip}
+\section{Composite A Software Vsprite}
+
+\cmd{ultimate\_vsprite\_draw()} draws a rectangular image directly into a
+standard 40-column C64 bitmap. It is local 6510 code: it works without UCI or
+Ultimate hardware.
+
+This example draws a two-byte-wide, eight-line masked image. Image and mask
+bytes are column-major: every line of byte column zero comes first, followed
+by every line of byte column one.
+
+\begin{listingbox}
+static const uint8\_t image[16] = \{\
+\hspace*{1em}0x00,0x18,0x3c,0x7e,0x7e,0x3c,0x18,0x00,\
+\hspace*{1em}0x00,0x18,0x3c,0x7e,0x7e,0x3c,0x18,0x00\
+\};\
+static const uint8\_t mask[16] = \{\
+\hspace*{1em}0xff,0xe7,0xc3,0x81,0x81,0xc3,0xe7,0xff,\
+\hspace*{1em}0xff,0xe7,0xc3,0x81,0x81,0xc3,0xe7,0xff\
+\};\
+ultimate\_vsprite sprite = \{\
+\hspace*{1em}(uint8\_t *)0x6000, image, mask, NULL,\
+\hspace*{1em}12, 72, 2, 8, 0, VSPRITE\_F\_MASKED\
+\};\
+\
+err = ultimate\_vsprite\_draw(\&sprite);
+\end{listingbox}
+
+\begin{resultbox}
+The 16 source bytes are composited at cell column 12, raster line 72.
+\end{resultbox}
+
+The bitmap pointer is its 8K base. \cmd{x} is a bitmap byte and screen-cell
+column from 0 to 39, not a pixel coordinate; \cmd{y} is a raster line from 0
+to 199. Width is measured in bitmap byte columns and height in raster lines.
+The SDK does no clipping: the complete rectangle must fit.
+
+\begin{reftable}{p{0.36\linewidth}p{0.18\linewidth}p{0.34\linewidth}}
+Flags & Source layout & Operation \\
+\midrule
+\cmd{0} & column-major image & destination OR source \\
+\cmd{VSPRITE\_F\_MASKED} & image and mask &
+  (destination AND mask) OR source \\
+\cmd{VSPRITE\_F\_COPY} & another C64 bitmap & copy the same rectangle; useful
+  for restoring a clean background \\
+\cmd{VSPRITE\_F\_COLOR} & column-major image & OR the image and write
+  \cmd{color} to screen cells containing a non-zero source byte \\
+\end{reftable}
+
+Starting from the descriptor above, these calls exercise the other three
+operations:
+
+\begin{listingbox}
+sprite.flags = 0;                 /* OR */\
+sprite.mask = NULL;\
+err = ultimate\_vsprite\_draw(\&sprite);\
+\
+sprite.flags = VSPRITE\_F\_COPY;  /* restore */\
+sprite.source = (uint8\_t *)0x4000;\
+err = ultimate\_vsprite\_draw(\&sprite);\
+\
+sprite.flags = VSPRITE\_F\_COLOR; /* OR and recolor */\
+sprite.source = image;\
+sprite.screen = (uint8\_t *)0x4400;\
+sprite.color = 6;\
+err = ultimate\_vsprite\_draw(\&sprite);
+\end{listingbox}
+
+\begin{resultbox}
+OR adds source bits; COPY restores the same rectangle from another bitmap;
+COLOR adds source bits and writes screen value 6 to touched cells. The first
+listing demonstrated MASKED.
+\end{resultbox}
+
+For color mode, set \cmd{screen} to the 1K screen base. Color mode cannot be
+combined with masked or copy mode. Mask and screen may be \cmd{NULL} when
+their modes do not use them. A null required pointer, zero size, invalid flag
+combination or out-of-bounds rectangle returns
+\cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT}.
+
+The routine patches its own instructions for speed, so it must execute from
+RAM and is not re-entrant. Movement, sub-byte image shifting, background
+policy, buffering and frame timing belong to the caller; the
+\cmd{demos/vsprites} and \cmd{demos/boing} programs show those two different
+policies using this same primitive.
+
+\begin{tip}
+For moving objects, save or copy the clean background under last frame's
+rectangles, restore those rectangles, update every position, then draw the new
+frame. Keeping restoration separate prevents old pixels from trailing behind
+the objects.
+\end{tip}
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/vsprite.s};
+\cmd{tests/emulator/sdk.suite}; \cmd{demos/vsprites/vsprites.asm};
+\cmd{demos/boing/boing.asm}}
+
 \section{Change And Read The Current Directory}
 
 \begin{listingbox}
@@ -224,15 +341,15 @@ char path[128];\
 uint16\_t length;\
 uint8\_t err;\
 \
-err = ultimate\_chdir("/usb1/games");\
+err = ultimate\_chdir("/USB1/GAMES");\
 err = ultimate\_getpath(path, sizeof path, \&length);\
 err = ultimate\_getpath(path, sizeof path, NULL);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 path = "/USB1/GAMES"\\
 length = 11
-\end{outputbox}
+\end{resultbox}
 
 The change-directory call selects an absolute or relative firmware path. The
 paired getpath calls show its optional output: receive the stored length
@@ -268,9 +385,9 @@ When attributes are not needed, pass the documented optional value:
 err = ultimate\_readdir(name, sizeof name, NULL);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 name receives the entry; no attribute byte is stored.
-\end{outputbox}
+\end{resultbox}
 
 If a program stops the walk before \cmd{ULTIMATE\_END}, call
 \cmd{uci\_abort()} before issuing another command.
@@ -278,13 +395,13 @@ If a program stops the walk before \cmd{ULTIMATE\_END}, call
 \subsection*{Make a directory, and return to the configured one}
 
 \begin{listingbox}
-err = ultimate\_mkdir("saves");\
+err = ultimate\_mkdir("SAVES");\
 err = ultimate\_home();
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 SAVES is created inside the current directory.
-\end{outputbox}
+\end{resultbox}
 
 \cmd{ultimate\_mkdir()} creates one directory in the current one.
 \cmd{ultimate\_home()} changes to the directory the machine's owner configured
@@ -301,7 +418,7 @@ uint16\_t got;\
 uint8\_t err;\
 uint8\_t close\_err;\
 \
-err = ultimate\_open("readme.txt", DOS\_FA\_READ);\
+err = ultimate\_open("README.TXT", DOS\_FA\_READ);\
 if (err == ULTIMATE\_OK) \{\
 \hspace*{1em}err = ultimate\_seek(0);\
 \hspace*{1em}if (err == ULTIMATE\_OK)\
@@ -311,15 +428,27 @@ if (err == ULTIMATE\_OK) \{\
 \}
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 got = 128\\
 err = ULTIMATE_OK
-\end{outputbox}
+\end{resultbox}
 
 \cmd{ultimate\_open()} establishes the firmware's current file.
 \cmd{ultimate\_seek()} selects an absolute position, \cmd{ultimate\_read()}
 reads from it, and \cmd{ultimate\_close()} releases the same file. A short read
 is end-of-file, not an error; \cmd{got} is the number stored.
+
+The four open bits combine into the common policies below:
+
+\begin{reftable}{p{0.45\linewidth}p{0.47\linewidth}}
+Call & Policy \\
+\midrule
+\cmd{ultimate\_open(name, DOS\_FA\_READ)} & open an existing file for reading \\
+\cmd{ultimate\_open(name, DOS\_FA\_WRITE)} & open an existing file for writing without truncating it \\
+\cmd{ultimate\_open(name, DOS\_FA\_WRITE | DOS\_FA\_CREATE\_NEW)} & create only when the name does not exist \\
+\cmd{ultimate\_open(name, DOS\_FA\_WRITE | DOS\_FA\_CREATE\_ALWAYS)} & create or replace the file \\
+\cmd{ultimate\_open(name, DOS\_FA\_READ | DOS\_FA\_WRITE)} & update an existing file and read it back \\
+\end{reftable}
 
 The byte-count output is optional:
 
@@ -327,28 +456,28 @@ The byte-count output is optional:
 err = ultimate\_read(buf, sizeof buf, NULL);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 buf receives bytes and the file advances; the count is discarded.
-\end{outputbox}
+\end{resultbox}
 
 \subsection*{Create, write and delete a file}
 
 \begin{listingbox}
 static const uint8\_t message[] = \{0x4f,0x4b,13\};\
 \
-err = ultimate\_open("result.txt",\
+err = ultimate\_open("RESULT.TXT",\
 \hspace*{2em}DOS\_FA\_CREATE\_ALWAYS | DOS\_FA\_WRITE);\
 if (err == ULTIMATE\_OK) \{\
 \hspace*{1em}err = ultimate\_write(message, sizeof message);\
 \hspace*{1em}close\_err = ultimate\_close();\
 \hspace*{1em}if (err == ULTIMATE\_OK) err = close\_err;\
 \}\
-err = ultimate\_delete("result.txt");
+err = ultimate\_delete("RESULT.TXT");
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 RESULT.TXT: WROTE 3 BYTES, CLOSED, DELETED
-\end{outputbox}
+\end{resultbox}
 
 The open flags create or replace the firmware-side file.
 \cmd{ultimate\_write()} appends the specified bytes at its current position;
@@ -363,7 +492,7 @@ The open flags create or replace the firmware-side file.
 ultimate\_fileinfo info;\
 uint16\_t year;\
 \
-err = ultimate\_stat("readme.txt", \&info);\
+err = ultimate\_stat("README.TXT", \&info);\
 if (err == ULTIMATE\_OK) \{\
 \hspace*{1em}year = 1980 + (info.date >> 9);\
 \hspace*{1em}printf("\%s: \%lu bytes, \%u\textbackslash n",\
@@ -375,21 +504,21 @@ if (err == ULTIMATE\_OK) \{\
 README.TXT: 1024 BYTES, 2026
 \end{outputbox}
 
-\cmd{ultimate\_stat()} takes a name in the current directory, or a path.
+\cmd{ultimate\_stat()} takes a name in the current directory.
 \cmd{ultimate\_fstat()} answers the same question about the file
 \cmd{ultimate\_open()} left open, and takes no name:
 
 \begin{listingbox}
-err = ultimate\_open("readme.txt", DOS\_FA\_READ);\
+err = ultimate\_open("README.TXT", DOS\_FA\_READ);\
 if (err == ULTIMATE\_OK) \{\
 \hspace*{1em}err = ultimate\_fstat(\&info);\
 \hspace*{1em}ultimate\_close();\
 \}
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 info describes the open file.
-\end{outputbox}
+\end{resultbox}
 
 The reply has this layout on the wire and is received straight into the
 structure:
@@ -417,17 +546,18 @@ a size read out of half of its four bytes would look like a real answer.
 \section{Rename And Copy A File}
 
 \begin{listingbox}
-err = ultimate\_rename("old.txt", "new.txt");\
-err = ultimate\_copy("new.txt", "backup.txt");
+err = ultimate\_rename("OLD.TXT", "NEW.TXT");\
+err = ultimate\_copy("NEW.TXT", "/USB1/BACKUP");
 \end{listingbox}
 
-\begin{outputbox}
-OLD.TXT becomes NEW.TXT; BACKUP.TXT is a copy of it.
-\end{outputbox}
+\begin{resultbox}
+OLD.TXT becomes NEW.TXT; BACKUP/NEW.TXT is a copy of it.
+\end{resultbox}
 
-Both names are in the current directory unless they carry a path. The Ultimate
-performs the copy itself, so no bytes pass through the C64 and a large file
-costs no more C64 time than a small one.
+Rename uses two names in the current directory. Copy takes a source there and
+a destination path, preserving the source filename. The Ultimate performs
+the copy itself, so no bytes pass through the C64 and a large file costs no more
+C64 memory than a small one.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/dosinfo.s}}
 
@@ -436,21 +566,21 @@ costs no more C64 time than a small one.
 \begin{listingbox}
 uint16\_t end;\
 \
-err = ultimate\_load("game.prg", 0);\
+err = ultimate\_load("GAME.PRG", 0);\
 end = ultimate\_last\_end();\
 \
-err = ultimate\_load("font.prg", 0xC000);\
+err = ultimate\_load("FONT.PRG", 0xC000);\
 end = ultimate\_last\_end();\
 \
-err = ultimate\_bload("font.bin", 0xC000, 2048);\
-err = ultimate\_save("screen.bin", 0x0400, 1000);
+err = ultimate\_bload("FONT.BIN", 0xC000, 2048);\
+err = ultimate\_save("SCREEN.BIN", 0x0400, 1000);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 GAME.PRG END = address after loaded data\\
 FONT.BIN: 2048 bytes loaded at \$C000\\
 SCREEN.BIN: 1000 bytes saved
-\end{outputbox}
+\end{resultbox}
 
 The first \cmd{ultimate\_load()} uses the PRG header address; the second shows
 the explicit-address form. Both consume the header, and
@@ -469,16 +599,16 @@ International Electrotechnical Commission, and the number is the one a BASIC
 program gives in \bas{load"name",8}.
 
 \begin{listingbox}
-err = ultimate\_mount(8, "games/pitfall.d64");\
+err = ultimate\_mount(8, "GAMES/PITFALL.D64");\
 err = ultimate\_swap(8);\
 err = ultimate\_unmount(8);\
 \
-err = ultimate\_mount(ULTIMATE\_DRIVE\_LAST, "demo.d64");
+err = ultimate\_mount(ULTIMATE\_DRIVE\_LAST, "DEMO.D64");
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 PITFALL.D64 is mounted in the drive answering as device 8.
-\end{outputbox}
+\end{resultbox}
 
 The firmware picks the image type from the extension. \cmd{.D64}, \cmd{.D71}
 and \cmd{.D81} hold the sectors of a 1541, 1571 and 1581 disk; \cmd{.G64} and
@@ -520,8 +650,7 @@ err = ultimate\_drive\_power(ULTIMATE\_DRIVE\_A, \&running);
 
 \begin{outputbox}
 TYPE 0 DEVICE 8 POWER 1\\
-TYPE 2 DEVICE 9 POWER 0\\
-running = 1
+TYPE 2 DEVICE 9 POWER 1
 \end{outputbox}
 
 \cmd{ultimate\_drive\_info()} fills in every drive the machine has.
@@ -564,9 +693,9 @@ uint8\_t ramdisk[CTRL\_RAMDISK\_BYTES];\
 err = ultimate\_ramdisk\_info(ramdisk);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 ramdisk holds four two-byte records.
-\end{outputbox}
+\end{resultbox}
 
 The reply is \cmd{CTRL\_RAMDISK\_DRIVES} records of a drive type code and a
 size in 64K units, so the buffer must hold \cmd{CTRL\_RAMDISK\_BYTES}. A type
@@ -596,8 +725,8 @@ if (err == ULTIMATE\_OK) puts(now);
 \end{listingbox}
 
 \begin{outputbox}
-2026/08/22 14:30:00\\
-SAT 2026/08/22 14:30:00
+2026/09/04 17:47:45\\
+FRI 2026/09/04 17:47:45
 \end{outputbox}
 
 \cmd{ULTIMATE\_TIME\_PLAIN} asks for the date and time;
@@ -613,9 +742,9 @@ still returns \cmd{ULTIMATE\_OK}, with the part that fitted, as
 err = ultimate\_set\_time(126, 8, 22, 14, 30, 0);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 The clock is set to 2026/08/22 14:30:00.
-\end{outputbox}
+\end{resultbox}
 
 Setting takes numbers rather than text, in the order year, month, day, hour,
 minute, second. The year is the year less 1900, so 2026 is 126. That is the
@@ -636,14 +765,21 @@ if (ultimate\_reu\_available()) \{\
 \}
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 banks = installed REU size in 64K banks\\
 1000 bytes stashed and fetched: ULTIMATE_OK
-\end{outputbox}
+\end{resultbox}
 
 Availability is separate from size, which is returned in 64K banks. Stash
 copies C64 RAM to the REU; fetch copies the same range back. A DMA length of
 zero means 65536 bytes.
+
+\begin{tip}
+Treat the REU as a fast asset cache, not as ordinary addressable RAM. Load a
+level, music bank or animation frames into it once, then fetch only the piece
+needed for the current room or frame. It also makes a useful clean-screen or
+undo buffer because stash and fetch finish before they return.
+\end{tip}
 
 \subsection*{Move the current file directly to and from the REU}
 
@@ -651,7 +787,7 @@ zero means 65536 bytes.
 \subsection*{File to REU}
 
 \begin{listingbox}
-err = ultimate\_open("assets.bin", DOS\_FA\_READ);\
+err = ultimate\_open("ASSETS.BIN", DOS\_FA\_READ);\
 if (err == ULTIMATE\_OK) \{\
 \hspace*{1em}err = ultimate\_seek(0);\
 \hspace*{1em}if (err == ULTIMATE\_OK)\
@@ -660,15 +796,15 @@ if (err == ULTIMATE\_OK) \{\
 \}
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 ASSETS.BIN TO REU \$000000: 65536 BYTES
-\end{outputbox}
+\end{resultbox}
 
 \Needspace{16\baselineskip}
 \subsection*{REU to file}
 
 \begin{listingbox}
-err = ultimate\_open("capture.bin",\
+err = ultimate\_open("CAPTURE.BIN",\
 \hspace*{2em}DOS\_FA\_CREATE\_ALWAYS | DOS\_FA\_WRITE);\
 if (err == ULTIMATE\_OK) \{\
 \hspace*{1em}err = ultimate\_reu\_save(0, 65536UL);\
@@ -676,9 +812,9 @@ if (err == ULTIMATE\_OK) \{\
 \}
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 REU \$000000 TO CAPTURE.BIN: 65536 BYTES
-\end{outputbox}
+\end{resultbox}
 
 These functions take no filename or file handle. The first flow opens the
 firmware's current DOS file, selects its first byte, then copies it to REU
@@ -686,6 +822,130 @@ address zero. The second flow makes a different current file and copies REU
 bytes into it. Close the same firmware-side file after either transfer.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/reu.s}}
+
+\Needspace{40\baselineskip}
+\section{Load And Play PCM Through Ultimate Audio}
+
+Ultimate Audio plays PCM from the REU window in the background; it is not SID
+sample playback. Enable \bas{map ultimate audio \$df20--dfff} in the machine's
+settings, then probe it before touching a voice.
+
+This example loads a PCM WAV directly from Ultimate storage into REU address
+\cmd{\$004000}, configures channel zero and starts it. The PCM bytes never pass
+through C64 RAM.
+
+\begin{listingbox}
+ultimate\_audio\_voice voice = \{\
+\hspace*{1em}0, 0, UA\_VOLUME\_MAX, UA\_PAN\_CENTER,\
+\hspace*{1em}0, 0, 0, 0, 1\
+\};\
+uint8\_t version;\
+\
+err = ultimate\_audio\_init();\
+if (err == ULTIMATE\_OK \&\& ultimate\_audio\_available()) \{\
+\hspace*{1em}version = ultimate\_audio\_version();\
+\hspace*{1em}err = ultimate\_audio\_load\_wav(\
+\hspace*{2em}"/USB0/BOING.WAV", 0x004000UL, \&voice);\
+\hspace*{1em}if (err == ULTIMATE\_OK)\
+\hspace*{2em}err = ultimate\_audio\_configure(\&voice);\
+\hspace*{1em}if (err == ULTIMATE\_OK)\
+\hspace*{2em}err = ultimate\_audio\_start(voice.channel, voice.flags);\
+\}
+\end{listingbox}
+
+\begin{resultbox}
+The WAV data is in the REU; channel 0 starts with its file format and rate.
+\end{resultbox}
+
+\cmd{ultimate\_audio\_init()} performs an inaudible probe using channel six
+and returns \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED} when the register block is not
+mapped. \cmd{ultimate\_audio\_available()} reads the cached result, and the
+version call returns the raw module byte only after that result is true.
+
+The WAV loader accepts uncompressed 8- or 16-bit PCM, mono or stereo, from 96
+through 65,535Hz. It fills \cmd{reu\_address}, \cmd{length}, \cmd{rate} and the
+format bits in \cmd{flags}; channel, volume, pan and repeat points keep the
+values supplied by the caller. An 8-bit WAV is unsigned, so the loader fixes
+its sign in place in the REU. Stereo data uses
+\cmd{UA\_CTRL\_INTERLEAVE}; the returned voice describes its left channel.
+
+To describe raw PCM without a WAV, fill all fields yourself. Length and rate
+must be non-zero, all REU ranges and repeat points must fit in 24 bits, and
+\cmd{rate} is the rounded divider
+\cmd{6250000 / samples\_per\_second}. Use \cmd{UA\_CTRL\_16BIT} for signed
+little-endian 16-bit data, \cmd{UA\_CTRL\_REPEAT} with
+\cmd{repeat\_a < repeat\_b <= length}, and a pan value from
+\cmd{UA\_PAN\_LEFT} through \cmd{UA\_PAN\_RIGHT}.
+
+Choose one format before configuring a raw voice:
+
+\begin{listingbox}
+voice.flags = 0;                         /* signed 8-bit mono */\
+voice.flags = UA\_CTRL\_16BIT;           /* signed 16-bit mono */\
+voice.flags = UA\_CTRL\_INTERLEAVE;      /* 8-bit stereo side */\
+voice.flags = UA\_CTRL\_16BIT |\
+              UA\_CTRL\_INTERLEAVE;      /* 16-bit stereo side */
+\end{listingbox}
+
+\begin{resultbox}
+For an 8-bit stereo right voice add 1 to the left voice's REU address and
+subtract 1 from its length. For 16-bit stereo add and subtract 2 instead.
+Configure both voices before starting either one.
+\end{resultbox}
+
+Looping, completion interrupts, volume and pan are independent choices:
+
+\begin{listingbox}
+voice.flags |= UA\_CTRL\_REPEAT;\
+voice.repeat\_a = 4096;\
+voice.repeat\_b = voice.length;\
+\
+voice.flags |= UA\_CTRL\_IRQ;\
+voice.volume = UA\_VOLUME\_MAX;          /* 0 is silent */\
+voice.pan = UA\_PAN\_LEFT;\
+voice.pan = UA\_PAN\_CENTER;\
+voice.pan = UA\_PAN\_RIGHT;
+\end{listingbox}
+
+\begin{resultbox}
+REPEAT loops bytes 4096 through the end; IRQ latches and asserts completion;
+volume accepts 0--63 and pan accepts 0--15. The three named pan constants show
+the common positions.
+\end{resultbox}
+
+Configure validates and writes the voice but leaves its gate closed. It also
+stops the channel and waits for the hardware to settle; always call start
+after configure. Start and stop are immediate.
+
+\subsection*{Handle end-of-sample status}
+
+\begin{listingbox}
+/* After installing an IRQ handler: */\
+voice.flags |= UA\_CTRL\_IRQ;\
+err = ultimate\_audio\_configure(\&voice);\
+if (err == ULTIMATE\_OK)\
+\hspace*{1em}err = ultimate\_audio\_start(voice.channel, voice.flags);\
+\
+/* In that handler: */\
+if (ultimate\_audio\_irq\_status() \& (1u << voice.channel))\
+\hspace*{1em}err = ultimate\_audio\_irq\_clear(voice.channel);\
+\
+/* To cancel playback from the main program: */\
+err = ultimate\_audio\_stop(voice.channel);
+\end{listingbox}
+
+\begin{resultbox}
+The bit for channel 0 is cleared after the sample ends; stop cancels playback.
+\end{resultbox}
+
+\cmd{UA\_CTRL\_IRQ} asserts the C64 IRQ line when playback ends as well as
+latching the channel bit. Install an interrupt handler that clears it, or keep
+interrupts disabled while polling. Status returns all seven channel bits;
+clear takes one channel number.
+
+\evidence{\cmd{include/ultimate.h}; \cmd{src/uci/audio.s};
+\cmd{src/uci/wav.s}; \cmd{tests/hardware/ucitest.c};
+\cmd{demos/boing/boing.asm}}
 
 \section{Inspect Network Interfaces}
 
@@ -701,10 +961,10 @@ if (err == ULTIMATE\_OK \&\& count != 0) \{\
 \}
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 count = number of network interfaces\\
 mac = six bytes; ipconfig = twelve bytes
-\end{outputbox}
+\end{resultbox}
 
 The count call reports available interfaces. The next two calls read the
 six-byte MAC address and the twelve-byte IPv4 configuration for interface zero
@@ -721,9 +981,9 @@ if (err == ULTIMATE\_OK) \{\
 \}
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 The interface keeps its netmask and gateway and answers on .60 instead.
-\end{outputbox}
+\end{resultbox}
 
 The block \cmd{ultimate\_net\_setip()} writes is the one
 \cmd{ultimate\_net\_ipconfig()} hands out: four bytes of address, then four of
@@ -767,10 +1027,10 @@ if (err == ULTIMATE\_OK)\
 \hspace*{1em}err = ultimate\_net\_close(handle);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 TCP: 3 BYTES SENT; REPLY BYTES RETURNED IN got\\
 UDP HANDLE OPENED AND CLOSED
-\end{outputbox}
+\end{resultbox}
 
 \cmd{ultimate\_net\_connect()} opens TCP; \cmd{ultimate\_net\_udp()} opens
 UDP. Both return a handle. Write reports bytes accepted through \cmd{sent}; read
@@ -795,10 +1055,10 @@ uint16\_t got;\
 err = ultimate\_http\_get(url, reply, sizeof reply, \&got);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 err = ULTIMATE_OK\\
 got = HTTP response-body bytes stored in reply
-\end{outputbox}
+\end{resultbox}
 
 \cmd{ultimate\_http\_get()} creates, exchanges and closes one GET request.
 The explicit bytes prevent cc65 from changing lowercase URL characters to the
@@ -813,10 +1073,14 @@ reuses \cmd{url}, \cmd{reply} and \cmd{got} from the preceding one.
 \begin{listingbox}
 uint8\_t request;\
 uint8\_t close\_err;\
+static const char header[] = \{\
+\hspace*{1em}0x61,0x63,0x63,0x65,0x70,0x74,0x3a,0x20,\
+\hspace*{1em}0x74,0x65,0x78,0x74,0x2f,0x70,0x6c,0x61,0x69,0x6e,0\
+\};\
 \
 err = ultimate\_http\_open(HTTP\_VERB\_GET, url, \&request);\
 if (err == ULTIMATE\_OK) \{\
-\hspace*{1em}err = ultimate\_http\_header(request, "accept: text/plain");\
+\hspace*{1em}err = ultimate\_http\_header(request, header);\
 \hspace*{1em}if (err == ULTIMATE\_OK)\
 \hspace*{2em}err = ultimate\_http\_exchange(request, HTTP\_BODY\_NONE,\
 \hspace*{3em}reply, sizeof reply, \&got);\
@@ -827,15 +1091,36 @@ if (err == ULTIMATE\_OK) \{\
 err = ultimate\_http\_free\_all();
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 GET WITH ONE HEADER: RESPONSE STORED\\
 ALL HTTP OBJECTS FREED
-\end{outputbox}
+\end{resultbox}
 
 \cmd{ultimate\_http\_open()} returns the request handle that header, exchange
 and close all use. \cmd{HTTP\_VERB\_GET} is one of the \cmd{HTTP\_VERB\_*}
 codes; \cmd{HTTP\_VERB\_POST}, \cmd{HTTP\_VERB\_PUT} and the rest are in
 \cmd{uci\_protocol.h}. The header line is one string in \cmd{key: value} form.
+
+Every supported HTTP method is selected at open time:
+
+\begin{listingbox}
+static const uint8\_t verbs[] = \{\
+\hspace*{1em}HTTP\_VERB\_GET, HTTP\_VERB\_PUT, HTTP\_VERB\_POST,\
+\hspace*{1em}HTTP\_VERB\_PATCH, HTTP\_VERB\_DELETE, HTTP\_VERB\_HEAD,\
+\hspace*{1em}HTTP\_VERB\_OPTIONS, HTTP\_VERB\_CONNECT, HTTP\_VERB\_TRACE\
+\};\
+uint8\_t i;\
+\
+for (i = 0; i < sizeof verbs; ++i) \{\
+\hspace*{1em}err = ultimate\_http\_open(verbs[i], url, \&request);\
+\hspace*{1em}if (err == ULTIMATE\_OK) ultimate\_http\_close(request);\
+\}
+\end{listingbox}
+
+\begin{resultbox}
+Each iteration creates and closes a request with that method. Opening alone
+sends nothing to the server.
+\end{resultbox}
 
 This request sends no body, so the exchange is given
 \cmd{HTTP\_BODY\_NONE}. The next section builds a body and passes its handle
@@ -888,17 +1173,43 @@ if (err == ULTIMATE\_OK) \{\
 \}
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 POSTED \{"name":"ADA","score":4200\}; the reply is in reply.
-\end{outputbox}
+\end{resultbox}
 
 Keys and string values go on the wire as given, and cc65 changes the case of a
 plain C literal exactly as it does for a URL. Build them as bytes, or fold the
 case back at run time.
 
+The remaining root body format choices are short variations:
+
+\begin{listingbox}
+err = ultimate\_http\_body(HTTP\_BODY\_JSON\_ARRAY, \&body);\
+err = ultimate\_http\_body\_int(body, "", 1);\
+err = ultimate\_http\_body\_free(body);\
+\
+err = ultimate\_http\_body(HTTP\_BODY\_URL\_ENCODED, \&body);\
+err = ultimate\_http\_body\_string(body, k\_name, v\_ada);\
+err = ultimate\_http\_body\_free(body);
+\end{listingbox}
+
+\begin{resultbox}
+The first body is \cmd{[1]}; the second is the form field
+\cmd{name=ADA}. JSON object and binary bodies are shown above and below;
+\cmd{HTTP\_BODY\_NONE} is passed directly to exchange and creates no body.
+\end{resultbox}
+
 \subsection*{Add a boolean, and nest a container}
 
 \begin{listingbox}
+static const char k\_alive[] = \{0x61,0x6c,0x69,0x76,0x65,0\};\
+static const char k\_stats[] = \{0x73,0x74,0x61,0x74,0x73,0\};\
+static const char k\_score[] = \{0x73,0x63,0x6f,0x72,0x65,0\};\
+static const char k\_lives[] = \{0x6c,0x69,0x76,0x65,0x73,0\};\
+static const char k\_runs[] = \{0x72,0x75,0x6e,0x73,0\};\
+static const char no\_key[] = \{0\};\
+\
+err = ultimate\_http\_body(HTTP\_BODY\_JSON\_OBJECT, \&body);\
 err = ultimate\_http\_body\_bool(body, k\_alive, 1);\
 \
 err = ultimate\_http\_body\_object(body, k\_stats);\
@@ -907,18 +1218,19 @@ err = ultimate\_http\_body\_up(body);\
 err = ultimate\_http\_body\_int(body, k\_lives, 3);\
 \
 err = ultimate\_http\_body\_array(body, k\_runs);\
-err = ultimate\_http\_body\_int(body, k\_score, 1);\
-err = ultimate\_http\_body\_up(body);
+err = ultimate\_http\_body\_int(body, no\_key, 1);\
+err = ultimate\_http\_body\_up(body);\
+err = ultimate\_http\_body\_free(body);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 \{"alive":true,"stats":\{"score":4200\},"lives":3,"runs":[1]\}
-\end{outputbox}
+\end{resultbox}
 
 Adding an object or an array enters it. Every key added afterwards goes inside,
 until \cmd{ultimate\_http\_body\_up()} steps back out to the parent. Inside an
-array the key is ignored, so the value alone is what is added. Any non-zero
-value is true.
+array the key is ignored, but the pointer must still be valid; pass an empty
+string as shown. Any non-zero value is true.
 
 \subsection*{Send raw bytes instead}
 
@@ -933,9 +1245,9 @@ err = ultimate\_http\_body\_clear(body);\
 err = ultimate\_http\_body\_free(body);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 The body holds eight bytes, then none; the slot is returned.
-\end{outputbox}
+\end{resultbox}
 
 Successive calls to \cmd{ultimate\_http\_body\_binary()} append.
 \cmd{ultimate\_http\_body\_clear()} empties a body and keeps the slot and its
@@ -976,11 +1288,11 @@ uci\_set\_timeout(old\_timeout);\
 err = uci\_abort();
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 present = 1\\
 ident = command-interface identification byte\\
 abort = ULTIMATE_OK
-\end{outputbox}
+\end{resultbox}
 
 The signature and identification-register calls are immediate register reads.
 \cmd{uci\_init()} performs the functional startup check. Timeout zero means
@@ -1025,11 +1337,11 @@ req.arglen = 1;\
 err = uci\_exec(\&req);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 IDENTIFY: reply contains target name\\
 GET_TIME: reply contains formatted time\\
 GET_HWINFO: reply contains model name
-\end{outputbox}
+\end{resultbox}
 
 The identify request has no arguments: zero initialization leaves
 \cmd{args}, \cmd{payload} and their lengths empty. The time request supplies
@@ -1049,10 +1361,10 @@ req.statusmax = 0;\
 err = uci\_exec(\&req);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 req.datalen = 0\\
 req.statuslen = 0
-\end{outputbox}
+\end{resultbox}
 
 \section{Read A Raw Multi-block Reply}
 
@@ -1065,10 +1377,10 @@ while (err == ULTIMATE\_OK) \{\
 \}
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 Each iteration receives one reply block; the loop ends when\\
 uci_more_blocks() = 0
-\end{outputbox}
+\end{resultbox}
 
 The first call submits the request and returns one reply block. The boolean
 call reports whether another follows; the next call releases the current block
@@ -1098,12 +1410,12 @@ empty status as success, so this is also the form without status bytes:
 err = uci\_decode\_status(UCI\_TARGET\_DOS1, NULL, 0);
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 expected = UCI_STATUS_FMT_DECIMAL3\\
 err = ULTIMATE_ERR_DEVICE\\
 device_code = 404\\
 empty DOS status = ULTIMATE_OK
-\end{outputbox}
+\end{resultbox}
 
 \evidence{\cmd{include/uci.h}; \cmd{src/uci/uci\_core.s};
 \cmd{bindings/cc65/ultimate\_cc65.s}}

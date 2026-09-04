@@ -1,0 +1,1096 @@
+% ca65 assembly API reference.
+
+\guidechapter{ASSEMBLY API REFERENCE}{%
+  \item Every callable symbol exported by \cmd{ultimate.inc}
+  \item Register and shared-cell inputs, outputs and clobbers
+  \item Short ca65 call examples
+}
+
+\begin{referencechapter}
+
+\newcommand{\asmref}[7]{%
+  \asmapi{#1}%
+  \entryfield{Call}{\cmd{jsr #1}}%
+  \entryhead{Inputs}#2\par
+  \entryhead{Outputs}#3\par
+  \entryhead{Clobbers}Registers not listed as outputs are undefined;
+  processor flags and the four bytes at \cmd{UCI\_ZP} may change. #4\par
+  \entryhead{Purpose}#5\par
+  \entryhead{Example}%
+  \begin{listingbox}[before skip=0.3\baselineskip,after skip=0.3\baselineskip]#6\end{listingbox}%
+  \begin{resultbox}#7\end{resultbox}}
+
+\section{Common Rules}
+
+Include \cmd{ultimate.inc} and link \cmd{ultimate.lib}. These are native 6502
+entries: arguments use registers or the exported \cmd{ult\_*} cells, never the
+C stack. Calls are not re-entrant. They install no interrupt handler and are
+safe with interrupts disabled. The SDK owns four zero-page bytes at \$FB--\$FE
+unless \cmd{UCI\_ZP} is changed before assembly.
+
+Except where an entry returns a value, \cmd{A} is an \cmd{ULTIMATE\_*} result;
+\cmd{beq} therefore branches on success. A 16-bit value returned in \cmd{A/X}
+has no flag guarantee. Initialize UCI-backed services with
+\cmd{ultimate\_init}; turbo, REU, audio and vsprites state their own probes.
+Pointers are little-endian, with the low byte in \cmd{A} and high byte in
+\cmd{X}. Strings sent to the Ultimate must be ASCII, not ca65-mapped PETSCII.
+Examples reuse the ordinary \cmd{setptr}, \cmd{setword} and \cmd{setdword}
+macros defined in Chapter~4.
+
+\section{Initialization And Discovery}
+
+\asmref{ultimate\_init}
+{None.}
+{\cmd{A} is \cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_NO\_DEVICE}, or
+\cmd{ULTIMATE\_ERR\_TIMEOUT}; N and Z reflect \cmd{A}.}
+{}
+{Initializes and functionally checks the command interface.}
+{jsr ultimate\_init\
+bne no\_ultimate}
+{The branch is taken unless the SDK is ready.}
+
+\asmref{ultimate\_available}
+{None.}
+{\cmd{A} is 1 after successful initialization, otherwise 0; N and Z reflect
+\cmd{A}.}
+{}
+{Reads cached availability without touching hardware.}
+{jsr ultimate\_available\
+beq not\_ready}
+{The branch is taken until \cmd{ultimate\_init} succeeds.}
+
+\asmref{ultimate\_detect}
+{\cmd{A/X} points to four writable bytes: present, ident and a 16-bit target
+mask.}
+{\cmd{A} is a result code.}
+{\cmd{ult\_buf}, \cmd{ult\_buflen} and \cmd{ult\_outlen}.}
+{Probes every known target and fills a reusable capability block.}
+{lda \#<caps\
+ldx \#>caps\
+jsr ultimate\_detect}
+{On success, bit N of \cmd{caps+2} identifies target N.}
+
+\asmref{ultimate\_identify}
+{\cmd{A} is a \cmd{UCI\_TARGET\_*}; \cmd{ult\_buf} points to output,
+\cmd{ult\_buflen} is its capacity and \cmd{ult\_outlen} points to an optional
+16-bit stored length.}
+{\cmd{A} is a result code; the text is NUL-terminated when capacity permits.}
+{}
+{Reads one target's identification string.}
+{lda \#UCI\_TARGET\_DOS1\
+jsr ultimate\_identify}
+{The caller's buffer contains the DOS identity on success.}
+
+\asmref{ultimate\_get\_model}
+{\cmd{ult\_buf}, \cmd{ult\_buflen} and optional \cmd{ult\_outlen} describe
+the output.}
+{\cmd{A} is a result code; output is terminated when capacity permits.}
+{}
+{Reads the model using deprecated control HWINFO compatibility.}
+{jsr ultimate\_get\_model}
+{Handle \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}; HWINFO may disappear.}
+
+\asmref{ultimate\_legacy\_get\_sid\_info}
+{\cmd{A/X} points to \cmd{ULTIMATE\_SID\_INFO\_SIZE} writable bytes.}
+{\cmd{A} is a result code; byte zero is the record count on success.}
+{}
+{Reads up to four raw SID mapping records through deprecated HWINFO.}
+{lda \#<sidinfo\
+ldx \#>sidinfo\
+jsr ultimate\_legacy\_get\_sid\_info}
+{Records begin at \cmd{ULTIMATE\_SID\_INFO\_RECORDS}; each five-byte record is
+a little-endian primary address, little-endian secondary address, and raw type
+byte at the named \cmd{ULTIMATE\_SID\_*} offsets.}
+
+\asmref{ultimate\_strerror}
+{\cmd{A} is an \cmd{ULTIMATE\_*} result code.}
+{\cmd{A/X} points to a NUL-terminated PETSCII explanation.}
+{}
+{Maps an SDK result to printable text.}
+{lda \#ULTIMATE\_ERR\_IO\
+jsr ultimate\_strerror}
+{\cmd{A/X} points to \cmd{I/O ERROR}.}
+
+\section{Palette, Turbo And Vsprite Graphics}
+
+\asmref{ultimate\_palette\_get}
+{\cmd{A/X} points to 48 writable bytes.}
+{\cmd{A} is a result code; success fills sixteen RGB triples.}
+{}
+{Reads the live VIC-II palette.}
+{lda \#<palette\
+ldx \#>palette\
+jsr ultimate\_palette\_get}
+{\cmd{palette} contains exactly 48 bytes on success.}
+
+\asmref{ultimate\_palette\_set}
+{\cmd{A/X} points to 48 RGB bytes.}
+{\cmd{A} is a result code.}
+{}
+{Replaces all sixteen live colours without writing flash.}
+{lda \#<palette\
+ldx \#>palette\
+jsr ultimate\_palette\_set}
+{The live palette changes on success.}
+
+\asmref{ultimate\_palette\_set\_color}
+{\cmd{ult\_color+0..3} contain index, red, green and blue.}
+{\cmd{A} is a result code.}
+{}
+{Changes one live palette colour; the index must be 0--15.}
+{lda \#6:sta ult\_color\
+lda \#255:sta ult\_color+1\
+lda \#0:sta ult\_color+2:sta ult\_color+3\
+jsr ultimate\_palette\_set\_color}
+{Colour 6 becomes red.}
+
+\asmref{ultimate\_palette\_reset}
+{None.}
+{\cmd{A} is a result code.}
+{}
+{Restores the built-in live palette.}
+{jsr ultimate\_palette\_reset}
+{Temporary palette changes are removed.}
+
+\asmref{ultimate\_turbo\_available}
+{None; UCI initialization is not required.}
+{\cmd{A} is 1 when the Ultimate~64 turbo registers answer, otherwise 0.}
+{}
+{Probes the memory-mapped turbo registers.}
+{jsr ultimate\_turbo\_available\
+beq one\_mhz\_fallback}
+{The fallback runs on unsupported or owner-disabled hardware.}
+
+\asmref{ultimate\_turbo\_get}
+{None.}
+{\cmd{A} is the current speed index or \cmd{U64\_TURBO\_UNAVAILABLE} (\$FF).}
+{}
+{Reads CPU speed without changing badlines.}
+{jsr ultimate\_turbo\_get\
+sta old\_speed}
+{\cmd{old\_speed} can restore a supported entry speed.}
+
+\asmref{ultimate\_turbo\_set}
+{\cmd{A} is a speed index 0--15; 1--4\,MHz constants are portable and
+\cmd{U64\_SPEED\_MAX} means this machine's maximum.}
+{\cmd{A} is a result code.}
+{}
+{Sets CPU speed and leaves badlines unchanged.}
+{lda \#U64\_SPEED\_1MHZ:jsr ultimate\_turbo\_set\
+lda \#U64\_SPEED\_2MHZ:jsr ultimate\_turbo\_set\
+lda \#U64\_SPEED\_3MHZ:jsr ultimate\_turbo\_set\
+lda \#U64\_SPEED\_4MHZ:jsr ultimate\_turbo\_set\
+lda \#U64\_SPEED\_MAX:jsr ultimate\_turbo\_set}
+{The calls demonstrate every named portable speed and model maximum.}
+
+\asmref{ultimate\_turbo\_badlines}
+{\cmd{A}=0 disables badlines; any nonzero value enables them.}
+{\cmd{A} is a result code.}
+{}
+{Changes VIC cycle stealing without changing CPU speed.}
+{lda \#0:jsr ultimate\_turbo\_badlines\
+lda \#1:jsr ultimate\_turbo\_badlines}
+{The two calls demonstrate both settings.}
+
+\asmref{ultimate\_vsprite\_draw}
+{\cmd{A/X} points to a \cmd{VSPRITE\_SIZE} descriptor. Its named offsets hold
+bitmap, source, optional mask and screen pointers; byte-column \cmd{X} (0--39),
+raster-line \cmd{Y} (0--199), nonzero width and height that fit the bitmap,
+colour, and exactly one operation: 0, \cmd{VSPRITE\_F\_MASKED},
+\cmd{VSPRITE\_F\_COPY}, or \cmd{VSPRITE\_F\_COLOR}. Image and mask bytes are
+column-major.}
+{\cmd{A} is a result code; the destination bitmap changes in place.}
+{The routine self-modifies and therefore must execute from RAM.}
+{Draws OR, masked, bitmap-copy or colour-aware software vsprites without UCI.}
+{lda \#0:sta sprite+VSPRITE\_FLAGS\
+lda \#<sprite:ldx \#>sprite:jsr ultimate\_vsprite\_draw\
+lda \#VSPRITE\_F\_MASKED:sta sprite+VSPRITE\_FLAGS\
+lda \#<sprite:ldx \#>sprite:jsr ultimate\_vsprite\_draw\
+lda \#VSPRITE\_F\_COPY:sta sprite+VSPRITE\_FLAGS\
+lda \#<sprite:ldx \#>sprite:jsr ultimate\_vsprite\_draw\
+lda \#VSPRITE\_F\_COLOR:sta sprite+VSPRITE\_FLAGS\
+lda \#<sprite:ldx \#>sprite:jsr ultimate\_vsprite\_draw}
+{The four calls select OR, masked, bitmap-copy and colour-aware draws.}
+
+\section{Directories And Files}
+
+\asmref{ultimate\_chdir}
+{\cmd{ult\_buf} points to a NUL-terminated ASCII path.}
+{\cmd{A} is a result code.}
+{}
+{Changes the current Ultimate DOS directory.}
+{setptr ult\_buf,path\
+jsr ultimate\_chdir}
+{Later filesystem calls use \cmd{path}.}
+
+\asmref{ultimate\_getpath}
+{\cmd{ult\_buf}, \cmd{ult\_buflen} and optional \cmd{ult\_outlen} describe
+the output.}
+{\cmd{A} is a result code; the current path is terminated when possible.}
+{}
+{Reads the current DOS path.}
+{setptr ult\_buf,buffer\
+jsr ultimate\_getpath}
+{The caller's buffer contains the current path.}
+
+\asmref{ultimate\_opendir}
+{None.}
+{\cmd{A} is a result code.}
+{}
+{Begins a block-preserving directory exchange.}
+{jsr ultimate\_opendir}
+{Success prepares the first \cmd{ultimate\_readdir}.}
+
+\asmref{ultimate\_readdir}
+{\cmd{ult\_buf} points to a name buffer and \cmd{ult\_buflen} is its size.}
+{\cmd{A} is \cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_END}, or an error;
+\cmd{ult\_attrib} receives \cmd{DOS\_ATTR\_*}.}
+{}
+{Consumes one directory entry. Call \cmd{uci\_abort} if stopping early.}
+{jsr ultimate\_readdir\
+cmp \#ULTIMATE\_END}
+{One terminated name is returned until the final call reports end.}
+
+\asmref{ultimate\_open}
+{\cmd{A} is a \cmd{DOS\_FA\_*} mask; \cmd{ult\_buf} points to a terminated
+filename.}
+{\cmd{A} is a result code.}
+{}
+{Opens the firmware-side current file.}
+{lda \#DOS\_FA\_READ:jsr ultimate\_open\
+lda \#DOS\_FA\_WRITE:jsr ultimate\_open\
+lda \#(DOS\_FA\_READ | DOS\_FA\_WRITE):jsr ultimate\_open\
+lda \#(DOS\_FA\_WRITE | DOS\_FA\_CREATE\_NEW):jsr ultimate\_open\
+lda \#(DOS\_FA\_WRITE | DOS\_FA\_CREATE\_ALWAYS):jsr ultimate\_open}
+{With \cmd{ult\_buf} changed to a suitable name before each call, these are
+read, write, read/write, create-new and create-or-replace modes.}
+
+\asmref{ultimate\_close}
+{None.}
+{\cmd{A} is a result code.}
+{}
+{Closes the current firmware-side file.}
+{jsr ultimate\_close}
+{The open file handle is released.}
+
+\asmref{ultimate\_read}
+{\cmd{ult\_buf} points to output, \cmd{ult\_buflen} is its capacity and
+\cmd{ult\_outlen} optionally points to the stored byte count.}
+{\cmd{A} is a result code; a short successful read means end-of-file.}
+{}
+{Reads from the current file and drains all reply blocks internally.}
+{jsr ultimate\_read}
+{The buffer and optional count describe the bytes read.}
+
+\asmref{ultimate\_write}
+{\cmd{ult\_buf} points to bytes and \cmd{ult\_buflen} is their count.}
+{\cmd{A} is a result code.}
+{}
+{Writes one complete span to the current file.}
+{jsr ultimate\_write}
+{The file position advances by \cmd{ult\_buflen} on success.}
+
+\asmref{ultimate\_seek}
+{\cmd{ult\_num} contains a 32-bit absolute file position.}
+{\cmd{A} is a result code.}
+{}
+{Moves the current file position.}
+{setdword ult\_num,1024\
+jsr ultimate\_seek}
+{The next transfer begins at byte 1024.}
+
+\asmref{ultimate\_delete}
+{\cmd{ult\_buf} points to a terminated name or path.}
+{\cmd{A} is a result code.}
+{}
+{Deletes one file.}
+{setptr ult\_buf,name\
+jsr ultimate\_delete}
+{The named file is removed on success.}
+
+\asmref{ultimate\_stat}
+{\cmd{ult\_buf} points to a name; \cmd{ult\_arg2} points to
+\cmd{ULTIMATE\_FILEINFO\_SIZE} writable bytes.}
+{\cmd{A} is a result code; success fills the metadata block.}
+{}
+{Reads metadata for a named entry.}
+{setptr ult\_buf,name\
+setptr ult\_arg2,fileinfo\
+jsr ultimate\_stat}
+{Size, FAT time, extension, attributes and name are returned.}
+
+\asmref{ultimate\_fstat}
+{\cmd{ult\_arg2} points to a writable file-info block; a file is open.}
+{\cmd{A} is a result code; success fills the metadata block.}
+{}
+{Reads metadata for the current file.}
+{setptr ult\_arg2,fileinfo\
+jsr ultimate\_fstat}
+{The open file's metadata is returned.}
+
+\asmref{ultimate\_rename}
+{\cmd{ult\_buf} points to the old name; \cmd{ult\_arg2} points to the new.}
+{\cmd{A} is a result code.}
+{}
+{Renames a current-directory entry.}
+{setptr ult\_buf,oldname\
+setptr ult\_arg2,newname\
+jsr ultimate\_rename}
+{The entry has the new name on success.}
+
+\asmref{ultimate\_copy}
+{\cmd{ult\_buf} points to a source name; \cmd{ult\_arg2} points to a
+destination directory.}
+{\cmd{A} is a result code.}
+{}
+{Copies inside the Ultimate while preserving the source filename.}
+{setptr ult\_buf,name\
+setptr ult\_arg2,destination\
+jsr ultimate\_copy}
+{No file contents pass through C64 RAM.}
+
+\asmref{ultimate\_mkdir}
+{\cmd{ult\_buf} points to a terminated directory name.}
+{\cmd{A} is a result code.}
+{}
+{Creates one directory.}
+{setptr ult\_buf,dirname\
+jsr ultimate\_mkdir}
+{The directory exists on success.}
+
+\asmref{ultimate\_home}
+{None.}
+{\cmd{A} is a result code.}
+{}
+{Changes to the configured Ultimate home directory.}
+{jsr ultimate\_home}
+{Later filesystem calls use that directory.}
+
+\section{Disk Images And Clock}
+
+\asmref{ultimate\_mount}
+{\cmd{A} is an IEC device number or \cmd{ULTIMATE\_DRIVE\_LAST};
+\cmd{ult\_buf} points to an image path.}
+{\cmd{A} is a result code.}
+{}
+{Mounts a D64, D71, D81, G64 or G71 image.}
+{lda \#8\
+jsr ultimate\_mount}
+{The image named by \cmd{ult\_buf} is mounted in device 8.}
+
+\asmref{ultimate\_unmount}
+{\cmd{A} is an IEC device number or \cmd{ULTIMATE\_DRIVE\_LAST}.}
+{\cmd{A} is a result code.}
+{}
+{Removes the current image from a drive.}
+{lda \#8\
+jsr ultimate\_unmount}
+{Device 8 becomes empty.}
+
+\asmref{ultimate\_swap}
+{\cmd{A} is an IEC device number or \cmd{ULTIMATE\_DRIVE\_LAST}.}
+{\cmd{A} is a result code.}
+{}
+{Advances a multi-image set.}
+{lda \#8\
+jsr ultimate\_swap}
+{Device 8 selects its next image.}
+
+\asmref{ultimate\_get\_time}
+{\cmd{A} is \cmd{ULTIMATE\_TIME\_PLAIN} or
+\cmd{ULTIMATE\_TIME\_WEEKDAY}; output uses \cmd{ult\_buf},
+\cmd{ult\_buflen} and optional \cmd{ult\_outlen}.}
+{\cmd{A} is a result code; success returns terminated time text.}
+{}
+{Reads the battery-backed clock.}
+{lda \#ULTIMATE\_TIME\_PLAIN:jsr ultimate\_get\_time\
+lda \#ULTIMATE\_TIME\_WEEKDAY:jsr ultimate\_get\_time}
+{Plain output resembles \cmd{2026/08/22 14:30:00}; weekday output prefixes a
+day name.}
+
+\asmref{ultimate\_set\_time}
+{\cmd{ult\_stage+0..5} contain year minus 1900, month, day, hour, minute and
+second.}
+{\cmd{A} is a result code.}
+{}
+{Sets the battery-backed clock.}
+{lda \#126:sta ult\_stage\
+lda \#8:sta ult\_stage+1\
+jsr ultimate\_set\_time}
+{The remaining four staging bytes must also be set before this call.}
+
+\section{Loading And Saving Memory}
+
+\asmref{ultimate\_load}
+{\cmd{ult\_buf} points to a PRG name; \cmd{ult\_addr}=0 uses its header and a
+nonzero address overrides it.}
+{\cmd{A} is a result code; \cmd{ult\_end} is the address after the load.}
+{The DOS fallback changes \cmd{ult\_buf}, \cmd{ult\_buflen},
+\cmd{ult\_outlen}, \cmd{ult\_addr} and \cmd{ult\_max}.}
+{Consumes the PRG header and tries SoftwareIEC before DOS fallback.}
+{setptr ult\_buf,name\
+setword ult\_addr,0\
+jsr ultimate\_load}
+{The PRG loads at its stored address on success.}
+
+\asmref{ultimate\_bload}
+{\cmd{ult\_buf} points to a name; nonzero \cmd{ult\_addr} is destination and
+nonzero \cmd{ult\_max} is the maximum raw length.}
+{\cmd{A} is a result code; \cmd{ult\_end} is the address after the load.}
+{}
+{Loads uninterpreted bytes without consuming a header.}
+{setword ult\_addr,\$c000\
+setword ult\_max,2048\
+jsr ultimate\_bload}
+{At most 2048 bytes are written from \$C000.}
+
+\asmref{ultimate\_save}
+{\cmd{ult\_buf} points to a name, \cmd{ult\_addr} is the C64 start and
+nonzero \cmd{ult\_max} is the length.}
+{\cmd{A} is a result code.}
+{}
+{Creates or replaces a file from C64 memory.}
+{setword ult\_addr,\$0400\
+setword ult\_max,1000\
+jsr ultimate\_save}
+{The text screen is saved on success.}
+
+\asmref{ultimate\_last\_end}
+{None.}
+{\cmd{A/X} is the address after the last successful load.}
+{}
+{Reads cached load state without touching hardware.}
+{jsr ultimate\_last\_end\
+sta end\
+stx end+1}
+{\cmd{end-1} is the last address written.}
+
+\section{RAM Expansion}
+
+\asmref{ultimate\_reu\_available}
+{None; UCI initialization is not required.}
+{\cmd{A} is 1 when REU registers answer, otherwise 0.}
+{}
+{Probes for enabled RAM expansion.}
+{jsr ultimate\_reu\_available\
+beq no\_reu}
+{The branch is taken when no REU is mapped.}
+
+\asmref{ultimate\_reu\_size}
+{None.}
+{\cmd{A/X} is the expansion size in 64K banks, or zero when absent.}
+{}
+{Measures the REU non-destructively.}
+{jsr ultimate\_reu\_size\
+sta banks\
+stx banks+1}
+{16 banks means 1\,MB; 256 banks means 16\,MB.}
+
+\asmref{ultimate\_reu\_stash}
+{\cmd{ult\_addr} is a C64 address; the low 24 bits of \cmd{ult\_reu} are the
+REU address and its high byte is ignored;
+the low word of \cmd{ult\_reulen} is the 16-bit length and zero means 65536
+bytes; its high word is ignored.}
+{\cmd{A} is a result code after DMA completes.}
+{}
+{Copies C64 memory into the REU.}
+{setword ult\_addr,\$0400\
+setdword ult\_reu,0\
+setdword ult\_reulen,1000\
+jsr ultimate\_reu\_stash}
+{The text screen is copied to REU address zero.}
+
+\asmref{ultimate\_reu\_fetch}
+{\cmd{ult\_addr}, \cmd{ult\_reu} and \cmd{ult\_reulen} describe the same
+ranges as \cmd{ultimate\_reu\_stash}.}
+{\cmd{A} is a result code after DMA completes.}
+{}
+{Copies REU data into C64 memory.}
+{setword ult\_addr,\$0400\
+jsr ultimate\_reu\_fetch}
+{The selected REU bytes replace C64 memory.}
+
+\asmref{ultimate\_reu\_load}
+{A readable file is open; \cmd{ult\_reu} is destination and
+\cmd{ult\_reulen} is a 32-bit length.}
+{\cmd{A} is a result code.}
+{}
+{Transfers the open file directly into expansion memory.}
+{setdword ult\_reu,0\
+setdword ult\_reulen,65536\
+jsr ultimate\_reu\_load}
+{The bytes do not pass through C64 RAM.}
+
+\asmref{ultimate\_reu\_save}
+{A writable file is open; \cmd{ult\_reu} is source and
+\cmd{ult\_reulen} is a 32-bit length.}
+{\cmd{A} is a result code.}
+{}
+{Transfers expansion memory directly into the open file.}
+{setdword ult\_reu,0\
+setdword ult\_reulen,65536\
+jsr ultimate\_reu\_save}
+{The bytes do not pass through C64 RAM.}
+
+\begin{tip}
+Use REU memory for large level data, decompression sources, sampled audio and
+screen backups. Stash/fetch swap live C64 memory; load/save avoid routing bulk
+file data through the C64 address space.
+\end{tip}
+
+\section{Ultimate Audio}
+
+\asmref{ultimate\_audio\_init}
+{Ultimate Audio is mapped at \$DF20--\$DFFF.}
+{\cmd{A} is a result code.}
+{}
+{Probes the PCM engine with a silent byte.}
+{jsr ultimate\_audio\_init\
+bne no\_audio}
+{Other audio routines are usable only after success.}
+
+\asmref{ultimate\_audio\_available}
+{Call \cmd{ultimate\_audio\_init} first.}
+{\cmd{A} is 1 after successful audio initialization, otherwise 0.}
+{}
+{Reads cached audio state.}
+{jsr ultimate\_audio\_available}
+{Zero means the PCM engine is unavailable.}
+
+\asmref{ultimate\_audio\_version}
+{Audio is available.}
+{\cmd{A} is the raw module-version byte.}
+{}
+{Reads the mapped engine's version register.}
+{jsr ultimate\_audio\_version\
+sta version}
+{\cmd{version} is valid only after audio initialization.}
+
+\asmref{ultimate\_audio\_configure}
+{\cmd{A/X} points to a \cmd{UA\_VOICE\_SIZE} descriptor. Named offsets hold
+channel 0--6; only \cmd{UA\_CTRL\_FLAGS}; volume 0--63; pan 0--15; a 24-bit REU
+start and nonzero length that do not pass 16\,MB; repeat offsets; and a nonzero
+rate. A 16-bit or interleaved length is even. Repeat requires
+\cmd{repeat\_a < repeat\_b <= length}.}
+{\cmd{A} is a result code; the channel is configured but stopped.}
+{}
+{Validates and programs one PCM voice.}
+{lda \#0:sta voice+UA\_VOICE\_FLAGS\
+lda \#<voice:ldx \#>voice:jsr ultimate\_audio\_configure\
+lda \#UA\_CTRL\_16BIT:sta voice+UA\_VOICE\_FLAGS\
+lda \#<voice:ldx \#>voice:jsr ultimate\_audio\_configure\
+lda \#UA\_CTRL\_INTERLEAVE:sta voice+UA\_VOICE\_FLAGS\
+lda \#<voice:ldx \#>voice:jsr ultimate\_audio\_configure\
+lda \#UA\_CTRL\_REPEAT:sta voice+UA\_VOICE\_FLAGS\
+lda \#<voice:ldx \#>voice:jsr ultimate\_audio\_configure\
+lda \#UA\_CTRL\_IRQ:sta voice+UA\_VOICE\_FLAGS\
+lda \#<voice:ldx \#>voice:jsr ultimate\_audio\_configure}
+{The examples isolate 8-bit mono, 16-bit, interleave, repeat and IRQ; valid
+flags may be combined.}
+
+\asmref{ultimate\_audio\_start}
+{\cmd{A} is channel 0--6; \cmd{X} contains only the descriptor's
+\cmd{UA\_CTRL\_FLAGS} bits. Do not include \cmd{UA\_CTRL\_GATE}; the call adds
+it.}
+{\cmd{A} is a result code.}
+{}
+{Opens a configured channel's gate.}
+{lda \#0\
+ldx \#UA\_CTRL\_REPEAT\
+jsr ultimate\_audio\_start}
+{Channel zero begins playing.}
+
+\asmref{ultimate\_audio\_stop}
+{\cmd{A} is channel 0--6.}
+{\cmd{A} is a result code.}
+{}
+{Closes one channel's gate.}
+{lda \#0\
+jsr ultimate\_audio\_stop}
+{Channel zero stops.}
+
+\asmref{ultimate\_audio\_irq\_status}
+{None.}
+{\cmd{A} is the latched end-of-sample channel mask.}
+{}
+{Reads PCM completion state.}
+{jsr ultimate\_audio\_irq\_status\
+and \#1}
+{A nonzero result means channel zero completed.}
+
+\asmref{ultimate\_audio\_irq\_clear}
+{\cmd{A} is channel 0--6.}
+{\cmd{A} is a result code.}
+{}
+{Clears one completion latch and its asserted IRQ.}
+{lda \#0\
+jsr ultimate\_audio\_irq\_clear}
+{Channel zero's completion state is clear.}
+
+\asmref{ultimate\_audio\_load\_wav}
+{\cmd{ult\_buf} points to a PCM WAV filename; \cmd{ult\_reu} is its REU
+destination; \cmd{A/X} points to a \cmd{UA\_VOICE\_SIZE} descriptor whose
+channel, volume, pan and repeat offsets are initialized by the caller.}
+{\cmd{A} is a result code; success fills address, length, rate and flags.}
+{\cmd{ult\_buf}, \cmd{ult\_buflen}, \cmd{ult\_outlen}, \cmd{ult\_num},
+\cmd{ult\_addr}, \cmd{ult\_reulen}, \cmd{ult\_arg2} and \cmd{ult\_attrib}.}
+{Loads supported 8/16-bit mono/stereo PCM and prepares a voice.}
+{lda \#<voice\
+ldx \#>voice\
+jsr ultimate\_audio\_load\_wav}
+{Configure and start the filled descriptor after success.}
+
+\section{Machine And Drive Control}
+
+\asmref{ultimate\_reboot}
+{None.}
+{No return.}
+{All machine state is reset.}
+{Reboots the C64 through the control target.}
+{jsr ultimate\_reboot}
+{No following instruction executes.}
+
+\asmref{ultimate\_freeze}
+{None.}
+{\cmd{A} is a result code after the user leaves the Ultimate menu.}
+{}
+{Enters the freezer menu and waits for the machine to resume.}
+{jsr ultimate\_freeze}
+{Execution resumes after the menu releases the C64.}
+
+\asmref{ultimate\_drive\_enable}
+{\cmd{A} is \cmd{ULTIMATE\_DRIVE\_A} or \cmd{ULTIMATE\_DRIVE\_B};
+\cmd{X}=0 disables and nonzero enables.}
+{\cmd{A} is a result code.}
+{}
+{Changes one emulated drive's enabled state.}
+{lda \#ULTIMATE\_DRIVE\_B\
+ldx \#0\
+jsr ultimate\_drive\_enable}
+{Drive B is disabled on success.}
+
+\asmref{ultimate\_drive\_power}
+{\cmd{A} is \cmd{ULTIMATE\_DRIVE\_A} or \cmd{ULTIMATE\_DRIVE\_B}.}
+{\cmd{A} is a result code; \cmd{ult\_stage}=1 when powered, 0 when off.}
+{}
+{Reads one drive's power state.}
+{lda \#ULTIMATE\_DRIVE\_A\
+jsr ultimate\_drive\_power\
+lda ult\_stage}
+{The final \cmd{A} is the Boolean power state after a successful call.}
+
+\asmref{ultimate\_drive\_info}
+{\cmd{A/X} points to \cmd{CTRL\_DRVINFO\_BYTES} writable bytes.}
+{\cmd{A} is a result code; byte \cmd{CTRL\_DRVINFO\_COUNT} is the number of
+records. Three-byte records begin at \cmd{CTRL\_DRVINFO\_FIRST} and contain
+type, IEC device number and power.}
+{}
+{Reads emulated drives and occupied IEC bus slots.}
+{lda \#<drives\
+ldx \#>drives\
+jsr ultimate\_drive\_info}
+{The returned count is bounded by the records that actually arrived.}
+
+\asmref{ultimate\_ramdisk\_info}
+{\cmd{A/X} points to \cmd{CTRL\_RAMDISK\_BYTES} writable bytes.}
+{\cmd{A} is a result code; success fills \cmd{CTRL\_RAMDISK\_DRIVES}
+two-byte records containing type and size in 64K units.}
+{}
+{Reads control-target RAM-disk state.}
+{lda \#<ramdisk\
+ldx \#>ramdisk\
+jsr ultimate\_ramdisk\_info}
+{The caller's block contains the decoded reply on success.}
+
+\section{Networking}
+
+\asmref{ultimate\_net\_ifcount}
+{None.}
+{\cmd{A} is a result code; \cmd{ult\_iface} is the interface count.}
+{}
+{Counts configured network interfaces.}
+{jsr ultimate\_net\_ifcount\
+lda ult\_iface}
+{The final \cmd{A} is the count after a successful call.}
+
+\asmref{ultimate\_net\_macaddr}
+{\cmd{ult\_iface} is an interface index; \cmd{ult\_buf} points to six bytes.}
+{\cmd{A} is a result code; success writes the MAC address.}
+{}
+{Reads one interface's hardware address.}
+{lda \#0:sta ult\_iface\
+setptr ult\_buf,mac\
+jsr ultimate\_net\_macaddr}
+{Six binary address bytes are returned.}
+
+\asmref{ultimate\_net\_ipconfig}
+{\cmd{ult\_iface} is an interface index; \cmd{ult\_buf} points to 12 bytes.}
+{\cmd{A} is a result code; success writes IP, netmask and gateway.}
+{}
+{Reads one interface's IPv4 configuration.}
+{lda \#0:sta ult\_iface\
+setptr ult\_buf,ipconfig\
+jsr ultimate\_net\_ipconfig}
+{Three four-byte network-order addresses are returned.}
+
+\asmref{ultimate\_net\_setip}
+{\cmd{ult\_iface} is an interface index; \cmd{ult\_buf} points to 12 bytes
+of IP, netmask and gateway.}
+{\cmd{A} is a result code.}
+{}
+{Writes a static IPv4 configuration.}
+{lda \#0:sta ult\_iface\
+setptr ult\_buf,ipconfig\
+jsr ultimate\_net\_setip}
+{The interface uses the supplied addresses on success.}
+
+\asmref{ultimate\_net\_connect}
+{\cmd{ult\_port} is a little-endian TCP port; \cmd{ult\_buf} points to an
+ASCII host name or address.}
+{\cmd{A} is a result code; \cmd{ult\_sock} is the socket handle.}
+{}
+{Opens TCP. Name lookup and connect wait without a timeout, then restore the
+caller's budget.}
+{setword ult\_port,80\
+setptr ult\_buf,host\
+jsr ultimate\_net\_connect}
+{Use \cmd{ult\_sock} only after success.}
+
+\asmref{ultimate\_net\_udp}
+{\cmd{ult\_port} and \cmd{ult\_buf} supply a port and ASCII peer.}
+{\cmd{A} is a result code; \cmd{ult\_sock} is the socket handle.}
+{}
+{Opens a connected UDP socket with the same wait policy as TCP.}
+{setword ult\_port,123\
+setptr ult\_buf,host\
+jsr ultimate\_net\_udp}
+{Use \cmd{ult\_sock} only after success.}
+
+\asmref{ultimate\_net\_close}
+{\cmd{ult\_sock} is an open socket handle.}
+{\cmd{A} is a result code.}
+{}
+{Releases one firmware-side socket.}
+{jsr ultimate\_net\_close}
+{The handle is no longer usable on success.}
+
+\asmref{ultimate\_net\_read}
+{\cmd{ult\_sock} is a socket; \cmd{ult\_buf} is output;
+\cmd{ult\_socklen} is its capacity.}
+{\cmd{A} is a result code; \cmd{ult\_socklen} becomes bytes stored.}
+{}
+{Polls once without waiting. \cmd{ULTIMATE\_END} reports peer close once.}
+{setword ult\_socklen,256\
+jsr ultimate\_net\_read}
+{Zero bytes with success means try again later.}
+
+\asmref{ultimate\_net\_write}
+{\cmd{ult\_sock} is a socket; \cmd{ult\_buf} points to bytes and
+\cmd{ult\_buflen} is their count.}
+{\cmd{A} is a result code; \cmd{ult\_socklen} becomes bytes accepted.}
+{}
+{Writes one caller span to a socket.}
+{jsr ultimate\_net\_write}
+{Advance by \cmd{ult\_socklen} when the socket accepts a partial span.}
+
+\section{HTTP Client}
+
+\asmref{ultimate\_http\_get}
+{\cmd{ult\_url} points to an ASCII URL; \cmd{ult\_buf} and
+\cmd{ult\_buflen} describe response storage.}
+{\cmd{A} is a result code; \cmd{ult\_httplen} is bytes retained and
+\cmd{uci\_last\_code} supplies HTTP status.}
+{}
+{Performs a complete GET using one firmware HTTP slot.}
+{setptr ult\_url,url\
+setptr ult\_buf,buffer\
+jsr ultimate\_http\_get}
+{The response body is retained up to the supplied capacity.}
+
+\asmref{ultimate\_http\_open}
+{\cmd{A} is any \cmd{HTTP\_VERB\_*}; \cmd{ult\_url} points to an ASCII URL.}
+{\cmd{A} is a result code; \cmd{ult\_http} is a handle or \$FF on failure.}
+{}
+{Allocates a request slot. All nine published HTTP verb constants are valid.}
+{lda \#HTTP\_VERB\_GET:jsr ultimate\_http\_open\
+lda \#HTTP\_VERB\_PUT:jsr ultimate\_http\_open\
+lda \#HTTP\_VERB\_POST:jsr ultimate\_http\_open\
+lda \#HTTP\_VERB\_PATCH:jsr ultimate\_http\_open\
+lda \#HTTP\_VERB\_DELETE:jsr ultimate\_http\_open\
+lda \#HTTP\_VERB\_HEAD:jsr ultimate\_http\_open\
+lda \#HTTP\_VERB\_OPTIONS:jsr ultimate\_http\_open\
+lda \#HTTP\_VERB\_CONNECT:jsr ultimate\_http\_open\
+lda \#HTTP\_VERB\_TRACE:jsr ultimate\_http\_open}
+{Each call creates a separate request of the named method; close each successful
+\cmd{ult\_http} handle.}
+
+\asmref{ultimate\_http\_header}
+{\cmd{ult\_http} is a request handle; \cmd{ult\_url} points to one ASCII
+\cmd{key: value} line.}
+{\cmd{A} is a result code.}
+{}
+{Adds one request header before exchange.}
+{setptr ult\_url,header\
+jsr ultimate\_http\_header}
+{The header is attached to the open request.}
+
+\asmref{ultimate\_http\_exchange}
+{\cmd{ult\_http} is a request; \cmd{ult\_body} is a body handle or
+\cmd{HTTP\_BODY\_NONE}; \cmd{ult\_buf}/\cmd{ult\_buflen} receive response.}
+{\cmd{A} is a result code; \cmd{ult\_httplen} is bytes retained and
+\cmd{uci\_last\_code} supplies HTTP status.}
+{}
+{Sends an open request. DNS/connect wait without limit and restore the caller's
+timeout afterwards.}
+{jsr ultimate\_http\_exchange}
+{The body buffer and HTTP status describe the response.}
+
+\asmref{ultimate\_http\_close}
+{\cmd{ult\_http} is a request handle.}
+{\cmd{A} is a result code.}
+{}
+{Releases one firmware HTTP slot.}
+{jsr ultimate\_http\_close}
+{The request handle is no longer usable.}
+
+\asmref{ultimate\_http\_free\_all}
+{None.}
+{\cmd{A} is a result code.}
+{}
+{Releases every HTTP request and body slot owned by the firmware.}
+{jsr ultimate\_http\_free\_all}
+{Useful cleanup after abandoning a partially built request.}
+
+\section{HTTP Request Bodies}
+
+Body values are built inside the Ultimate. For keyed JSON/object and URL-form
+values, \cmd{ult\_url} points to an ASCII key of at most
+\cmd{ULTIMATE\_HTTP\_KEY\_MAX} bytes. For an array element, point it to a
+one-byte NUL string; a null pointer is invalid.
+
+\asmref{ultimate\_http\_body}
+{\cmd{A} is \cmd{HTTP\_BODY\_JSON\_OBJECT},
+\cmd{HTTP\_BODY\_JSON\_ARRAY}, \cmd{HTTP\_BODY\_URL\_ENCODED}, or
+\cmd{HTTP\_BODY\_BINARY}.}
+{\cmd{A} is a result code; \cmd{ult\_body} is a handle or \$FF on failure.}
+{}
+{Allocates an empty firmware-side request body.}
+{lda \#HTTP\_BODY\_BINARY:jsr ultimate\_http\_body\
+lda \#HTTP\_BODY\_JSON\_OBJECT:jsr ultimate\_http\_body\
+lda \#HTTP\_BODY\_JSON\_ARRAY:jsr ultimate\_http\_body\
+lda \#HTTP\_BODY\_URL\_ENCODED:jsr ultimate\_http\_body}
+{The calls create binary, JSON-object, JSON-array and URL-encoded bodies; free
+each successful \cmd{ult\_body} handle.}
+
+\asmref{ultimate\_http\_body\_free}
+{\cmd{ult\_body} is a body handle.}
+{\cmd{A} is a result code.}
+{}
+{Releases one firmware-side body slot.}
+{jsr ultimate\_http\_body\_free}
+{The handle is no longer usable.}
+
+\asmref{ultimate\_http\_body\_clear}
+{\cmd{ult\_body} is a body handle.}
+{\cmd{A} is a result code.}
+{}
+{Removes all values but preserves the body format and slot.}
+{jsr ultimate\_http\_body\_clear}
+{The body is empty and reusable.}
+
+\asmref{ultimate\_http\_body\_up}
+{\cmd{ult\_body} is positioned inside a nested object or array.}
+{\cmd{A} is a result code.}
+{}
+{Moves the body cursor to its parent container.}
+{jsr ultimate\_http\_body\_up}
+{The next value is added beside the container just left.}
+
+\asmref{ultimate\_http\_body\_int}
+{\cmd{ult\_body} is a handle; \cmd{ult\_url} points to a key, or to an empty
+string for an array element;
+\cmd{ult\_val} is a signed 32-bit integer.}
+{\cmd{A} is a result code.}
+{}
+{Adds one integer value.}
+{setptr ult\_url,key\
+setdword ult\_val,-6502\
+jsr ultimate\_http\_body\_int}
+{The keyed value is added to the current container.}
+
+\asmref{ultimate\_http\_body\_bool}
+{\cmd{ult\_body} is a handle; \cmd{ult\_url} points to a key, or to an empty
+string for an array element;
+\cmd{ult\_val}=0 means false and any nonzero value means true.}
+{\cmd{A} is a result code.}
+{}
+{Adds one Boolean value.}
+{setptr ult\_url,key\
+setdword ult\_val,1\
+jsr ultimate\_http\_body\_bool\
+setdword ult\_val,0\
+jsr ultimate\_http\_body\_bool}
+{The calls add true and false respectively.}
+
+\asmref{ultimate\_http\_body\_string}
+{\cmd{ult\_body} is a handle; \cmd{ult\_url} points to a key, or to an empty
+string for an array element;
+\cmd{ult\_buf} points to a NUL-terminated ASCII value.}
+{\cmd{A} is a result code.}
+{}
+{Adds one escaped string value.}
+{setptr ult\_url,key\
+setptr ult\_buf,value\
+jsr ultimate\_http\_body\_string}
+{The string is added to the current container.}
+
+\asmref{ultimate\_http\_body\_object}
+{\cmd{ult\_body} is a handle; \cmd{ult\_url} points to a key, or to an empty
+string for an array element.}
+{\cmd{A} is a result code; success enters the new object.}
+{}
+{Adds and enters a nested JSON object.}
+{setptr ult\_url,key\
+jsr ultimate\_http\_body\_object}
+{Call \cmd{ultimate\_http\_body\_up} to leave it.}
+
+\asmref{ultimate\_http\_body\_array}
+{\cmd{ult\_body} is a handle; \cmd{ult\_url} points to a key, or to an empty
+string for an array element.}
+{\cmd{A} is a result code; success enters the new array.}
+{}
+{Adds and enters a nested JSON array.}
+{setptr ult\_url,key\
+jsr ultimate\_http\_body\_array}
+{Point \cmd{ult\_url} at a NUL byte for each unkeyed array element.}
+
+\asmref{ultimate\_http\_body\_binary}
+{\cmd{ult\_body} is a binary body; \cmd{ult\_buf} points to bytes and
+\cmd{ult\_buflen} is their count.}
+{\cmd{A} is a result code.}
+{}
+{Appends raw bytes to a binary request body.}
+{setptr ult\_buf,payload\
+setword ult\_buflen,payload\_end-payload\
+jsr ultimate\_http\_body\_binary}
+{The payload bytes are appended without text conversion.}
+
+\section{Low-Level UCI Transport}
+
+Use these entries for commands that the service layer does not wrap. The
+\cmd{uci\_request} layout and \cmd{UCI\_REQ\_*} offsets are generated in
+\cmd{uci\_protocol.inc}. A request's argument, payload, data and status spans
+remain caller-owned. \cmd{uci\_more} is the exported byte read after a
+boundary-preserving call; nonzero means another reply block follows.
+
+\asmref{uci\_present}
+{None.}
+{\cmd{A} is 1 when the documented signature is present, otherwise 0.}
+{}
+{Performs a fast register-only presence probe.}
+{jsr uci\_present\
+beq absent}
+{This does not prove that the interface can finish a command.}
+
+\asmref{uci\_ident}
+{None.}
+{\cmd{A} is the raw identification register.}
+{}
+{Reads diagnostic identity without blocking.}
+{jsr uci\_ident\
+sta ident}
+{\cmd{ident} contains the unvalidated register byte.}
+
+\asmref{uci\_req\_clear}
+{None.}
+{No defined register result; all \cmd{UCI\_REQ\_SIZE} bytes of
+\cmd{uci\_req} are zero.}
+{}
+{Clears the SDK-owned request block before selected fields are filled.}
+{jsr uci\_req\_clear}
+{No stale pointer or length remains in \cmd{uci\_req}.}
+
+\asmref{uci\_exec\_block}
+{Fill the exported \cmd{uci\_req} block.}
+{\cmd{A} is a result code; output lengths are written into the block.}
+{}
+{Runs the SDK-owned request block to completion.}
+{jsr uci\_req\_clear\
+lda \#UCI\_TARGET\_DOS1\
+sta uci\_req+UCI\_REQ\_TARGET\
+jsr uci\_exec\_block}
+{The request completes and all reply blocks are drained.}
+
+\asmref{uci\_exec}
+{\cmd{A/X} points to any writable \cmd{UCI\_REQ\_SIZE} request block.}
+{\cmd{A} is a result code; output lengths are written into that block.}
+{}
+{Runs a caller-owned request block to completion.}
+{lda \#<request\
+ldx \#>request\
+jsr uci\_exec}
+{The caller may keep several independent request blocks.}
+
+\asmref{uci\_exec\_first}
+{\cmd{A/X} points to a writable request block.}
+{\cmd{A} is a result for the first reply block; \cmd{uci\_more} describes
+whether another follows.}
+{}
+{Starts a boundary-preserving exchange such as a directory walk.}
+{lda \#<request\
+ldx \#>request\
+jsr uci\_exec\_first}
+{Only the first logical reply block is retained.}
+
+\asmref{uci\_exec\_next}
+{A boundary-preserving exchange is live and \cmd{uci\_more} is nonzero.}
+{\cmd{A} is the next block's result; \cmd{uci\_more} is updated.}
+{}
+{Advances the live exchange by one reply block.}
+{lda uci\_more\
+beq finished\
+jsr uci\_exec\_next}
+{The request block's data length is reset for this block.}
+
+\asmref{uci\_abort}
+{None.}
+{\cmd{A} is a result code.}
+{}
+{Abandons any live exchange and returns the interface to idle.}
+{jsr uci\_abort}
+{A stopped directory walk no longer holds the interface.}
+
+\asmref{uci\_set\_timeout\_a}
+{\cmd{A} is a budget in units of 256 polls; zero means forever.}
+{No defined register result.}
+{}
+{Sets the transport polling budget. Wall time varies with CPU speed.}
+{lda \#UCI\_TIMEOUT\_DEFAULT\
+jsr uci\_set\_timeout\_a}
+{Later bounded calls use the default budget.}
+
+\asmref{uci\_get\_timeout\_a}
+{None.}
+{\cmd{A} is the current timeout budget; zero means forever.}
+{}
+{Reads the current polling budget.}
+{jsr uci\_get\_timeout\_a\
+sta saved\_timeout}
+{The byte can restore caller policy after a temporary change.}
+
+\asmref{uci\_last\_code}
+{None.}
+{\cmd{A/X} is the most recently decoded raw device status, or \$FFFF when
+none was supplied.}
+{}
+{Returns target-specific diagnostic detail.}
+{jsr uci\_last\_code\
+sta device\_code\
+stx device\_code+1}
+{Interpret the number only in the context of the target just called.}
+
+\evidence{\cmd{bindings/asm/ultimate.inc}; \cmd{docs/asm-abi.md};
+\cmd{guide/examples/assembly\_calls.s}; \cmd{tests/emulator/sdk.suite};
+\cmd{tests/hardware/ucitest.c}}
+
+\end{referencechapter}

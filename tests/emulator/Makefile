@@ -60,7 +60,9 @@ HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_status_reg t_
                 t_palette_get t_palette_set t_palette_color t_palette_reset \
                 t_palette_get_null t_palette_set_null pal_index \
                 t_turbo_available t_turbo_get t_turbo_set t_turbo_badlines \
-                turbo_arg \
+                turbo_arg t_vsprite_draw t_vsprite_null \
+                vsprite vs_bitmap vs_source vs_mask vs_screen \
+                vs_x vs_y vs_width vs_height vs_color vs_flags \
                 t_chdir t_getpath t_opendir t_readdir \
                 t_open t_close t_read dir_attrib \
                 t_create t_write t_seek t_delete wr_len seek_pos \

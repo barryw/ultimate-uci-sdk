@@ -37,12 +37,13 @@ it under an emulator and on real hardware, and exposes it to assembly and C.
 
 **Status: early.** The transport, the error model and capability detection are
 complete and tested — under a simulated Ultimate, and on a real Ultimate 64
-Elite running firmware 3.15. So are the palette, turbo, file, REU, network and
-HTTP services: directories, open/read/write/seek, load and save, both directions
-of the RAM expansion, TCP and UDP sockets, and fetching a URL. The rest of the
-Ultimate DOS command set is there too — file information, rename, copy, make
-directory — along with mounting disk images, the battery-backed clock, the
-emulated drives, and JSON and form request bodies for the HTTP client.
+Elite running firmware 3.15. So are the palette, turbo, file, REU, Ultimate
+Audio, network and HTTP services: directories, open/read/write/seek, load and
+save, both directions of the RAM expansion, background PCM playback, TCP and
+UDP sockets, and fetching a URL. The rest of the Ultimate DOS command set is
+there too — file information, rename, copy, make directory — along with mounting
+disk images, the battery-backed clock, the emulated drives, and JSON and form
+request bodies for the HTTP client.
 
 ## What hardware does it support?
 
@@ -55,8 +56,9 @@ code path:
 | Ultimate 64, Elite, Elite-II | yes |
 | Commodore 64 Ultimate | yes |
 
-Nothing here needs a machine newer than a 1541 Ultimate-II. Newer machines and
-newer firmware bring extra targets; those are found by probing, never assumed.
+The command-interface foundation works across that range. Optional direct
+hardware features such as turbo and Ultimate Audio are probed at runtime and
+return `ULTIMATE_ERR_NOT_SUPPORTED` when unavailable.
 
 **The command interface is optional and off by default on some setups.** It is
 switched on in the Ultimate's *Command Interface* configuration menu. Until it
@@ -79,9 +81,11 @@ enable it in the ultimate settings menu.
 | the battery-backed clock | `get_time`, `set_time` |
 | the machine and its drives | `reboot`, `freeze`, `drive_enable`, `drive_power`, `drive_info`, `ramdisk_info` |
 | the RAM expansion | `reu_stash`, `reu_fetch`, file-to-expansion without the C64 in between, and `reu_size` to find out how much there is |
+| background PCM from REU memory | `audio_init`, `audio_load_wav`, `audio_configure`, `audio_start`, `audio_stop`, and completion status |
 | configured SID addresses | `ultimate_legacy_get_sid_info` uses deprecated HWINFO and returns every primary and optional secondary mapping |
 | the running palette | `palette_get`, `palette_set`, `palette_set_color`, `palette_reset` |
 | CPU speed on an Ultimate 64 | `turbo_set`, `turbo_get`, `turbo_badlines` |
+| software vsprites in a C64 bitmap | `vsprite_draw` for OR, masked, copy/restore and color-aware compositing |
 | TCP and UDP sockets | `net_connect`, `net_udp`, `net_read`, `net_write`, `net_close`, and the machine's own address from `net_ipconfig` |
 | fetching a URL | `http_get` in one call, or `http_open`/`http_header`/`http_exchange` when a request needs headers |
 | posting JSON, a form, or raw bytes | `http_body` and the nine calls that fill it, built inside the Ultimate so a 38K machine can send more than it could hold |
@@ -90,10 +94,10 @@ enable it in the ultimate settings menu.
 The Ultimate-only [Machine Yearning SID visualizer](demos/sid-visualizer/)
 drives six 24-bit palette colours from six live SID voices. Its bundled music
 has a separate CC BY-NC 4.0 licence; the SDK remains MIT-licensed.
-[vsprites](demos/vsprites/) draws software sprites similar to Amiga blitter
-objects, but without a blitter: the 6510 does the compositing. Turbo entry
-points let it fill whatever frame the machine has: sixty 32x32 vsprites at
-60 fps on a 48 MHz Elite, two on a stock C64.
+[vsprites](demos/vsprites/) exercises the reusable software-vsprite compositor:
+objects similar to Amiga blitter objects, but without a blitter. Turbo entry
+points let it fill whatever frame the machine has: 39 32x32 vsprites at 60 fps
+on the tested 48 MHz Elite, one on a stock C64.
 [Boing](demos/boing/) recreates the Amiga Boing Ball with multiplexed hardware
 sprites, a software-composited vsprite shadow, a perspective grid and PCM audio.
 
@@ -274,41 +278,43 @@ public model does not expose them.
 
 Built for a machine with 38 kilobytes.
 
-- No heap, no hidden buffers. Every byte lands in a buffer you own.
-- 191 bytes of static RAM in total, request block included. No allocation, ever.
+- No heap. Reply data lands in buffers you own; the SDK keeps only fixed-size
+  transport and service state.
+- `UCI_VARS_SIZE` bytes of static RAM (currently 191), plus caller-owned request
+  blocks. No allocation, ever.
 - Four bytes of zero page, at an address you choose.
 - No interrupts required, and no interrupt handler installed.
-- Every entry point is bounded: it completes or returns `ULTIMATE_ERR_TIMEOUT`.
-  The exceptions are opening a socket and running an HTTP exchange, and both are
-  documented as such: a connect was measured at 30.8 s to an address with
-  nothing at it, which no timeout budget can express, so they wait on the
-  firmware's own limit instead.
+- Ordinary UCI calls complete or return `ULTIMATE_ERR_TIMEOUT`. Socket creation
+  and HTTP exchange temporarily wait forever and rely on the firmware's own
+  limit; reboot does not return, and freeze waits for the user. Each exception
+  is called out in its API entry.
 
 ## Testing
 
-Two layers, each catching what the other cannot.
+Three layers, each catching a different class of error.
 
 ```bash
 make test         # sim6502 in Docker: the assembled SDK, against a simulated Ultimate
+make unittest     # generated tables, ABI/layouts, register boundaries, packaging
 make -C tests/hardware && copy ucitest.prg to your Ultimate    # the real thing, TAP output
 ```
 
-Current results: **115 host unit tests and 244 emulator tests across eight
-suites, all passing.** The hardware suite last ran 6/6 scenarios on an Ultimate
-64 Elite running firmware 3.15, where the BASIC wedge is also typed at the
-machine line by line and checked on the screen; the checks added for the disk
-image, clock, drive and HTTP body services have not been run on a machine yet.
+Current results: **122 host invariant tests and 281 emulator tests across nine
+suites, all passing.** The hardware suite last ran 7/7 scenarios with zero
+failures on an Ultimate 64 Elite running firmware 3.15, FPGA 124/core 1.4F. The
+BASIC wedge is separately typed at the machine line by line and checked on the
+screen.
 
 Every mutating hardware test writes to `/Temp`, the FAT filesystem the firmware
 formats in RAM at boot, so running them cannot fill a medium, wear flash, or
 leave anything behind after a power cycle.
 
-There is no host layer: the SDK is 6502 assembly, so a host test would have to
-reimplement the thing it is testing. The layer that existed before the assembly
-rewrite is the argument. cc65 translates string literals into PETSCII, so the
-`"NO TARGET"` marker capability detection relies on matched perfectly in the
-host tests and never matched on a real C64. Running the compiled code against a
-simulated Ultimate found it in minutes.
+The host checks enforce generated and structural invariants; they do not
+reimplement 6502 behavior. The retired host behavioral layer shows why: cc65
+translates string literals into PETSCII, so the `"NO TARGET"` marker used by
+capability detection matched perfectly in that old host test and never matched
+on a real C64. Running the compiled code against a simulated Ultimate found it
+in minutes.
 
 ## Documentation
 

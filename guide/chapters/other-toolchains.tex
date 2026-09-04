@@ -4,6 +4,7 @@
   \item Building and identifying the blob
   \item The stable jump table
   \item The parameter block
+  \item Ultimate Audio and software-vsprite extension entries
   \item Calling it from BASIC
   \item Choosing a different base address
 }
@@ -53,9 +54,9 @@ This example checks the default build before calling it:
 \hspace*{2em}bne wrong\_version
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 All four comparisons match; execution continues with ABI version 1.
-\end{outputbox}
+\end{resultbox}
 
 The version byte changes only when an existing entry changes meaning. New
 entries are appended, so a program written against version~1 keeps working
@@ -74,9 +75,9 @@ new entries are appended so published offsets do not move.
 \hspace*{2em}jsr \$701C\hspace{2em}; +\$1C  ultimate\_init
 \end{listingbox}
 
-\begin{outputbox}
+\begin{resultbox}
 A = ULTIMATE_OK after each initialization call.
-\end{outputbox}
+\end{resultbox}
 
 These are the two initialization entries. Use \cmd{ultimate\_init} for
 application code; the lower-level \cmd{uci\_init} entry is exposed for
@@ -96,7 +97,9 @@ described in the next section, because a caller cannot pass a filename in
 before returning it in \cmd{A}.
 
 That second group is what a BASIC program can drive, because \bas{sys} can
-neither pass a register nor read one back.
+neither pass a register nor read one back. The extension tables at
+\cmd{+\$2E8} and \cmd{+\$300} contain both kinds; their individual contracts
+say whether they use registers or the parameter block.
 
 The complete offset table is in \cmd{bindings/blob/README.md}. Read the
 offsets there rather than counting entries: the table gained the file
@@ -127,6 +130,51 @@ an address from this subset.
 
 \evidence{\cmd{bindings/blob/blob.s}; \cmd{bindings/blob/README.md};
 \cmd{tests/emulator/blob.suite}}
+
+\Needspace{34\baselineskip}
+\section{Call Audio And Vsprite Extensions}
+
+Ultimate Audio occupies the extension entries from \cmd{+\$2E8} through
+\cmd{+\$300}. The normal sequence is
+\cmd{ultimate\_audio\_init}, optionally
+\cmd{audio\_load\_wav}, then \cmd{audio\_configure} and
+\cmd{audio\_start}. Configure, start, stop and clear use the
+\cmd{ultimate\_audio\_voice} structure at
+\cmd{BLOB + BLOB\_BP\_AUDIO}; the WAV entry also uses
+\cmd{BLOB\_BP\_NAME} and \cmd{BLOB\_BP\_REU}. Chapter~3 defines every voice
+field and the safe configure/start/stop sequence. The complete stable offset
+table is in \cmd{bindings/blob/README.md}.
+
+The software-vsprite entry is \cmd{BLOB + BLOB\_VSPRITE\_DRAW}, currently
+\cmd{+\$303}. Put the descriptor address in \cmd{BLOB\_BP\_ADDR} and read the
+result from \cmd{BLOB\_BP\_RESULT}:
+
+\begin{listingbox}
+BLOB = \$7000\
+\
+\hspace*{2em}lda \#<sprite\
+\hspace*{2em}sta BLOB + BLOB\_BP\_ADDR\
+\hspace*{2em}lda \#>sprite\
+\hspace*{2em}sta BLOB + BLOB\_BP\_ADDR + 1\
+\hspace*{2em}jsr BLOB + BLOB\_VSPRITE\_DRAW\
+\hspace*{2em}lda BLOB + BLOB\_BP\_RESULT\
+\hspace*{2em}bne draw\_failed\
+\
+sprite:\
+\hspace*{2em}.word \$6000, image, mask, 0\
+\hspace*{2em}.byte 12, 72, 2, 8, 0, VSPRITE\_F\_MASKED
+\end{listingbox}
+
+\begin{resultbox}
+The masked image is composited into the bitmap; the parameter result is zero.
+\end{resultbox}
+
+The descriptor and flag contract is the one in \emph{Composite A Software
+Vsprite} in Chapter~3. This is a parameter-block shim around the same assembly
+routine, not another renderer.
+
+\evidence{\cmd{bindings/blob/blob.s}; \cmd{bindings/blob/README.md};
+\cmd{bindings/asm/uci\_protocol.inc}; \cmd{src/uci/vsprite.s}}
 
 \section{Call The Blob From BASIC}
 

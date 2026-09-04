@@ -14,6 +14,17 @@
         sta location + 1
 .endmacro
 
+.macro setdword location, value
+        lda #.lobyte(value)
+        sta location
+        lda #.hibyte(value)
+        sta location + 1
+        lda #.bankbyte(value)
+        sta location + 2
+        lda #.hibyte(.hiword(value))
+        sta location + 3
+.endmacro
+
         .segment "CODE"
 
 ; Assemble every public entry point printed in the assembly chapter.
@@ -42,15 +53,51 @@ guide_assembly_calls:
         jsr ultimate_palette_reset
         jsr ultimate_turbo_available
         jsr ultimate_turbo_get
+        lda #U64_SPEED_1MHZ
+        jsr ultimate_turbo_set
+        lda #U64_SPEED_2MHZ
+        jsr ultimate_turbo_set
+        lda #U64_SPEED_3MHZ
+        jsr ultimate_turbo_set
         lda #U64_SPEED_4MHZ
+        jsr ultimate_turbo_set
+        lda #U64_SPEED_MAX
         jsr ultimate_turbo_set
         lda #0
         jsr ultimate_turbo_badlines
+        lda #0
+        sta vsprite + VSPRITE_FLAGS
+        lda #<vsprite
+        ldx #>vsprite
+        jsr ultimate_vsprite_draw
+        lda #VSPRITE_F_MASKED
+        sta vsprite + VSPRITE_FLAGS
+        lda #<vsprite
+        ldx #>vsprite
+        jsr ultimate_vsprite_draw
+        lda #VSPRITE_F_COPY
+        sta vsprite + VSPRITE_FLAGS
+        lda #<vsprite
+        ldx #>vsprite
+        jsr ultimate_vsprite_draw
+        lda #VSPRITE_F_COLOR
+        sta vsprite + VSPRITE_FLAGS
+        lda #<vsprite
+        ldx #>vsprite
+        jsr ultimate_vsprite_draw
         jsr ultimate_chdir
         jsr ultimate_getpath
         jsr ultimate_opendir
         jsr ultimate_readdir
         lda #DOS_FA_READ
+        jsr ultimate_open
+        lda #DOS_FA_WRITE
+        jsr ultimate_open
+        lda #(DOS_FA_WRITE | DOS_FA_CREATE_NEW)
+        jsr ultimate_open
+        lda #(DOS_FA_WRITE | DOS_FA_CREATE_ALWAYS)
+        jsr ultimate_open
+        lda #(DOS_FA_READ | DOS_FA_WRITE)
         jsr ultimate_open
         jsr ultimate_close
         jsr ultimate_read
@@ -63,10 +110,52 @@ guide_assembly_calls:
         jsr ultimate_last_end
         jsr ultimate_reu_available
         jsr ultimate_reu_size
+        setdword ult_reu, 0
+        setdword ult_reulen, 65536
         jsr ultimate_reu_stash
         jsr ultimate_reu_fetch
         jsr ultimate_reu_load
         jsr ultimate_reu_save
+        jsr ultimate_audio_init
+        jsr ultimate_audio_available
+        jsr ultimate_audio_version
+        lda #<voice
+        ldx #>voice
+        jsr ultimate_audio_load_wav
+        lda #0
+        sta voice + UA_VOICE_FLAGS
+        lda #UA_PAN_LEFT
+        sta voice + UA_VOICE_PAN
+        lda #<voice
+        ldx #>voice
+        jsr ultimate_audio_configure
+        lda #UA_CTRL_16BIT
+        sta voice + UA_VOICE_FLAGS
+        lda #UA_PAN_CENTER
+        sta voice + UA_VOICE_PAN
+        lda #<voice
+        ldx #>voice
+        jsr ultimate_audio_configure
+        lda #UA_CTRL_INTERLEAVE
+        sta voice + UA_VOICE_FLAGS
+        lda #<voice
+        ldx #>voice
+        jsr ultimate_audio_configure
+        lda #(UA_CTRL_16BIT | UA_CTRL_INTERLEAVE | UA_CTRL_REPEAT)
+        sta voice + UA_VOICE_FLAGS
+        lda #UA_PAN_RIGHT
+        sta voice + UA_VOICE_PAN
+        lda #<voice
+        ldx #>voice
+        jsr ultimate_audio_configure
+        lda #0
+        ldx #0
+        jsr ultimate_audio_start
+        jsr ultimate_audio_irq_status
+        lda #0
+        jsr ultimate_audio_irq_clear
+        lda #0
+        jsr ultimate_audio_stop
         setptr ult_buf, buffer
         setptr ult_arg2, fileinfo
         jsr ultimate_stat
@@ -120,18 +209,37 @@ guide_assembly_calls:
         jsr ultimate_http_get
         lda #HTTP_VERB_GET
         jsr ultimate_http_open
+        lda #HTTP_VERB_PUT
+        jsr ultimate_http_open
+        lda #HTTP_VERB_POST
+        jsr ultimate_http_open
+        lda #HTTP_VERB_PATCH
+        jsr ultimate_http_open
+        lda #HTTP_VERB_DELETE
+        jsr ultimate_http_open
+        lda #HTTP_VERB_HEAD
+        jsr ultimate_http_open
+        lda #HTTP_VERB_OPTIONS
+        jsr ultimate_http_open
+        lda #HTTP_VERB_CONNECT
+        jsr ultimate_http_open
+        lda #HTTP_VERB_TRACE
+        jsr ultimate_http_open
         jsr ultimate_http_header
         jsr ultimate_http_exchange
         jsr ultimate_http_close
         lda #HTTP_BODY_JSON_OBJECT
         jsr ultimate_http_body
+        lda #HTTP_BODY_JSON_ARRAY
+        jsr ultimate_http_body
+        lda #HTTP_BODY_URL_ENCODED
+        jsr ultimate_http_body
+        lda #HTTP_BODY_BINARY
+        jsr ultimate_http_body
         setptr ult_url, buffer
         setptr ult_buf, buffer
         jsr ultimate_http_body_string
-        setword ult_val, 4200
-        lda #0
-        sta ult_val + 2
-        sta ult_val + 3
+        setdword ult_val, -6502
         jsr ultimate_http_body_int
         jsr ultimate_http_body_bool
         jsr ultimate_http_body_object
@@ -170,3 +278,5 @@ sid_info: .res ULTIMATE_SID_INFO_SIZE
 fileinfo: .res ULTIMATE_FILEINFO_SIZE
 drives:   .res CTRL_DRVINFO_BYTES
 ramdisk:  .res CTRL_RAMDISK_BYTES
+voice:    .res UA_VOICE_SIZE
+vsprite:  .res VSPRITE_SIZE

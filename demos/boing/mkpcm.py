@@ -34,8 +34,9 @@ def main():
         import genboing; genboing.main()
         samples, rate = from_raw8("boing8.pcm", 11025)
     # Signed 8-bit, resident in the PRG in two pieces around the I/O area:
-    # 9,728 bytes at $aa00-$cfff and up to 7,424 at $e000-$fcff.
-    PIECE_A, PIECE_B_MAX = 9728, 7424
+    # 8,912 bytes at $ad30-$cfff and up to 8,186 at $e000-$fff9. The short tail
+    # trim keeps the IRQ vectors at $fffa-$ffff out of the resident sample.
+    PIECE_A, PIECE_B_MAX = 8912, 8186
     data = bytes(max(-128, min(127, v >> 8)) & 0xFF for v in samples)[:PIECE_A + PIECE_B_MAX]
     open("boing.pcm", "wb").write(data)
     a = min(PIECE_A, len(data)); b = len(data) - a

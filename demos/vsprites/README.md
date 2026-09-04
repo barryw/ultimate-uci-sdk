@@ -8,30 +8,29 @@ frame. They are similar to Amiga blitter objects, but without a blitter: the
 
 The demo adds a vsprite whenever the last frame took under three quarters of the
 raster period and takes one away when it took more than seven eighths, so it
-fills whatever machine it is on: two vsprites on a stock C64, 60 on the tested
-48 MHz Elite, and more on a 64 MHz Commodore 64 Ultimate. The grey band at the top
-of the border is the render time; the black below it is what is left.
+fills whatever machine it is on: one vsprite on a stock C64 and 39 on
+the tested 48 MHz Elite. The grey band at the top of the border is the render
+time; the black below it is what is left.
 
 ## What the SDK does here
 
-Three calls, through the standalone blob at `$7000`:
+Four calls, through the standalone blob at `$7000`:
 `ultimate_turbo_available()` says whether the machine's Turbo Control setting
 gives the program the speed register; `ultimate_turbo_set(U64_SPEED_MAX)` asks
 for the top speed; `ultimate_turbo_badlines(0)` stops the VIC stealing cycles,
-which is worth six per cent of every frame at any speed. Nothing else is
-Ultimate-specific: the blit is plain 6510 code that runs, slowly, on a C64.
+which is worth six per cent of every frame at any speed; and
+`ultimate_vsprite_draw()` restores and masked-composites each vsprite. The draw
+routine is plain 6510 code and also runs, slowly, on a stock C64.
 
-Numbers, measured on an Elite (firmware 3.15, NTSC): one 32-line vsprite costs
-about 10,500 cycles to restore and redraw, 218 microseconds at 48 MHz, so
-the frame holds 76 of them at 60 fps with nothing else running. The design
-notes in `docs/superpowers/specs/2026-09-01-software-sprites-design.md` have
-the full tables, the memory map and the colour options.
+Measured on an Elite (firmware 3.15, NTSC), the adaptive loop settled at 39
+32x32 vsprites at 59.9 fps, using 13,312 of the frame's 17,055 CIA cycles for
+movement, restore and draw.
 
 ## Building
 
 ```
 make            # vsprites.prg, with the SDK blob inside it
-make check      # run it in VICE (1 MHz, two vsprites) and write vsprites-vice.png
+make check      # run it in VICE (1 MHz) and write vsprites-vice.png
 make run U64_HOST=192.168.1.62
 ```
 
@@ -50,7 +49,8 @@ it at speed; with any other setting it runs at 1 MHz, honestly.
 |---|---|
 | `$0801-$24ff` | code, tables, three shapes pre-shifted four ways |
 | `$4000-$5f3f` | bitmap A (VIC bank 1), screen A at `$6000` |
-| `$7000-$954b` | the SDK blob, its RAM at `$9f00` |
+| `$7000-$9d2c` | the SDK blob (current build) |
+| `$9f00-$9fbe` | the SDK's `UCI_VARS_SIZE` bytes (currently 191) |
 | `$a000-$bf3f` | the clean background, RAM under BASIC (`$01 = $35`) |
 | `$c000-$c3ff` | screen B (VIC bank 3), bitmap B at `$e000-$ff3f` under the KERNAL |
 

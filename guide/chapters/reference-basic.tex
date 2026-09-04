@@ -1,0 +1,505 @@
+% BASIC keyword reference.
+
+\guidechapter{BASIC KEYWORD REFERENCE}{%
+  \item Every wedge statement, function and constant
+  \item Exact syntax, tokens, results and side effects
+  \item One short example for every entry
+}
+
+\begin{referencechapter}
+
+\section{Common Rules}
+
+All entries require the BASIC wedge from Chapter~2. Custom statements work in
+direct and program modes, but BASIC V2 cannot dispatch one immediately after
+\bas{then}; branch to a line containing the statement instead. None of the
+custom keywords has an abbreviated entry.
+
+Statements report their SDK result through \bas{uerr}; target-specific status
+is retained in \bas{udev}. Numeric syntax errors remain ordinary BASIC errors.
+Dedicated filename statements retain at most 63 filename bytes. The raw
+\bas{uci} statement retains 256 reply bytes, 40 status bytes and 64 argument
+bytes.
+
+\section{Raw Command Interface}
+
+\basicapi{UCI}{statement}
+
+\entryfield{Syntax}{\bas{uci} or \bas{uci} \textit{target, command}
+[\bas{,} \textit{argument} \ldots]}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$CC} (204)}
+\entryfield{Result}{\bas{uerr}, \bas{udev}, \bas{ulen}, \bas{ust\$},
+\bas{udat\$} and \bas{ubyte(}}
+
+\entryhead{Purpose}
+
+Executes any published UCI command. A bare \bas{uci} aborts an unfinished
+exchange and returns the interface to idle. Target and command are bytes.
+String arguments contribute their bytes; numeric arguments normally contribute
+one byte. Known commands automatically widen arguments required by their wire
+format. \bas{uw(} and \bas{ul(} force widths explicitly.
+
+\entryhead{Examples}
+
+\begin{screen}
+10 UCI UCTRL,1\\
+20 PRINT UERR;ULEN;UDAT\$
+\end{screen}
+
+\begin{outputbox}
+ 0  14 CONTROL TARGET
+\end{outputbox}
+
+\begin{screen}
+10 UCI UDOS1,38\\
+20 UCI UDOS1,38,0\\
+30 UCI UDOS1,240,UW(4660),UL(65536)
+\end{screen}
+
+\begin{resultbox}
+The first two calls demonstrate an omitted and explicit optional argument. The
+third sends 4660 as two bytes and 65536 as four, both least-significant byte
+first.
+\end{resultbox}
+
+\basicapi{UERR}{numeric function}
+
+\entryfield{Syntax}{\bas{uerr}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$CD} (205)}
+\entryfield{Returns}{The last \cmd{ULTIMATE\_*} result; zero is
+\cmd{ULTIMATE\_OK}}
+
+\entryhead{Purpose}
+
+Tests whether the most recent wedge statement succeeded. It is initialized to
+zero when the wedge starts. Appendix~A defines every result code.
+
+\begin{screen}
+10 ULOAD "FONT.PRG",49152\\
+20 IF UERR THEN PRINT "LOAD FAILED";UERR
+\end{screen}
+
+\begin{resultbox}
+The program continues silently when the load succeeds and prints the SDK result
+when it fails.
+\end{resultbox}
+
+\basicapi{UDEV}{numeric function}
+
+\entryfield{Syntax}{\bas{udev}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$CE} (206)}
+\entryfield{Returns}{The target's last raw status number, from 0 through 65535}
+
+\entryhead{Purpose}
+
+Adds firmware-specific detail to diagnostics. Do not use it for normal program
+control; use \bas{uerr}, whose meanings are stable across targets.
+
+\begin{screen}
+10 UCI UDOS1,1\\
+20 IF UERR THEN PRINT "DEVICE STATUS";UDEV
+\end{screen}
+
+\begin{resultbox}
+UDEV is consulted only after UERR reports failure.
+\end{resultbox}
+
+\basicapi{ULEN}{numeric function}
+
+\entryfield{Syntax}{\bas{ulen}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$CF} (207)}
+\entryfield{Returns}{The retained reply length, from 0 through 256}
+
+\entryhead{Purpose}
+
+Reports how many data bytes the most recent \bas{uci} command retained. It is
+zero before the first command. A longer reply retains the first 256 bytes and
+sets \bas{uerr} to \cmd{ULTIMATE\_ERR\_TRUNCATED}.
+
+\begin{screen}
+10 UCI UCTRL,1\\
+20 FOR I=0 TO ULEN-1:PRINT UBYTE(I);:NEXT
+\end{screen}
+
+\begin{resultbox}
+The loop visits exactly the retained reply bytes.
+\end{resultbox}
+
+\basicapi{UST\$}{string function}
+
+\entryfield{Syntax}{\bas{ust\$}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$D0} (208)}
+\entryfield{Returns}{The status bytes from the most recent \bas{uci} command as
+a BASIC string}
+
+\entryhead{Purpose}
+
+Exposes the target's status text exactly as received, up to the wedge's
+40-byte status buffer. Use \bas{uerr} and \bas{udev} when a stable numeric test
+is needed.
+
+\begin{screen}
+10 UCI UCTRL,1\\
+20 PRINT UST\$
+\end{screen}
+
+\begin{outputbox}
+00,OK
+\end{outputbox}
+
+\basicapi{UDAT\$}{string function}
+
+\entryfield{Syntax}{\bas{udat\$}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$D1} (209)}
+\entryfield{Returns}{Up to 255 retained reply bytes as a BASIC string}
+
+\entryhead{Purpose}
+
+Returns textual or binary reply data in one value. BASIC strings cannot contain
+more than 255 bytes, so use \bas{ubyte(255)} to inspect the final byte of a
+256-byte retained reply.
+
+\begin{screen}
+10 UCI UCTRL,1\\
+20 PRINT UDAT\$
+\end{screen}
+
+\begin{outputbox}
+CONTROL TARGET
+\end{outputbox}
+
+\basicapi{UBYTE(}{numeric function}
+
+\entryfield{Syntax}{\bas{ubyte(}\textit{index}\bas{)}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$D2} (210), including the opening parenthesis}
+\entryfield{Returns}{Reply byte \textit{index}, or zero when the index is
+outside the retained reply}
+
+\entryhead{Purpose}
+
+Reads binary replies without converting them to strings. Valid retained
+indices are 0 through 255.
+
+\begin{screen}
+10 UCI UCTRL,1\\
+20 PRINT UBYTE(0);UBYTE(1);UBYTE(999)
+\end{screen}
+
+\begin{outputbox}
+ 67  79  0
+\end{outputbox}
+
+\basicapi{UW(}{UCI argument modifier}
+
+\entryfield{Syntax}{\bas{uw(}\textit{numeric expression}\bas{)}}
+\entryfield{Valid only}{As an argument inside a \bas{uci} statement}
+\entryfield{Token}{\cmd{\$D3} (211), including the opening parenthesis}
+\entryfield{Produces}{Two little-endian argument bytes}
+
+\entryhead{Purpose}
+
+Overrides the raw command's normal argument width. It is useful for firmware
+commands newer than the wedge's shape table.
+
+\begin{screen}
+UCI UDOS1,240,UW(4660)
+\end{screen}
+
+\begin{resultbox}
+The argument bytes are 52,18 (\$34,\$12).
+\end{resultbox}
+
+\basicapi{UL(}{UCI argument modifier}
+
+\entryfield{Syntax}{\bas{ul(}\textit{numeric expression}\bas{)}}
+\entryfield{Valid only}{As an argument inside a \bas{uci} statement}
+\entryfield{Token}{\cmd{\$D4} (212), including the opening parenthesis}
+\entryfield{Produces}{Four little-endian argument bytes}
+
+\entryhead{Purpose}
+
+Forces a signed 32-bit BASIC value into the raw argument stream.
+
+\begin{screen}
+UCI UDOS1,240,UL(65536)
+\end{screen}
+
+\begin{resultbox}
+The argument bytes are 0,0,1,0.
+\end{resultbox}
+
+\section{Target Constants}
+
+\basicapi{UDOS1}{numeric constant}
+\entryfield{Syntax}{\bas{udos1}}
+\entryfield{Token}{\cmd{\$D5} (213)}
+\entryfield{Returns}{1, the first Ultimate DOS target}
+\begin{screen}
+UCI UDOS1,1
+\end{screen}
+\begin{resultbox}
+The IDENTIFY command is sent to the primary filesystem service.
+\end{resultbox}
+
+\basicapi{UDOS2}{numeric constant}
+\entryfield{Syntax}{\bas{udos2}}
+\entryfield{Token}{\cmd{\$D6} (214)}
+\entryfield{Returns}{2, the second Ultimate DOS target}
+\begin{screen}
+UCI UDOS2,1
+\end{screen}
+\begin{resultbox}
+The IDENTIFY command is sent to the optional second filesystem service.
+\end{resultbox}
+
+\basicapi{UNET}{numeric constant}
+\entryfield{Syntax}{\bas{unet}}
+\entryfield{Token}{\cmd{\$D7} (215)}
+\entryfield{Returns}{3, the network target}
+\begin{screen}
+UCI UNET,1
+\end{screen}
+\begin{resultbox}
+The IDENTIFY command is sent to the network service.
+\end{resultbox}
+
+\basicapi{UCTRL}{numeric constant}
+\entryfield{Syntax}{\bas{uctrl}}
+\entryfield{Token}{\cmd{\$D8} (216)}
+\entryfield{Returns}{4, the machine and cartridge-control target}
+\begin{screen}
+UCI UCTRL,1
+\end{screen}
+\begin{resultbox}
+The IDENTIFY command is sent to the control service.
+\end{resultbox}
+
+\basicapi{UIEC}{numeric constant}
+\entryfield{Syntax}{\bas{uiec}}
+\entryfield{Token}{\cmd{\$D9} (217)}
+\entryfield{Returns}{5, the SoftwareIEC target}
+\begin{screen}
+UCI UIEC,1
+\end{screen}
+\begin{resultbox}
+The IDENTIFY command is sent to the high-speed IEC service.
+\end{resultbox}
+
+\basicapi{UHTTP}{numeric constant}
+\entryfield{Syntax}{\bas{uhttp}}
+\entryfield{Token}{\cmd{\$DA} (218)}
+\entryfield{Returns}{6, the HTTP target}
+\begin{screen}
+UCI UHTTP,1
+\end{screen}
+\begin{resultbox}
+The IDENTIFY command is sent to the HTTP client service.
+\end{resultbox}
+
+\section{Turbo Control}
+
+\basicapi{UTURBO}{statement and numeric function}
+
+\entryfield{Syntax}{\bas{uturbo} \textit{index} or \bas{uturbo}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$DB} (219)}
+\entryfield{Statement result}{\bas{uerr}}
+\entryfield{Function result}{Current speed index, or 255 when turbo registers
+are unavailable}
+
+\entryhead{Purpose}
+
+Sets or reads the Ultimate~64 CPU-speed index. Indices 0, 1, 2 and 3 portably
+mean 1, 2, 3 and 4\,MHz. Indices 4 through 15 are model-dependent. The
+statement leaves the badline setting unchanged.
+
+\begin{screen}
+10 S=UTURBO:IF S=255 THEN PRINT "NO TURBO":END\\
+20 UTURBO 0:UTURBO 1:UTURBO 2:UTURBO 3\\
+30 UTURBO 15:IF UERR THEN END\\
+40 PRINT UTURBO\\
+50 UTURBO S
+\end{screen}
+
+\begin{outputbox}
+ 15
+\end{outputbox}
+
+The first four settings demonstrate the portable 1, 2, 3 and 4\,MHz speeds;
+15 selects the model's maximum. Indices 4--14 are accepted but deliberately
+not assigned a frequency here because their meanings differ by model.
+
+\section{Files And Directories}
+
+\basicapi{ULOAD}{statement}
+
+\entryfield{Syntax}{\bas{uload} \textit{filename\$}
+[\bas{,} \textit{address}]}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$DC} (220)}
+\entryfield{Result}{\bas{uerr}; raw target status in \bas{udev}}
+
+\entryhead{Purpose}
+
+Loads a PRG from the current Ultimate directory. Its two-byte header is always
+consumed. Omitting the address, or supplying zero, uses the header's address;
+any other 16-bit value overrides it.
+
+\begin{screen}
+10 ULOAD "FONT.PRG"\\
+20 IF UERR THEN PRINT "LOAD FAILED";UERR;UDEV\\
+30 ULOAD "FONT.PRG",49152
+\end{screen}
+
+\begin{resultbox}
+The first call uses the PRG's address. The second loads its body beginning at
+\$C000. The caller must protect live memory at either destination.
+\end{resultbox}
+
+\basicapi{UBLOAD}{statement}
+
+\entryfield{Syntax}{\bas{ubload} \textit{filename\$, address, length}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$DD} (221)}
+\entryfield{Result}{\bas{uerr}; raw target status in \bas{udev}}
+
+\entryhead{Purpose}
+
+Loads at most \textit{length} raw file bytes into a nonzero 16-bit C64 address.
+It does not consume or interpret a PRG header. Address and length must both be
+nonzero.
+
+\begin{screen}
+10 UBLOAD "FONT.BIN",49152,2048\\
+20 IF UERR THEN PRINT "LOAD FAILED";UERR;UDEV
+\end{screen}
+
+\begin{resultbox}
+At most 2048 bytes are written beginning at \$C000.
+\end{resultbox}
+
+\basicapi{USAVE}{statement}
+
+\entryfield{Syntax}{\bas{usave} \textit{filename\$, start, length}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$DE} (222)}
+\entryfield{Result}{\bas{uerr}; raw target status in \bas{udev}}
+
+\entryhead{Purpose}
+
+Creates or replaces a file with \textit{length} bytes beginning at the 16-bit
+C64 address \textit{start}. Length must be nonzero.
+
+\begin{screen}
+10 USAVE "SCREEN.BIN",1024,1000\\
+20 IF UERR THEN PRINT "SAVE FAILED";UERR;UDEV
+\end{screen}
+
+\begin{resultbox}
+SCREEN.BIN receives the 1000-byte text screen.
+\end{resultbox}
+
+\basicapi{UDIR}{statement}
+
+\entryfield{Syntax}{\bas{udir}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$DF} (223)}
+\entryfield{Result}{\bas{uerr}; directory names are printed as they arrive}
+
+\entryhead{Purpose}
+
+Lists the current Ultimate directory, one entry per line. A slash follows each
+directory. Normal end-of-directory leaves \bas{uerr} at zero.
+
+\begin{screen}
+UDIR
+\end{screen}
+
+\begin{outputbox}
+TEMP/
+\end{outputbox}
+
+The output above is the controlled root directory used by the hardware test;
+real directory contents vary.
+
+\section{RAM Expansion}
+
+\basicapi{USTASH}{statement}
+
+\entryfield{Syntax}{\bas{ustash} \textit{C64 address, REU address, length}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$E0} (224)}
+\entryfield{Result}{\bas{uerr}}
+
+\entryhead{Purpose}
+
+Copies C64 memory into the RAM expansion with DMA. The C64 address is 16-bit,
+the REU address is 24-bit, and the length is 16-bit; a zero length means 65536
+bytes. The transfer is complete when the statement returns.
+
+\begin{screen}
+10 USTASH 1024,0,1000\\
+20 IF UERR THEN PRINT "NO REU"
+\end{screen}
+
+\begin{resultbox}
+The 1000-byte text screen is copied to REU address zero.
+\end{resultbox}
+
+\basicapi{UFETCH}{statement}
+
+\entryfield{Syntax}{\bas{ufetch} \textit{C64 address, REU address, length}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$E1} (225)}
+\entryfield{Result}{\bas{uerr}}
+
+\entryhead{Purpose}
+
+Copies data from the RAM expansion into C64 memory. Address widths and the
+zero-means-65536 length convention are the same as \bas{ustash}.
+
+\begin{screen}
+10 UFETCH 1024,0,1000\\
+20 IF UERR THEN PRINT "NO REU"
+\end{screen}
+
+\begin{resultbox}
+The first 1000 REU bytes replace the C64 text screen.
+\end{resultbox}
+
+\basicapi{UREU}{numeric function}
+
+\entryfield{Syntax}{\bas{ureu}}
+\entryfield{Modes}{Direct and program}
+\entryfield{Token}{\cmd{\$E2} (226)}
+\entryfield{Returns}{Installed REU size in 64K banks, or zero when unavailable}
+
+\entryhead{Purpose}
+
+Tests for a RAM expansion and measures it in one operation. Multiply by 64 for
+kilobytes.
+
+\begin{screen}
+10 PRINT UREU\\
+20 PRINT UREU*64
+\end{screen}
+
+\begin{outputbox}
+ 32\\
+ 2048
+\end{outputbox}
+
+This is the actual result with the hardware-test configuration set to a 2\,MB
+REU; the value follows the machine's setting.
+
+\evidence{\cmd{tools/gen\_keywords.py}; \cmd{src/basic/dispatch.s};
+\cmd{tests/emulator/basic.suite}; \cmd{tests/hardware/basictest.py}}
+
+\end{referencechapter}

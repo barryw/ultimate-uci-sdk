@@ -1,0 +1,1463 @@
+% C API reference.
+
+\guidechapter{C API REFERENCE}{%
+  \item Every public structure, function and capability macro
+  \item Exact prototypes, parameters, return values and side effects
+  \item Short, compilable call examples
+}
+
+\begin{referencechapter}
+
+\newcommand{\capiref}[8]{%
+  \capi{#1}%
+  \entryfield{Header}{\cmd{#2}}%
+  \entryfield{Prototype}{\cmd{#3}}%
+  \entryhead{Parameters}#4\par
+  \entryhead{Returns}#5\par
+  \entryhead{Purpose}#6\par
+  \entryhead{Example}%
+  \begin{listingbox}[before skip=0.3\baselineskip,after skip=0.3\baselineskip]#7\end{listingbox}%
+  \begin{resultbox}#8\end{resultbox}}
+
+\newcommand{\cmacroref}[7]{%
+  \cmacroapi{#1}%
+  \entryfield{Header}{\cmd{ultimate.h}}%
+  \entryfield{Syntax}{\cmd{#2}}%
+  \entryhead{Parameters}#3\par
+  \entryhead{Returns}#4\par
+  \entryhead{Purpose}#5\par
+  \entryhead{Example}%
+  \begin{listingbox}[before skip=0.3\baselineskip,after skip=0.3\baselineskip]#6\end{listingbox}%
+  \begin{resultbox}#7\end{resultbox}}
+
+\newcommand{\capirefout}[8]{%
+  \capi{#1}%
+  \entryfield{Header}{\cmd{#2}}%
+  \entryfield{Prototype}{\cmd{#3}}%
+  \entryhead{Parameters}#4\par
+  \entryhead{Returns}#5\par
+  \entryhead{Purpose}#6\par
+  \entryhead{Example}%
+  \begin{listingbox}[before skip=0.3\baselineskip,after skip=0.3\baselineskip]#7\end{listingbox}%
+  \begin{outputbox}#8\end{outputbox}}
+
+\newcommand{\structref}[3]{%
+  \apientry{#1 type}{\cmd{#1}}{C structure}%
+  \label{struct:#2}%
+  \entryfield{Header}{\cmd{#3}}}
+
+\section{Common Rules}
+
+Include \cmd{ultimate.h} for application services and \cmd{uci.h} only for raw
+transport calls. Unless an entry says otherwise, a \cmd{uint8\_t} service
+returns \cmd{ULTIMATE\_OK} on success or an \cmd{ULTIMATE\_ERR\_*} value from
+Appendix~A. Caller-supplied buffers remain owned by the caller and must stay
+valid until the call returns. The SDK allocates no memory.
+For UCI-backed calls, an entry's Returns field names call-specific outcomes;
+transport and target failures may also return the applicable Appendix~A error.
+
+Call \cmd{ultimate\_init()} once before any UCI-backed service. Turbo, REU DMA
+and software vsprites state their separate requirements. cc65 character maps
+string literals; uppercase filename/path literals are ASCII-compatible, while
+case-sensitive ASCII URLs, headers, keys and values should be constructed as
+bytes or converted at run time.
+
+\section{SDK Data Types}
+
+The following entries define every public structure used by the C API. Function
+parameter descriptions link back here; the structure definitions in
+\cmd{ultimate.h} and \cmd{uci.h} remain the compiler's authority.
+
+\structref{ultimate\_capabilities}{ultimate-capabilities}{ultimate.h}
+
+Filled by \cmd{ultimate\_detect()}; callers normally allocate it once and keep
+it for feature checks.
+
+\begin{apitable}{p{0.25\linewidth}p{0.67\linewidth}}
+\textbf{Field} & \textbf{Meaning} \\ \midrule
+\cmd{uint8\_t present} & 1 when a working command interface answered. \\
+\cmd{uint8\_t ident} & Raw UCI identification-register value. \\
+\cmd{uint16\_t targets} & Bit N is set when UCI target N identified itself. \\
+\end{apitable}
+
+\entryhead{Example}
+\begin{listingbox}
+ultimate\_capabilities caps;\
+uint8\_t err = ultimate\_detect(\&caps);\
+if (err == ULTIMATE\_OK \&\& ultimate\_has\_http(\&caps)) \{\
+\hspace*{2em}/* HTTP target is available */\
+\}
+\end{listingbox}
+
+\structref{ultimate\_sid}{ultimate-sid}{ultimate.h}
+
+One raw SID mapping returned inside \hyperref[struct:ultimate-sid-info]{%
+\cmd{ultimate\_sid\_info}}. It describes addresses and firmware mapping type;
+it does not identify a 6581 versus 8580.
+
+\begin{apitable}{p{0.34\linewidth}p{0.58\linewidth}}
+\textbf{Field} & \textbf{Meaning} \\ \midrule
+\cmd{uint16\_t primary\_address} & Primary memory-mapped SID address. \\
+\cmd{uint16\_t secondary\_address} & Second mapping, or zero when absent. \\
+\cmd{uint8\_t type} & Raw implementation/address-mask code; preserve unknown values. \\
+\end{apitable}
+
+\entryhead{Example}
+\begin{listingbox}
+ultimate\_sid\_info info;\
+ultimate\_sid *sid;\
+uint8\_t err = ultimate\_legacy\_get\_sid\_info(\&info);\
+if (err == ULTIMATE\_OK \&\& info.count != 0)\
+\hspace*{2em}sid = \&info.sid[0];
+\end{listingbox}
+
+\structref{ultimate\_sid\_info}{ultimate-sid-info}{ultimate.h}
+
+Count-prefixed result from deprecated control HWINFO. At most
+\cmd{ULTIMATE\_SID\_MAX} (4) records are retained.
+
+\begin{apitable}{p{0.34\linewidth}p{0.58\linewidth}}
+\textbf{Field} & \textbf{Meaning} \\ \midrule
+\cmd{uint8\_t count} & Valid entries in \cmd{sid}; zero on any call failure. \\
+\cmd{ultimate\_sid sid[ULTIMATE\_SID\_MAX]} & SID mapping records; only
+indices below \cmd{count} are valid. \\
+\end{apitable}
+
+\entryhead{Example}
+\begin{listingbox}
+ultimate\_sid\_info info;\
+uint8\_t err = ultimate\_legacy\_get\_sid\_info(\&info);\
+if (err == ULTIMATE\_OK \&\& info.count != 0) \{\
+\hspace*{2em}/* info.sid[0] is valid */\
+\}
+\end{listingbox}
+
+\structref{ultimate\_vsprite}{ultimate-vsprite}{ultimate.h}
+
+A complete software-vsprite draw descriptor. It is read only during
+\cmd{ultimate\_vsprite\_draw()}; the bitmap, and optionally screen memory, are
+changed in place. The descriptor is 14 bytes in the cc65 ABI.
+
+\begin{apitable}{p{0.27\linewidth}p{0.65\linewidth}}
+\textbf{Field} & \textbf{Meaning} \\ \midrule
+\cmd{uint8\_t *bitmap} & Base of a standard 8000-byte C64 bitmap. \\
+\cmd{const uint8\_t *source} & Image bytes in column-major order; for
+\cmd{VSPRITE\_F\_COPY}, the base of another C64 bitmap. \\
+\cmd{const uint8\_t *mask} & Column-major mask required by
+\cmd{VSPRITE\_F\_MASKED} and ignored otherwise; the destination is ANDed with
+the mask, then the source is ORed into it. \\
+\cmd{uint8\_t *screen} & Screen-memory base required by
+\cmd{VSPRITE\_F\_COLOR} and ignored otherwise. \\
+\cmd{uint8\_t x} & Destination bitmap byte/cell column, 0--39; this is not a
+pixel coordinate. \\
+\cmd{uint8\_t y} & Destination raster line, 0--199. \\
+\cmd{uint8\_t width} & Width in bitmap byte columns; must be nonzero and fit
+from \cmd{x}. \\
+\cmd{uint8\_t height} & Height in raster lines; must be nonzero and fit from
+\cmd{y}. \\
+\cmd{uint8\_t color} & Screen byte written to cells touched by visible source
+bytes in colour mode. \\
+\cmd{uint8\_t flags} & 0 for OR, or exactly one of
+\cmd{VSPRITE\_F\_MASKED}, \cmd{VSPRITE\_F\_COPY}, or
+\cmd{VSPRITE\_F\_COLOR}. \\
+\end{apitable}
+
+For ordinary and masked draws, source (and mask) layout is every raster line of
+byte column zero, followed by every line of byte column one, and so on. The
+caller supplies pre-shifted images when sub-cell horizontal movement is needed.
+
+\Needspace{22\baselineskip}
+\entryhead{Complete masked-draw example}
+\begin{listingbox}
+static const uint8\_t image[8] =\
+\hspace*{2em}\{ 0x18, 0x3c, 0x7e, 0xff, 0xff, 0x7e, 0x3c, 0x18 \};\
+static const uint8\_t mask[8] =\
+\hspace*{2em}\{ 0xe7, 0xc3, 0x81, 0x00, 0x00, 0x81, 0xc3, 0xe7 \};\
+ultimate\_vsprite sprite;\
+uint8\_t err;\
+\
+sprite.bitmap = (uint8\_t *)0xe000;\
+sprite.source = image;\
+sprite.mask = mask;\
+sprite.screen = (uint8\_t *)0xcc00;\
+sprite.x = 18;       /* byte column */\
+sprite.y = 80;       /* raster line */\
+sprite.width = 1;    /* 8 pixels */\
+sprite.height = 8;\
+sprite.color = 2;    /* ignored in masked mode */\
+sprite.flags = VSPRITE\_F\_MASKED;\
+err = ultimate\_vsprite\_draw(\&sprite);
+\end{listingbox}
+
+\begin{resultbox}
+The 8-by-8 image is composited at bitmap byte column 18, raster line 80. Set
+\cmd{flags} to 0, \cmd{VSPRITE\_F\_COPY}, or \cmd{VSPRITE\_F\_COLOR} for the
+other three operations and populate the fields described above.
+\end{resultbox}
+
+\structref{ultimate\_fileinfo}{ultimate-fileinfo}{ultimate.h}
+
+Metadata returned by \cmd{ultimate\_stat()} and \cmd{ultimate\_fstat()}.
+
+\begin{apitable}{p{0.31\linewidth}p{0.61\linewidth}}
+\textbf{Field} & \textbf{Meaning} \\ \midrule
+\cmd{uint32\_t size} & File size in bytes. \\
+\cmd{uint16\_t date} & Packed FAT date: year minus 1980, month and day. \\
+\cmd{uint16\_t time} & Packed FAT time: hour, minute and two-second units. \\
+\cmd{char extension[3]} & Three space-padded bytes; not NUL-terminated. \\
+\cmd{uint8\_t attrib} & \cmd{DOS\_ATTR\_*} bits. \\
+\cmd{char name[ULTIMATE\_NAME\_MAX + 1]} & NUL-terminated name, bounded by
+\cmd{ULTIMATE\_NAME\_MAX}. \\
+\end{apitable}
+
+\entryhead{Example}
+\begin{listingbox}
+ultimate\_fileinfo info;\
+uint8\_t err = ultimate\_stat("DEMO.PRG", \&info);\
+if (err == ULTIMATE\_OK) \{\
+\hspace*{2em}/* info.name, info.size and info.attrib are valid */\
+\}
+\end{listingbox}
+
+\structref{ultimate\_audio\_voice}{ultimate-audio-voice}{ultimate.h}
+
+One Ultimate Audio PCM channel descriptor. Configuration reads all fields and
+leaves the channel stopped. The descriptor is \cmd{UA\_VOICE\_SIZE} (22)
+bytes in the cc65 ABI.
+
+\begin{apitable}{p{0.29\linewidth}p{0.63\linewidth}}
+\textbf{Field} & \textbf{Meaning} \\ \midrule
+\cmd{uint8\_t channel} & Channel 0 through \cmd{UA\_CHANNELS-1}. \\
+\cmd{uint8\_t flags} & \cmd{UA\_CTRL\_*} format/repeat/IRQ bits, excluding
+\cmd{UA\_CTRL\_GATE}. \\
+\cmd{uint8\_t volume} & 0 through \cmd{UA\_VOLUME\_MAX}. \\
+\cmd{uint8\_t pan} & \cmd{UA\_PAN\_LEFT} through \cmd{UA\_PAN\_RIGHT}. \\
+\cmd{uint32\_t reu\_address} & First PCM byte in the 24-bit REU window. \\
+\cmd{uint32\_t length} & PCM byte count, 1 through \$FFFFFF. \\
+\cmd{uint32\_t repeat\_a} & Loop-start byte offset relative to
+\cmd{reu\_address}. \\
+\cmd{uint32\_t repeat\_b} & Loop-end byte offset relative to
+\cmd{reu\_address}. \\
+\cmd{uint16\_t rate} & Nonzero divider: round(6250000 / samples per second). \\
+\end{apitable}
+
+Values 7 and 8 are both centred pan positions. The address and byte count may
+end at 16\,MB but may not wrap beyond it. A 16-bit or interleaved voice needs
+an even length. With \cmd{UA\_CTRL\_REPEAT}, the required relation is
+\cmd{repeat\_a < repeat\_b <= length}.
+
+\Needspace{18\baselineskip}
+\entryhead{Complete 8-bit mono example}
+\begin{listingbox}
+ultimate\_audio\_voice voice;\
+uint8\_t err;\
+voice.channel = 0;\
+voice.flags = 0;\
+voice.volume = UA\_VOLUME\_MAX;\
+voice.pan = UA\_PAN\_CENTER;\
+voice.reu\_address = 0x4000UL;\
+voice.length = 8000UL;\
+voice.repeat\_a = 0;\
+voice.repeat\_b = 0;\
+voice.rate = 781;       /* about 8000 samples/second */\
+err = ultimate\_audio\_configure(\&voice);\
+if (err == ULTIMATE\_OK)\
+\hspace*{2em}err = ultimate\_audio\_start(voice.channel, voice.flags);
+\end{listingbox}
+
+\structref{ultimate\_drive}{ultimate-drive}{ultimate.h}
+
+One drive or occupied IEC-bus record inside
+\hyperref[struct:ultimate-drives]{\cmd{ultimate\_drives}}.
+
+\begin{apitable}{p{0.26\linewidth}p{0.66\linewidth}}
+\textbf{Field} & \textbf{Meaning} \\ \midrule
+\cmd{uint8\_t type} & \cmd{CTRL\_DRVTYPE\_*}; SoftwareIEC and printer values
+describe bus slots, not physical drives. \\
+\cmd{uint8\_t device} & IEC device number accepted by mount operations. \\
+\cmd{uint8\_t power} & 1 while the drive is running, otherwise 0. \\
+\end{apitable}
+
+\entryhead{Example}
+\begin{listingbox}
+ultimate\_drives drives;\
+ultimate\_drive *drive;\
+uint8\_t err = ultimate\_drive\_info(\&drives);\
+if (err == ULTIMATE\_OK \&\& drives.count != 0)\
+\hspace*{2em}drive = \&drives.drive[0];
+\end{listingbox}
+
+\structref{ultimate\_drives}{ultimate-drives}{ultimate.h}
+
+Count-prefixed result from \cmd{ultimate\_drive\_info()}.
+
+\begin{apitable}{p{0.38\linewidth}p{0.54\linewidth}}
+\textbf{Field} & \textbf{Meaning} \\ \midrule
+\cmd{uint8\_t count} & Valid records; never greater than records actually
+received or \cmd{ULTIMATE\_DRIVES\_MAX}. \\
+\cmd{ultimate\_drive drive[ULTIMATE\_DRIVES\_MAX]} & Drive/bus records; only indices below
+\cmd{count} are valid. \\
+\end{apitable}
+
+\entryhead{Example}
+\begin{listingbox}
+ultimate\_drives drives;\
+uint8\_t err = ultimate\_drive\_info(\&drives);\
+if (err == ULTIMATE\_OK \&\& drives.count != 0) \{\
+\hspace*{2em}/* drives.drive[0] is valid */\
+\}
+\end{listingbox}
+
+\structref{uci\_request}{uci-request}{uci.h}
+
+One low-level command/reply exchange. All pointed-to spans remain owned by the
+caller. The cc65 layout is \cmd{UCI\_REQ\_SIZE} (22) bytes and matches the
+generated assembly offsets.
+
+\begin{apitable}{p{0.27\linewidth}p{0.65\linewidth}}
+\textbf{Field} & \textbf{Meaning} \\ \midrule
+\cmd{uint8\_t target} & \cmd{UCI\_TARGET\_*}, optionally ORed with
+\cmd{UCI\_TARGET\_NO\_REPLY}. \\
+\cmd{uint8\_t command} & Target-specific command byte. \\
+\cmd{const uint8\_t *args} & Optional fixed argument bytes. \\
+\cmd{uint16\_t arglen} & Byte count at \cmd{args}; use zero with NULL. \\
+\cmd{const uint8\_t *payload} & Optional payload span sent after arguments. \\
+\cmd{uint16\_t payloadlen} & Byte count at \cmd{payload}; use zero with NULL. \\
+\cmd{uint8\_t *data} & Reply-data buffer, or NULL to discard without a
+truncation result. \\
+\cmd{uint16\_t datamax} & Capacity of \cmd{data}. \\
+\cmd{uint16\_t datalen} & Output: reply-data bytes retained. \\
+\cmd{uint8\_t *status} & Optional raw status buffer. \\
+\cmd{uint16\_t statusmax} & Capacity of \cmd{status}. \\
+\cmd{uint16\_t statuslen} & Output: status bytes retained. \\
+\end{apitable}
+
+\Needspace{17\baselineskip}
+\entryhead{Complete IDENTIFY example}
+\begin{listingbox}
+uint8\_t reply[64];\
+uint8\_t status[16];\
+uci\_request req = \{ 0 \};\
+uint8\_t err;\
+req.target = UCI\_TARGET\_DOS1;\
+req.command = UCI\_CMD\_IDENTIFY;\
+req.data = reply;\
+req.datamax = sizeof reply;\
+req.status = status;\
+req.statusmax = sizeof status;\
+err = uci\_exec(\&req);
+\end{listingbox}
+
+\begin{resultbox}
+On success, \cmd{reply[0..req.datalen-1]} contains the identification data and
+\cmd{status[0..req.statuslen-1]} contains the raw target status.
+\end{resultbox}
+
+\section{Initialization And Discovery}
+
+\capiref{ultimate\_init}{ultimate.h}
+{uint8\_t ultimate\_init(void)}
+{None.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_NO\_DEVICE}, or
+\cmd{ULTIMATE\_ERR\_TIMEOUT}.}
+{Initializes the SDK and functionally checks the command interface. Call it
+once before other UCI-backed services.}
+{uint8\_t err = ultimate\_init();}
+{The SDK is ready only when \cmd{err == ULTIMATE\_OK}.}
+
+\capiref{ultimate\_available}{ultimate.h}
+{uint8\_t ultimate\_available(void)}
+{None.}
+{1 after successful initialization; otherwise 0.}
+{Reads cached SDK state without touching hardware.}
+{if (!ultimate\_available()) return 1;}
+{The program exits when initialization has not succeeded.}
+
+\capiref{ultimate\_detect}{ultimate.h}
+{uint8\_t ultimate\_detect(ultimate\_capabilities *caps)}
+{\cmd{caps} points to writable
+\hyperref[struct:ultimate-capabilities]{\cmd{ultimate\_capabilities}} storage.}
+{\cmd{ULTIMATE\_OK} after probing all known targets, including when some are
+absent; \cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT} for a null \cmd{caps}; or the
+\cmd{ULTIMATE\_ERR\_NO\_DEVICE}/\cmd{ULTIMATE\_ERR\_TIMEOUT} result from
+initializing the transport.}
+{Fills \cmd{present}, \cmd{ident}, and the target bit mask. It costs one UCI
+round trip per known target, so normally call it once.}
+{ultimate\_capabilities caps; err = ultimate\_detect(\&caps);}
+{\cmd{caps.targets} identifies the services actually implemented.}
+
+\capiref{ultimate\_identify}{ultimate.h}
+{uint8\_t ultimate\_identify(uint8\_t target, char *buf, uint16\_t buflen, uint16\_t *outlen)}
+{\cmd{target} is \cmd{UCI\_TARGET\_*}; \cmd{buf} has \cmd{buflen} bytes;
+\cmd{outlen} may be \cmd{NULL}.}
+{\cmd{ULTIMATE\_OK}, or \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED} when the target is
+absent.}
+{Reads a target's identification string, stores at most \cmd{buflen-1} bytes,
+and terminates it. A supplied \cmd{outlen} excludes the terminator.}
+{err = ultimate\_identify(UCI\_TARGET\_DOS1, text, sizeof text, \&length);}
+{\cmd{text} contains the DOS identity and \cmd{length} its stored length.}
+
+\capiref{ultimate\_get\_model}{ultimate.h}
+{uint8\_t ultimate\_get\_model(char *buf, uint16\_t buflen, uint16\_t *outlen)}
+{\cmd{buf} has \cmd{buflen} bytes; \cmd{outlen} may be \cmd{NULL}.}
+{\cmd{ULTIMATE\_OK} or \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Reads the hardware model through the deprecated control HWINFO command.
+Retained for compatibility; new code must handle its disappearance.}
+{err = ultimate\_get\_model(text, sizeof text, NULL);}
+{\cmd{text} is terminated when the call succeeds.}
+
+\capiref{ultimate\_legacy\_get\_sid\_info}{ultimate.h}
+{uint8\_t ultimate\_legacy\_get\_sid\_info(ultimate\_sid\_info *info)}
+{\cmd{info} points to writable
+\hyperref[struct:ultimate-sid-info]{\cmd{ultimate\_sid\_info}} storage.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED},
+\cmd{ULTIMATE\_ERR\_PROTOCOL}, or \cmd{ULTIMATE\_ERR\_TRUNCATED};
+\cmd{info->count} is zero on failure.}
+{Reads up to four SID mapping records through deprecated HWINFO. Type bytes are
+raw implementation/mapping codes, not 6581/8580 model identifiers.}
+{ultimate\_sid\_info info; err = ultimate\_legacy\_get\_sid\_info(\&info);}
+{On success, \cmd{info.sid[0].primary\_address} is the first SID address.}
+
+\section{Capability Macros}
+
+\cmacroref{ultimate\_has\_target}
+{ultimate\_has\_target(caps, target)}
+{\cmd{caps} points to
+\hyperref[struct:ultimate-capabilities]{\cmd{ultimate\_capabilities}} filled by
+\cmd{ultimate\_detect()}; \cmd{target} is a target number.}
+{1 when that target bit is set, otherwise 0.}
+{Tests an arbitrary target without another hardware transaction.}
+{if (ultimate\_has\_target(\&caps, UCI\_TARGET\_HTTP)) use\_http();}
+{The branch runs only when detection found the HTTP target.}
+
+\cmacroref{ultimate\_has\_dos}{ultimate\_has\_dos(caps)}
+{\cmd{caps} points to detected
+\hyperref[struct:ultimate-capabilities]{\cmd{ultimate\_capabilities}}.}
+{1 when DOS target 1 exists.}
+{Tests the primary filesystem service.}
+{if (ultimate\_has\_dos(\&caps)) list\_files();}
+{Filesystem code runs only when DOS1 was detected.}
+
+\cmacroref{ultimate\_has\_dos2}{ultimate\_has\_dos2(caps)}
+{\cmd{caps} points to detected
+\hyperref[struct:ultimate-capabilities]{\cmd{ultimate\_capabilities}}.}
+{1 when DOS target 2 exists.}
+{Tests the optional second filesystem service.}
+{if (ultimate\_has\_dos2(\&caps)) inspect\_second\_dos();}
+{The branch is skipped on machines exposing only DOS1.}
+
+\cmacroref{ultimate\_has\_network}{ultimate\_has\_network(caps)}
+{\cmd{caps} points to detected
+\hyperref[struct:ultimate-capabilities]{\cmd{ultimate\_capabilities}}.}
+{1 when the network target exists.}
+{Tests socket-service availability.}
+{if (ultimate\_has\_network(\&caps)) connect\_peer();}
+{Network code runs only when its target was detected.}
+
+\cmacroref{ultimate\_has\_control}{ultimate\_has\_control(caps)}
+{\cmd{caps} points to detected
+\hyperref[struct:ultimate-capabilities]{\cmd{ultimate\_capabilities}}.}
+{1 when the control target exists.}
+{Tests machine-control service availability.}
+{if (ultimate\_has\_control(\&caps)) read\_drives();}
+{Control operations are attempted only when supported.}
+
+\cmacroref{ultimate\_has\_softiec}{ultimate\_has\_softiec(caps)}
+{\cmd{caps} points to detected
+\hyperref[struct:ultimate-capabilities]{\cmd{ultimate\_capabilities}}.}
+{1 when the SoftwareIEC target identifies itself.}
+{Reports target presence, not whether a particular fast load will work;
+\cmd{ultimate\_load()} performs the honest command-level test.}
+{uint8\_t present = ultimate\_has\_softiec(\&caps);}
+{\cmd{present} describes detection only.}
+
+\cmacroref{ultimate\_has\_http}{ultimate\_has\_http(caps)}
+{\cmd{caps} points to detected
+\hyperref[struct:ultimate-capabilities]{\cmd{ultimate\_capabilities}}.}
+{1 when the HTTP target exists.}
+{Tests firmware HTTP-client availability.}
+{if (ultimate\_has\_http(\&caps)) fetch\_page();}
+{HTTP code runs only when its target was detected.}
+
+\section{Palette, Turbo And Vsprite Graphics}
+
+\capiref{ultimate\_palette\_get}{ultimate.h}
+{uint8\_t ultimate\_palette\_get(uint8\_t *palette)}
+{\cmd{palette} points to \cmd{ULTIMATE\_PALETTE\_BYTES} writable bytes.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}, or
+\cmd{ULTIMATE\_ERR\_PROTOCOL} unless a full 48-byte reply arrives.}
+{Reads sixteen live RGB triples.}
+{uint8\_t palette[ULTIMATE\_PALETTE\_BYTES]; err = ultimate\_palette\_get(palette);}
+{\cmd{palette[0..2]} is colour zero's red, green and blue.}
+
+\capiref{ultimate\_palette\_set}{ultimate.h}
+{uint8\_t ultimate\_palette\_set(const uint8\_t *palette)}
+{\cmd{palette} points to 48 bytes containing sixteen RGB triples.}
+{\cmd{ULTIMATE\_OK} or \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Replaces the live palette in one command without writing flash or a VPL file.}
+{err = ultimate\_palette\_set(palette);}
+{All sixteen live colours change when the call succeeds.}
+
+\capiref{ultimate\_palette\_set\_color}{ultimate.h}
+{uint8\_t ultimate\_palette\_set\_color(uint8\_t index, uint8\_t r, uint8\_t g, uint8\_t b)}
+{\cmd{index} is 0--15; RGB components are 0--255.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT} for another index,
+or \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Changes one live palette colour.}
+{err = ultimate\_palette\_set\_color(6, 255, 0, 0);}
+{Colour index 6 becomes red.}
+
+\capiref{ultimate\_palette\_reset}{ultimate.h}
+{uint8\_t ultimate\_palette\_reset(void)}
+{None.}
+{\cmd{ULTIMATE\_OK} or \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Restores the machine's built-in live palette.}
+{err = ultimate\_palette\_reset();}
+{Temporary palette changes are removed.}
+
+\capiref{ultimate\_turbo\_available}{ultimate.h}
+{uint8\_t ultimate\_turbo\_available(void)}
+{None; \cmd{ultimate\_init()} is not required.}
+{1 when the Ultimate~64 turbo registers answer, otherwise 0.}
+{Tests the owner's Turbo Control setting through memory-mapped hardware.}
+{if (!ultimate\_turbo\_available()) run\_at\_one\_mhz();}
+{The fallback runs on a plain C64 or when turbo registers are disabled.}
+
+\capiref{ultimate\_turbo\_get}{ultimate.h}
+{uint8\_t ultimate\_turbo\_get(void)}
+{None.}
+{The current speed index, or \cmd{U64\_TURBO\_UNAVAILABLE} (\$FF).}
+{Reads the CPU-speed index without changing the badline setting.}
+{uint8\_t old = ultimate\_turbo\_get();}
+{\cmd{old} can later restore the entry speed when it is not \$FF.}
+
+\capiref{ultimate\_turbo\_set}{ultimate.h}
+{uint8\_t ultimate\_turbo\_set(uint8\_t index)}
+{\cmd{index} is 0--15. Constants through \cmd{U64\_SPEED\_4MHZ} are portable;
+\cmd{U64\_SPEED\_MAX} means this machine's maximum.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT}, or
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Sets CPU speed and leaves badlines unchanged.}
+{err = ultimate\_turbo\_set(U64\_SPEED\_1MHZ);\
+err = ultimate\_turbo\_set(U64\_SPEED\_2MHZ);\
+err = ultimate\_turbo\_set(U64\_SPEED\_3MHZ);\
+err = ultimate\_turbo\_set(U64\_SPEED\_4MHZ);\
+err = ultimate\_turbo\_set(U64\_SPEED\_MAX);}
+{The calls demonstrate every named portable speed and the model's maximum;
+unnamed indices 4--14 remain model-dependent.}
+
+\capiref{ultimate\_turbo\_badlines}{ultimate.h}
+{uint8\_t ultimate\_turbo\_badlines(uint8\_t on)}
+{Zero disables badlines; any nonzero value restores them.}
+{\cmd{ULTIMATE\_OK} or \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Changes VIC badline cycle stealing without changing CPU speed. Check the real
+display before shipping with badlines disabled.}
+{err = ultimate\_turbo\_badlines(0); err = ultimate\_turbo\_badlines(1);}
+{The two calls demonstrate both settings.}
+
+\capiref{ultimate\_vsprite\_draw}{ultimate.h}
+{uint8\_t ultimate\_vsprite\_draw(const ultimate\_vsprite *sprite)}
+{\cmd{sprite} points to a complete
+\hyperref[struct:ultimate-vsprite]{\cmd{ultimate\_vsprite}} descriptor; its
+linked type entry defines every field, layout and valid operation.}
+{\cmd{ULTIMATE\_OK} or \cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT}.}
+{Composites an OR, masked, bitmap-copy, or colour-aware software vsprite. It
+needs no Ultimate or UCI, executes from RAM, self-modifies, and is not
+re-entrant.}
+{sprite.flags = 0;                 err = ultimate\_vsprite\_draw(\&sprite);\
+sprite.flags = VSPRITE\_F\_MASKED; err = ultimate\_vsprite\_draw(\&sprite);\
+sprite.flags = VSPRITE\_F\_COPY;   err = ultimate\_vsprite\_draw(\&sprite);\
+sprite.flags = VSPRITE\_F\_COLOR;  err = ultimate\_vsprite\_draw(\&sprite);}
+{The four calls demonstrate OR, masked, bitmap-copy and colour-aware draws.}
+
+\section{Directories And Files}
+
+\capiref{ultimate\_chdir}{ultimate.h}
+{uint8\_t ultimate\_chdir(const char *path)}
+{\cmd{path} is a NUL-terminated absolute or relative path.}
+{An \cmd{ULTIMATE\_*} result.}
+{Changes the current Ultimate DOS directory.}
+{err = ultimate\_chdir("/USB1/GAMES");}
+{Later filesystem calls use that directory.}
+
+\capiref{ultimate\_getpath}{ultimate.h}
+{uint8\_t ultimate\_getpath(char *buf, uint16\_t buflen, uint16\_t *outlen)}
+{\cmd{buf} has \cmd{buflen} bytes; \cmd{outlen} may be \cmd{NULL}.}
+{An \cmd{ULTIMATE\_*} result; clipping to \cmd{buflen-1} is still success.}
+{Returns the current path terminated, and optionally its stored length.}
+{err = ultimate\_getpath(path, sizeof path, \&length);}
+{\cmd{path} contains the current directory.}
+
+\capiref{ultimate\_opendir}{ultimate.h}
+{uint8\_t ultimate\_opendir(void)}
+{None.}
+{An \cmd{ULTIMATE\_*} result.}
+{Begins a block-by-block walk of the current directory. Issue no unrelated
+command until it reaches \cmd{ULTIMATE\_END} or is aborted.}
+{err = ultimate\_opendir();}
+{A successful call prepares the first \cmd{ultimate\_readdir()}.}
+
+\capiref{ultimate\_readdir}{ultimate.h}
+{uint8\_t ultimate\_readdir(char *name, uint16\_t namelen, uint8\_t *attrib)}
+{\cmd{name} has \cmd{namelen} bytes; \cmd{attrib} may be \cmd{NULL}.}
+{\cmd{ULTIMATE\_OK} for one entry, \cmd{ULTIMATE\_END} after the last, or an
+error.}
+{Consumes one directory reply block, terminates the name, and optionally stores
+\cmd{DOS\_ATTR\_*}. Call \cmd{uci\_abort()} when stopping early.}
+{err = ultimate\_readdir(name, sizeof name, \&attrib);}
+{On \cmd{ULTIMATE\_OK}, \cmd{name} and \cmd{attrib} describe exactly one
+entry; call again until \cmd{ULTIMATE\_END}.}
+
+\capiref{ultimate\_open}{ultimate.h}
+{uint8\_t ultimate\_open(const char *name, uint8\_t attrib)}
+{\cmd{name} is terminated; \cmd{attrib} combines \cmd{DOS\_FA\_READ},
+\cmd{DOS\_FA\_WRITE}, \cmd{DOS\_FA\_CREATE\_NEW}, or
+\cmd{DOS\_FA\_CREATE\_ALWAYS}.}
+{An \cmd{ULTIMATE\_*} result.}
+{Opens a firmware-side current file. Create-always replaces; create-new fails
+when the name already exists.}
+{err = ultimate\_open("INPUT", DOS\_FA\_READ);\
+err = ultimate\_open("OUTPUT", DOS\_FA\_WRITE);\
+err = ultimate\_open("BOTH", DOS\_FA\_READ | DOS\_FA\_WRITE);\
+err = ultimate\_open("NEW", DOS\_FA\_WRITE | DOS\_FA\_CREATE\_NEW);\
+err = ultimate\_open("REPLACE", DOS\_FA\_WRITE | DOS\_FA\_CREATE\_ALWAYS);}
+{The calls demonstrate read, write, read/write, create-new and
+create-or-replace modes.}
+
+\capiref{ultimate\_close}{ultimate.h}
+{uint8\_t ultimate\_close(void)}
+{None.}
+{An \cmd{ULTIMATE\_*} result; closing with nothing open is harmless.}
+{Closes the current firmware-side file.}
+{err = ultimate\_close();}
+{The current file handle is released.}
+
+\capiref{ultimate\_read}{ultimate.h}
+{uint8\_t ultimate\_read(uint8\_t *buf, uint16\_t len, uint16\_t *outlen)}
+{\cmd{buf} has \cmd{len} bytes; \cmd{outlen} may be \cmd{NULL}; a file is open.}
+{An \cmd{ULTIMATE\_*} result. A short successful read means end-of-file.}
+{Reads up to \cmd{len} bytes, walking the firmware's reply blocks internally.}
+{err = ultimate\_read(buf, sizeof buf, \&got);}
+{\cmd{got} is the actual byte count when supplied.}
+
+\capiref{ultimate\_write}{ultimate.h}
+{uint8\_t ultimate\_write(const uint8\_t *buf, uint16\_t len)}
+{\cmd{buf} points to \cmd{len} bytes; a writable file is open.}
+{An \cmd{ULTIMATE\_*} result.}
+{Writes the complete caller span to the current file.}
+{err = ultimate\_write(message, sizeof message);}
+{The bytes are appended or written at the current file position.}
+
+\capiref{ultimate\_seek}{ultimate.h}
+{uint8\_t ultimate\_seek(uint32\_t pos)}
+{\cmd{pos} is an absolute byte position in the current open file.}
+{An \cmd{ULTIMATE\_*} result.}
+{Moves the firmware-side file position.}
+{err = ultimate\_seek(1024UL);}
+{The next read or write begins at byte 1024.}
+
+\capiref{ultimate\_delete}{ultimate.h}
+{uint8\_t ultimate\_delete(const char *name)}
+{\cmd{name} is a terminated current-directory name or path.}
+{An \cmd{ULTIMATE\_*} result.}
+{Deletes one file.}
+{err = ultimate\_delete("RESULT.TXT");}
+{RESULT.TXT is removed on success.}
+
+\capiref{ultimate\_stat}{ultimate.h}
+{uint8\_t ultimate\_stat(const char *name, ultimate\_fileinfo *info)}
+{\cmd{name} is terminated; \cmd{info} points to writable
+\hyperref[struct:ultimate-fileinfo]{\cmd{ultimate\_fileinfo}} storage.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_PROTOCOL} for a short reply, or
+another error.}
+{Reads size, packed FAT date/time, extension, attributes and terminated name.}
+{ultimate\_fileinfo info; err = ultimate\_stat("DEMO.PRG", \&info);}
+{\cmd{info.size} is valid only after success.}
+
+\capiref{ultimate\_fstat}{ultimate.h}
+{uint8\_t ultimate\_fstat(ultimate\_fileinfo *info)}
+{\cmd{info} points to writable
+\hyperref[struct:ultimate-fileinfo]{\cmd{ultimate\_fileinfo}} storage; a file
+is open.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_PROTOCOL}, or another error.}
+{Reads metadata for the current open file.}
+{ultimate\_fileinfo info; err = ultimate\_fstat(\&info);}
+{The open file's metadata fills \cmd{info}.}
+
+\capiref{ultimate\_rename}{ultimate.h}
+{uint8\_t ultimate\_rename(const char *from, const char *to)}
+{Both pointers name terminated entries in the current directory.}
+{An \cmd{ULTIMATE\_*} result.}
+{Renames one entry without copying its contents through the C64.}
+{err = ultimate\_rename("OLD.TXT", "NEW.TXT");}
+{OLD.TXT becomes NEW.TXT.}
+
+\capiref{ultimate\_copy}{ultimate.h}
+{uint8\_t ultimate\_copy(const char *name, const char *destination\_path)}
+{\cmd{name} is a current-directory source; \cmd{destination\_path} names the
+target directory.}
+{An \cmd{ULTIMATE\_*} result.}
+{Copies inside the Ultimate and preserves the source filename.}
+{err = ultimate\_copy("NEW.TXT", "/USB1/BACKUP");}
+{The destination is /USB1/BACKUP/NEW.TXT.}
+
+\capiref{ultimate\_mkdir}{ultimate.h}
+{uint8\_t ultimate\_mkdir(const char *name)}
+{\cmd{name} is a terminated new directory name.}
+{An \cmd{ULTIMATE\_*} result.}
+{Creates one directory in the current directory.}
+{err = ultimate\_mkdir("SAVES");}
+{SAVES is created.}
+
+\capiref{ultimate\_home}{ultimate.h}
+{uint8\_t ultimate\_home(void)}
+{None.}
+{\cmd{ULTIMATE\_OK} or \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED} when no home is
+configured.}
+{Changes to the Ultimate's configured home directory.}
+{err = ultimate\_home();}
+{Later filesystem calls use the configured home.}
+
+\section{Disk Images And Clock}
+
+\capiref{ultimate\_mount}{ultimate.h}
+{uint8\_t ultimate\_mount(uint8\_t device, const char *image)}
+{\cmd{device} is an IEC number or \cmd{ULTIMATE\_DRIVE\_LAST}; \cmd{image} is a
+terminated D64, D71, D81, G64 or G71 path.}
+{An \cmd{ULTIMATE\_*} result; a disabled drive normally reports
+\cmd{ULTIMATE\_ERR\_DEVICE}.}
+{Mounts an image in the selected emulated drive.}
+{err = ultimate\_mount(8, "GAMES/PITFALL.D64");}
+{PITFALL.D64 is mounted in the drive answering as IEC device 8.}
+
+\capiref{ultimate\_unmount}{ultimate.h}
+{uint8\_t ultimate\_unmount(uint8\_t device)}
+{\cmd{device} is an IEC number or \cmd{ULTIMATE\_DRIVE\_LAST}.}
+{An \cmd{ULTIMATE\_*} result.}
+{Removes the current image from a drive.}
+{err = ultimate\_unmount(8);}
+{The drive answering as device 8 becomes empty.}
+
+\capiref{ultimate\_swap}{ultimate.h}
+{uint8\_t ultimate\_swap(uint8\_t device)}
+{\cmd{device} is an IEC number or \cmd{ULTIMATE\_DRIVE\_LAST}.}
+{An \cmd{ULTIMATE\_*} result.}
+{Advances a multi-image set the same way as the Ultimate menu.}
+{err = ultimate\_swap(8);}
+{Device 8 selects its next image.}
+
+\capiref{ultimate\_get\_time}{ultimate.h}
+{uint8\_t ultimate\_get\_time(uint8\_t format, char *buf, uint16\_t buflen, uint16\_t *outlen)}
+{\cmd{format} is \cmd{ULTIMATE\_TIME\_PLAIN} or
+\cmd{ULTIMATE\_TIME\_WEEKDAY}; \cmd{buf} has \cmd{buflen} bytes;
+\cmd{outlen} may be \cmd{NULL}.}
+{An \cmd{ULTIMATE\_*} result.}
+{Reads the battery-backed clock as terminated firmware-formatted text.}
+{err = ultimate\_get\_time(ULTIMATE\_TIME\_PLAIN, now, sizeof now, \&length);\
+err = ultimate\_get\_time(ULTIMATE\_TIME\_WEEKDAY, now, sizeof now, \&length);}
+{Plain output resembles \cmd{2026/08/22 14:30:00}; weekday output prefixes a
+day name.}
+
+\capiref{ultimate\_set\_time}{ultimate.h}
+{uint8\_t ultimate\_set\_time(uint8\_t year\_1900, uint8\_t month, uint8\_t day, uint8\_t hour, uint8\_t minute, uint8\_t second)}
+{The year is calendar year minus 1900; remaining arguments are month, day,
+hour, minute and second.}
+{An \cmd{ULTIMATE\_*} result.}
+{Sets the battery-backed clock.}
+{err = ultimate\_set\_time(126, 8, 22, 14, 30, 0);}
+{The clock becomes 2026-08-22 14:30:00.}
+
+\section{Loading And Saving Memory}
+
+\capiref{ultimate\_load}{ultimate.h}
+{uint8\_t ultimate\_load(const char *name, uint16\_t addr)}
+{\cmd{name} is a non-null terminated PRG path; zero \cmd{addr} uses its header,
+and a nonzero value overrides it.}
+{An \cmd{ULTIMATE\_*} result; after success
+\cmd{ultimate\_last\_end()} supplies the end address.}
+{Consumes the two-byte PRG header and loads its body. The SDK first tries
+SoftwareIEC and transparently falls back to DOS reads.}
+{err = ultimate\_load("GAME.PRG", 0); err = ultimate\_load("FONT.PRG", 0xc000);}
+{The calls demonstrate header-selected and caller-selected addresses.}
+
+\capiref{ultimate\_bload}{ultimate.h}
+{uint8\_t ultimate\_bload(const char *name, uint16\_t addr, uint16\_t max)}
+{\cmd{name} is terminated; \cmd{addr} and \cmd{max} must be nonzero.}
+{An \cmd{ULTIMATE\_*} result; \cmd{ultimate\_last\_end()} supplies the end
+address after success.}
+{Loads at most \cmd{max} raw bytes without consuming a header.}
+{err = ultimate\_bload("FONT.BIN", 0xc000, 2048);}
+{At most 2048 bytes are written from \$C000.}
+
+\capiref{ultimate\_save}{ultimate.h}
+{uint8\_t ultimate\_save(const char *name, uint16\_t start, uint16\_t len)}
+{\cmd{name} is terminated; \cmd{start} is a C64 address; \cmd{len} is nonzero.}
+{An \cmd{ULTIMATE\_*} result.}
+{Creates or replaces a file with a C64 memory range.}
+{err = ultimate\_save("SCREEN.BIN", 0x0400, 1000);}
+{SCREEN.BIN receives the 1000-byte text screen.}
+
+\capiref{ultimate\_last\_end}{ultimate.h}
+{uint16\_t ultimate\_last\_end(void)}
+{None.}
+{The address immediately following the last successful
+\cmd{ultimate\_load()} or \cmd{ultimate\_bload()}.}
+{Retrieves cached load state without touching hardware.}
+{uint16\_t end = ultimate\_last\_end();}
+{\cmd{end-1} is the final address written by the preceding successful load.}
+
+\section{RAM Expansion}
+
+\capiref{ultimate\_reu\_available}{ultimate.h}
+{uint8\_t ultimate\_reu\_available(void)}
+{None; UCI initialization is not required.}
+{1 when the REU registers answer, otherwise 0.}
+{Tests whether RAM expansion is enabled.}
+{if (!ultimate\_reu\_available()) return ULTIMATE\_ERR\_NOT\_SUPPORTED;}
+{The program refuses an REU-dependent path when no expansion is mapped.}
+
+\capiref{ultimate\_reu\_size}{ultimate.h}
+{uint16\_t ultimate\_reu\_size(void)}
+{None.}
+{Size in 64K banks, or zero when unavailable.}
+{Measures the expansion non-destructively by testing alias boundaries.}
+{uint16\_t banks = ultimate\_reu\_size();}
+{2 means 128\,KB, 16 means 1\,MB, 128 means 8\,MB and 256 means 16\,MB.}
+
+\capiref{ultimate\_reu\_stash}{ultimate.h}
+{uint8\_t ultimate\_reu\_stash(uint16\_t addr, uint32\_t reuaddr, uint16\_t len)}
+{\cmd{addr} is a C64 address; \cmd{reuaddr} is within 24 bits; zero
+\cmd{len} means 65536 bytes.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}, or
+\cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT}.}
+{DMA-copies C64 memory into the expansion and returns after completion.}
+{err = ultimate\_reu\_stash(0x0400, 0, 1000);}
+{The text screen is copied to REU address zero.}
+
+\capiref{ultimate\_reu\_fetch}{ultimate.h}
+{uint8\_t ultimate\_reu\_fetch(uint16\_t addr, uint32\_t reuaddr, uint16\_t len)}
+{\cmd{addr} is a C64 address; \cmd{reuaddr} is within 24 bits; zero
+\cmd{len} means 65536 bytes.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}, or
+\cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT}.}
+{DMA-copies expansion data into C64 memory.}
+{err = ultimate\_reu\_fetch(0x0400, 0, 1000);}
+{The first 1000 REU bytes replace the text screen.}
+
+\capiref{ultimate\_reu\_load}{ultimate.h}
+{uint8\_t ultimate\_reu\_load(uint32\_t reuaddr, uint32\_t len)}
+{A readable file is open; \cmd{reuaddr} and \cmd{len} describe a range within
+the 16\,MB REU window.}
+{An \cmd{ULTIMATE\_*} result.}
+{Transfers the current open file directly into the expansion. It may take a
+long time and restores the caller's UCI timeout.}
+{err = ultimate\_open("ASSETS.BIN", DOS\_FA\_READ); err = ultimate\_reu\_load(0, 65536UL);}
+{The first 65536 file bytes move to REU address zero without passing through C64 RAM.}
+
+\capiref{ultimate\_reu\_save}{ultimate.h}
+{uint8\_t ultimate\_reu\_save(uint32\_t reuaddr, uint32\_t len)}
+{A writable file is open; \cmd{reuaddr} and \cmd{len} describe a range within
+the 16\,MB REU window.}
+{An \cmd{ULTIMATE\_*} result.}
+{Transfers expansion data directly into the current open file and restores the
+caller's timeout.}
+{err = ultimate\_open("CAPTURE.BIN", DOS\_FA\_WRITE | DOS\_FA\_CREATE\_ALWAYS); err = ultimate\_reu\_save(0, 65536UL);}
+{65536 REU bytes are written without passing through C64 RAM.}
+
+\begin{tip}
+Keep large level data, decompression sources, sampled audio and screen backups
+in the REU. Use stash/fetch for small live-memory swaps and load/save when the
+data should move directly between storage and expansion memory.
+\end{tip}
+
+\section{Ultimate Audio}
+
+\capiref{ultimate\_audio\_init}{ultimate.h}
+{uint8\_t ultimate\_audio\_init(void)}
+{Ultimate Audio must be mapped at \$DF20--\$DFFF.}
+{\cmd{ULTIMATE\_OK} or \cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Probes the PCM engine with a silent byte. Call once before other audio calls.}
+{err = ultimate\_audio\_init();}
+{Audio services are usable only after success.}
+
+\capiref{ultimate\_audio\_available}{ultimate.h}
+{uint8\_t ultimate\_audio\_available(void)}
+{Call \cmd{ultimate\_audio\_init()} first.}
+{1 after successful audio initialization, otherwise 0.}
+{Reads cached audio state without touching hardware.}
+{if (!ultimate\_audio\_available()) return 1;}
+{The program exits when the PCM engine is unavailable.}
+
+\capiref{ultimate\_audio\_version}{ultimate.h}
+{uint8\_t ultimate\_audio\_version(void)}
+{Audio must be available.}
+{The raw module-version byte.}
+{Reads the mapped engine's version register.}
+{uint8\_t version = ultimate\_audio\_version();}
+{\cmd{version} is meaningful only after audio initialization succeeds.}
+
+\capiref{ultimate\_audio\_configure}{ultimate.h}
+{uint8\_t ultimate\_audio\_configure(const ultimate\_audio\_voice *voice)}
+{\cmd{voice} points to a fully initialized
+\hyperref[struct:ultimate-audio-voice]{\cmd{ultimate\_audio\_voice}}; its linked
+type entry defines all fields and constraints.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT}, or
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Stops, validates and programs one voice, leaving its gate closed. Flags select
+8/16-bit, mono/interleaved, repeat and IRQ operation.}
+{voice.flags = 0;                  err = ultimate\_audio\_configure(\&voice);\
+voice.flags = UA\_CTRL\_16BIT;    err = ultimate\_audio\_configure(\&voice);\
+voice.flags = UA\_CTRL\_INTERLEAVE; err = ultimate\_audio\_configure(\&voice);\
+voice.flags = UA\_CTRL\_REPEAT;   err = ultimate\_audio\_configure(\&voice);\
+voice.flags = UA\_CTRL\_IRQ;      err = ultimate\_audio\_configure(\&voice);}
+{The calls isolate 8-bit mono, 16-bit, stereo interleave, repeat and completion
+IRQ settings; valid flags may be combined.}
+
+\capiref{ultimate\_audio\_start}{ultimate.h}
+{uint8\_t ultimate\_audio\_start(uint8\_t channel, uint8\_t flags)}
+{\cmd{channel} is 0 through \cmd{UA\_CHANNELS-1}; \cmd{flags} repeats only the
+configured \cmd{UA\_CTRL\_FLAGS} format/playback bits. Do not include
+\cmd{UA\_CTRL\_GATE}; the call adds it.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT}, or
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Opens a configured channel's gate immediately.}
+{err = ultimate\_audio\_start(0, UA\_CTRL\_16BIT | UA\_CTRL\_REPEAT);}
+{Channel zero begins playing.}
+
+\capiref{ultimate\_audio\_stop}{ultimate.h}
+{uint8\_t ultimate\_audio\_stop(uint8\_t channel)}
+{\cmd{channel} is 0 through \cmd{UA\_CHANNELS-1}.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT}, or
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Closes one channel's gate immediately.}
+{err = ultimate\_audio\_stop(0);}
+{Channel zero stops.}
+
+\capiref{ultimate\_audio\_irq\_status}{ultimate.h}
+{uint8\_t ultimate\_audio\_irq\_status(void)}
+{Audio must be available.}
+{A bit mask with one end-of-sample bit per channel.}
+{Reads latched PCM completion state.}
+{uint8\_t ended = ultimate\_audio\_irq\_status();}
+{\cmd{ended \& (1u << channel)} is nonzero when that channel completed.}
+
+\capiref{ultimate\_audio\_irq\_clear}{ultimate.h}
+{uint8\_t ultimate\_audio\_irq\_clear(uint8\_t channel)}
+{\cmd{channel} is 0 through \cmd{UA\_CHANNELS-1}.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT}, or
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED}.}
+{Clears one channel's latched completion bit and its asserted IRQ.}
+{err = ultimate\_audio\_irq\_clear(channel);}
+{That channel's completion bit is clear.}
+
+\capiref{ultimate\_audio\_load\_wav}{ultimate.h}
+{uint8\_t ultimate\_audio\_load\_wav(const char *name, uint32\_t reuaddr, ultimate\_audio\_voice *voice)}
+{\cmd{name} is a terminated PCM WAV path; \cmd{reuaddr} begins its REU data;
+\cmd{voice} points to
+\hyperref[struct:ultimate-audio-voice]{\cmd{ultimate\_audio\_voice}} and
+preserves caller channel, volume, pan and repeat points.}
+{DOS errors, \cmd{ULTIMATE\_ERR\_PROTOCOL} for broken RIFF,
+\cmd{ULTIMATE\_ERR\_NOT\_SUPPORTED} for unsupported format/rate/range, or an
+REU error. The voice is invalid on failure.}
+{Loads 8/16-bit mono/stereo PCM, fixes unsigned 8-bit samples in place, closes
+the file on every path, and fills address, length, rate and format flags.}
+{err = ultimate\_audio\_load\_wav("/USB1/BOING.WAV", 0x4000UL, \&voice);}
+{On success, configure and start \cmd{voice}; for stereo derive the right
+channel as described in Chapter~3.}
+
+\section{Machine And Drive Control}
+
+\capiref{ultimate\_reboot}{ultimate.h}
+{uint8\_t ultimate\_reboot(void)}
+{None.}
+{Does not return.}
+{Resets the C64; the calling program stops existing during the command.}
+{ultimate\_reboot(); /* no following statement runs */}
+{The machine restarts.}
+
+\capiref{ultimate\_freeze}{ultimate.h}
+{uint8\_t ultimate\_freeze(void)}
+{None.}
+{An \cmd{ULTIMATE\_*} result after the user leaves the menu.}
+{Invokes the Ultimate freeze menu and waits for human release.}
+{err = ultimate\_freeze();}
+{Execution resumes after the menu closes.}
+
+\capiref{ultimate\_drive\_enable}{ultimate.h}
+{uint8\_t ultimate\_drive\_enable(uint8\_t drive, uint8\_t on)}
+{\cmd{drive} is \cmd{ULTIMATE\_DRIVE\_A} or \cmd{ULTIMATE\_DRIVE\_B}; zero
+\cmd{on} disables, nonzero enables.}
+{An \cmd{ULTIMATE\_*} result.}
+{Switches one physical emulated drive off or on.}
+{err = ultimate\_drive\_enable(ULTIMATE\_DRIVE\_A, 0); err = ultimate\_drive\_enable(ULTIMATE\_DRIVE\_A, 1);}
+{The calls demonstrate both states.}
+
+\capiref{ultimate\_drive\_power}{ultimate.h}
+{uint8\_t ultimate\_drive\_power(uint8\_t drive, uint8\_t *on)}
+{\cmd{drive} is A or B; \cmd{on} is a required writable pointer.}
+{An \cmd{ULTIMATE\_*} result; \cmd{*on} is 1 while running.}
+{Reads one physical drive's power state.}
+{err = ultimate\_drive\_power(ULTIMATE\_DRIVE\_A, \&running);}
+{\cmd{running} contains zero or one after success.}
+
+\capiref{ultimate\_drive\_info}{ultimate.h}
+{uint8\_t ultimate\_drive\_info(ultimate\_drives *drives)}
+{\cmd{drives} points to writable
+\hyperref[struct:ultimate-drives]{\cmd{ultimate\_drives}} storage.}
+{An \cmd{ULTIMATE\_*} result; count never exceeds records actually received.}
+{Reports type, IEC device number and power for disk drives and occupied IEC
+slots. SoftwareIEC and printer records are bus slots, not physical drives.}
+{ultimate\_drives drives; err = ultimate\_drive\_info(\&drives);}
+{\cmd{drives.drive[i].device} is the number accepted by mount operations.}
+
+\capiref{ultimate\_ramdisk\_info}{ultimate.h}
+{uint8\_t ultimate\_ramdisk\_info(uint8\_t *info)}
+{\cmd{info} has \cmd{CTRL\_RAMDISK\_BYTES} writable bytes.}
+{An \cmd{ULTIMATE\_*} result.}
+{Reads GEOS MegaPatch RAM-disk records: type followed by size in 64K units.}
+{uint8\_t info[CTRL\_RAMDISK\_BYTES]; err = ultimate\_ramdisk\_info(info);}
+{A record type of zero marks an empty slot.}
+
+\section{Network Sockets}
+
+\capiref{ultimate\_net\_ifcount}{ultimate.h}
+{uint8\_t ultimate\_net\_ifcount(uint8\_t *count)}
+{\cmd{count} is a required writable pointer.}
+{An \cmd{ULTIMATE\_*} result; \cmd{*count} is valid after success.}
+{Reports the number of network interfaces.}
+{err = ultimate\_net\_ifcount(\&count);}
+{Indices zero through \cmd{count-1} may be queried.}
+
+\capiref{ultimate\_net\_macaddr}{ultimate.h}
+{uint8\_t ultimate\_net\_macaddr(uint8\_t iface, uint8\_t *mac)}
+{\cmd{iface} is an interface index; \cmd{mac} has
+\cmd{UCI\_NET\_MACADDR\_BYTES} writable bytes.}
+{An \cmd{ULTIMATE\_*} result.}
+{Reads the six-byte hardware address.}
+{uint8\_t mac[UCI\_NET\_MACADDR\_BYTES]; err = ultimate\_net\_macaddr(0, mac);}
+{\cmd{mac[0..5]} contains interface zero's address.}
+
+\capiref{ultimate\_net\_ipconfig}{ultimate.h}
+{uint8\_t ultimate\_net\_ipconfig(uint8\_t iface, uint8\_t *ipconfig)}
+{\cmd{iface} is an interface index; \cmd{ipconfig} has 12 writable bytes.}
+{An \cmd{ULTIMATE\_*} result.}
+{Reads IPv4 address, netmask and gateway as three four-byte network-order
+addresses.}
+{uint8\_t ip[UCI\_NET\_IPCONFIG\_BYTES]; err = ultimate\_net\_ipconfig(0, ip);}
+{\cmd{ip[0..3]}, \cmd{ip[4..7]} and \cmd{ip[8..11]} hold the three addresses.}
+
+\capiref{ultimate\_net\_setip}{ultimate.h}
+{uint8\_t ultimate\_net\_setip(uint8\_t iface, const uint8\_t *ipconfig)}
+{\cmd{iface} is an interface index; \cmd{ipconfig} supplies the same 12-byte
+address/netmask/gateway layout returned above.}
+{An \cmd{ULTIMATE\_*} result.}
+{Changes only the running network configuration; it does not write stored
+settings or detect address conflicts.}
+{err = ultimate\_net\_setip(0, ip);}
+{Interface zero immediately uses the supplied configuration.}
+
+\capiref{ultimate\_net\_connect}{ultimate.h}
+{uint8\_t ultimate\_net\_connect(const char *host, uint16\_t port, uint8\_t *handle)}
+{\cmd{host} is terminated; \cmd{port} is a TCP port; \cmd{handle} is required.}
+{An \cmd{ULTIMATE\_*} result; \cmd{*handle} receives the socket on success.}
+{Opens a TCP socket. DNS/connect may take about 30 seconds, so this call waits
+without the normal timeout limit and restores the caller's budget.}
+{err = ultimate\_net\_connect("192.0.2.1", 80, \&handle);}
+{\cmd{handle} names the connected TCP socket.}
+
+\capiref{ultimate\_net\_udp}{ultimate.h}
+{uint8\_t ultimate\_net\_udp(const char *host, uint16\_t port, uint8\_t *handle)}
+{\cmd{host} is terminated; \cmd{port} is a UDP port; \cmd{handle} is required.}
+{An \cmd{ULTIMATE\_*} result; \cmd{*handle} receives the socket on success.}
+{Opens a connected UDP socket with the same unbounded-connect timeout handling
+as the TCP call.}
+{err = ultimate\_net\_udp("192.0.2.1", 6502, \&handle);}
+{\cmd{handle} names the UDP socket.}
+
+\capiref{ultimate\_net\_close}{ultimate.h}
+{uint8\_t ultimate\_net\_close(uint8\_t handle)}
+{\cmd{handle} names an open socket.}
+{An \cmd{ULTIMATE\_*} result.}
+{Closes a socket explicitly. Do not close after \cmd{ultimate\_net\_read()}
+returns \cmd{ULTIMATE\_END}; the firmware already removed it.}
+{err = ultimate\_net\_close(handle);}
+{The socket handle is released.}
+
+\capiref{ultimate\_net\_read}{ultimate.h}
+{uint8\_t ultimate\_net\_read(uint8\_t handle, uint8\_t *buf, uint16\_t bufsize, uint16\_t *got)}
+{\cmd{handle} is open; \cmd{buf} has \cmd{bufsize} bytes; \cmd{got} is required.
+The SDK refuses unsafe requests above \cmd{UCI\_NET\_READ\_MAX}.}
+{\cmd{ULTIMATE\_OK} with zero or more bytes, \cmd{ULTIMATE\_END} once when the
+peer closes, or an error.}
+{Polls without waiting. At most \cmd{bufsize-UCI\_NET\_READ\_PREFIX} data bytes
+fit because the firmware prefixes its count.}
+{err = ultimate\_net\_read(handle, buf, sizeof buf, \&got);}
+{Use data only when \cmd{err == ULTIMATE\_OK \&\& got != 0}; stop on
+\cmd{ULTIMATE\_END}.}
+
+\capiref{ultimate\_net\_write}{ultimate.h}
+{uint8\_t ultimate\_net\_write(uint8\_t handle, const uint8\_t *buf, uint16\_t len, uint16\_t *sent)}
+{\cmd{handle} is open; \cmd{buf} supplies \cmd{len} bytes; \cmd{sent} is
+required.}
+{An \cmd{ULTIMATE\_*} result; \cmd{*sent} is the accepted count.}
+{Writes one span and reports rather than assumes how much the firmware took.}
+{err = ultimate\_net\_write(handle, buf, len, \&sent);}
+{After success, compare \cmd{sent} with \cmd{len}.}
+
+\begin{tip}
+Use a small state machine around nonblocking reads: connect once, poll during
+the program's normal update loop, consume available bytes, and treat
+\cmd{ULTIMATE\_END} as the terminal state.
+\end{tip}
+
+\section{HTTP Requests}
+
+\capiref{ultimate\_http\_get}{ultimate.h}
+{uint8\_t ultimate\_http\_get(const char *url, uint8\_t *buf, uint16\_t bufsize, uint16\_t *got)}
+{\cmd{url} is terminated ASCII; \cmd{buf} has \cmd{bufsize} bytes;
+\cmd{got} is required.}
+{\cmd{ULTIMATE\_OK} for HTTP below 400, \cmd{ULTIMATE\_ERR\_DEVICE} for HTTP
+errors, \cmd{ULTIMATE\_ERR\_TRUNCATED} when the body is larger, or another
+transport error.}
+{Creates, executes and frees a GET request. It waits through DNS/connect and
+restores the timeout. The HTTP status remains in
+\cmd{ultimate\_device\_code()}.}
+{err = ultimate\_http\_get(url, buf, sizeof buf, \&got);}
+{\cmd{buf[0..got-1]} contains the retained body, including an HTTP error body.}
+
+\capiref{ultimate\_http\_open}{ultimate.h}
+{uint8\_t ultimate\_http\_open(uint8\_t verb, const char *url, uint8\_t *handle)}
+{\cmd{verb} is any \cmd{HTTP\_VERB\_*} from GET through TRACE; \cmd{url} is
+terminated ASCII; \cmd{handle} is required.}
+{An \cmd{ULTIMATE\_*} result; \cmd{*handle} receives a request slot.}
+{Creates a request for later headers and exchange.}
+{err = ultimate\_http\_open(HTTP\_VERB\_GET, url, \&request);\
+err = ultimate\_http\_open(HTTP\_VERB\_PUT, url, \&request);\
+err = ultimate\_http\_open(HTTP\_VERB\_POST, url, \&request);\
+err = ultimate\_http\_open(HTTP\_VERB\_PATCH, url, \&request);\
+err = ultimate\_http\_open(HTTP\_VERB\_DELETE, url, \&request);\
+err = ultimate\_http\_open(HTTP\_VERB\_HEAD, url, \&request);\
+err = ultimate\_http\_open(HTTP\_VERB\_OPTIONS, url, \&request);\
+err = ultimate\_http\_open(HTTP\_VERB\_CONNECT, url, \&request);\
+err = ultimate\_http\_open(HTTP\_VERB\_TRACE, url, \&request);}
+{Each call allocates a separate request using the named HTTP method; close each
+successful handle.}
+
+\capiref{ultimate\_http\_header}{ultimate.h}
+{uint8\_t ultimate\_http\_header(uint8\_t handle, const char *line)}
+{\cmd{handle} is an open request; \cmd{line} is terminated
+\cmd{key: value} ASCII.}
+{An \cmd{ULTIMATE\_*} result.}
+{Adds one HTTP header. Call repeatedly for multiple fields.}
+{static const char header[] = \{\
+0x61,0x63,0x63,0x65,0x70,0x74,0x3a,0x20,\
+0x61,0x70,0x70,0x6c,0x69,0x63,0x61,0x74,0x69,0x6f,0x6e,0x2f,\
+0x6a,0x73,0x6f,0x6e,0\};\
+err = ultimate\_http\_header(request, header);}
+{The header is attached to the request slot.}
+
+\capiref{ultimate\_http\_exchange}{ultimate.h}
+{uint8\_t ultimate\_http\_exchange(uint8\_t handle, uint8\_t body, uint8\_t *buf, uint16\_t bufsize, uint16\_t *got)}
+{\cmd{handle} is an open request; \cmd{body} is a body handle or
+\cmd{HTTP\_BODY\_NONE}; \cmd{buf} has \cmd{bufsize} bytes; \cmd{got} is
+required.}
+{The same HTTP/result/truncation rules as \cmd{ultimate\_http\_get()}.}
+{Sends the prepared request. It waits through DNS/connect and restores the
+timeout, but does not free the header or body slots.}
+{err = ultimate\_http\_exchange(request, HTTP\_BODY\_NONE, buf, sizeof buf, \&got);}
+{A request without a body completes and retains up to \cmd{sizeof buf} bytes.}
+
+\capiref{ultimate\_http\_close}{ultimate.h}
+{uint8\_t ultimate\_http\_close(uint8\_t handle)}
+{\cmd{handle} names an open request/header slot.}
+{An \cmd{ULTIMATE\_*} result.}
+{Returns one request slot to the firmware.}
+{err = ultimate\_http\_close(request);}
+{The request slot is reusable.}
+
+\capiref{ultimate\_http\_free\_all}{ultimate.h}
+{uint8\_t ultimate\_http\_free\_all(void)}
+{None.}
+{An \cmd{ULTIMATE\_*} result.}
+{Frees every HTTP header and body slot held by the machine. Use for startup
+recovery; it may also invalidate slots owned by another C64 program.}
+{err = ultimate\_http\_free\_all();}
+{All sixteen firmware slots become available.}
+
+\section{HTTP Request Bodies}
+
+\capiref{ultimate\_http\_body}{ultimate.h}
+{uint8\_t ultimate\_http\_body(uint8\_t format, uint8\_t *handle)}
+{\cmd{format} is \cmd{HTTP\_BODY\_BINARY}, \cmd{HTTP\_BODY\_JSON\_OBJECT},
+\cmd{HTTP\_BODY\_JSON\_ARRAY}, or \cmd{HTTP\_BODY\_URL\_ENCODED};
+\cmd{handle} is required.}
+{An \cmd{ULTIMATE\_*} result; \cmd{*handle} receives the new slot.}
+{Creates an empty firmware-side body in any supported format. Binary bodies
+accept only the binary append call; the other formats accept typed items.}
+{err = ultimate\_http\_body(HTTP\_BODY\_BINARY, \&body);\
+err = ultimate\_http\_body(HTTP\_BODY\_JSON\_OBJECT, \&body);\
+err = ultimate\_http\_body(HTTP\_BODY\_JSON\_ARRAY, \&body);\
+err = ultimate\_http\_body(HTTP\_BODY\_URL\_ENCODED, \&body);}
+{The calls create binary, JSON-object, JSON-array and URL-encoded bodies;
+free every successful handle.}
+
+\capiref{ultimate\_http\_body\_free}{ultimate.h}
+{uint8\_t ultimate\_http\_body\_free(uint8\_t handle)}
+{\cmd{handle} names a body slot.}
+{An \cmd{ULTIMATE\_*} result.}
+{Returns one body slot to the firmware.}
+{err = ultimate\_http\_body\_free(body);}
+{The body slot is reusable.}
+
+\capiref{ultimate\_http\_body\_clear}{ultimate.h}
+{uint8\_t ultimate\_http\_body\_clear(uint8\_t handle)}
+{\cmd{handle} names a body slot.}
+{An \cmd{ULTIMATE\_*} result.}
+{Empties a body while retaining its slot and format.}
+{err = ultimate\_http\_body\_clear(body);}
+{The body can be rebuilt without allocating another slot.}
+
+\capiref{ultimate\_http\_body\_up}{ultimate.h}
+{uint8\_t ultimate\_http\_body\_up(uint8\_t handle)}
+{\cmd{handle} names a JSON/form body currently inside a child container.}
+{An \cmd{ULTIMATE\_*} result.}
+{Leaves the current object or array and returns to its parent.}
+{err = ultimate\_http\_body\_up(body);}
+{Subsequent items are added beside the completed child container.}
+
+\capiref{ultimate\_http\_body\_int}{ultimate.h}
+{uint8\_t ultimate\_http\_body\_int(uint8\_t handle, const char *key, int32\_t value)}
+{\cmd{handle} names a nonbinary body; \cmd{key} is non-NULL and at most
+\cmd{ULTIMATE\_HTTP\_KEY\_MAX} bytes. Inside arrays pass an empty string; the
+pointed-to key is ignored.}
+{An \cmd{ULTIMATE\_*} result, including
+\cmd{ULTIMATE\_ERR\_INVALID\_ARGUMENT} for an overlong key.}
+{Adds a signed 32-bit integer.}
+{static const char key[] = \{0x73,0x63,0x6f,0x72,0x65,0\};\
+err = ultimate\_http\_body\_int(body, key, -6502L);}
+{An object gets \cmd{"score":-6502}; for an array, pass an empty key string and
+only the value is added.}
+
+\capiref{ultimate\_http\_body\_bool}{ultimate.h}
+{uint8\_t ultimate\_http\_body\_bool(uint8\_t handle, const char *key, uint8\_t value)}
+{\cmd{handle} names a nonbinary body; \cmd{key} follows the same rules; zero is
+false and nonzero is true.}
+{An \cmd{ULTIMATE\_*} result.}
+{Adds a Boolean value.}
+{static const char key[] = \{0x72,0x65,0x61,0x64,0x79,0\};\
+err = ultimate\_http\_body\_bool(body, key, 1);\
+err = ultimate\_http\_body\_bool(body, key, 0);}
+{The calls add true and false values respectively.}
+
+\capiref{ultimate\_http\_body\_string}{ultimate.h}
+{uint8\_t ultimate\_http\_body\_string(uint8\_t handle, const char *key, const char *value)}
+{\cmd{handle} names a nonbinary body; \cmd{key} follows the same rules;
+\cmd{value} is terminated and at most 255 bytes.}
+{An \cmd{ULTIMATE\_*} result.}
+{Adds one string value.}
+{static const char key[] = \{0x6e,0x61,0x6d,0x65,0\};\
+static const char value[] = \{0x62,0x6f,0x69,0x6e,0x67,0\};\
+err = ultimate\_http\_body\_string(body, key, value);}
+{The object gets \cmd{"name":"boing"}.}
+
+\capiref{ultimate\_http\_body\_object}{ultimate.h}
+{uint8\_t ultimate\_http\_body\_object(uint8\_t handle, const char *key)}
+{\cmd{handle} names a nonbinary body; \cmd{key} follows the same rules.}
+{An \cmd{ULTIMATE\_*} result.}
+{Adds an object and enters it. Call \cmd{ultimate\_http\_body\_up()} to leave.}
+{static const char key[] = \{0x70,0x6c,0x61,0x79,0x65,0x72,0\};\
+err = ultimate\_http\_body\_object(body, key);}
+{Following typed values are children of \cmd{player}.}
+
+\capiref{ultimate\_http\_body\_array}{ultimate.h}
+{uint8\_t ultimate\_http\_body\_array(uint8\_t handle, const char *key)}
+{\cmd{handle} names a nonbinary body; \cmd{key} follows the same rules.}
+{An \cmd{ULTIMATE\_*} result.}
+{Adds an array and enters it. Keys on items inside the array are ignored.}
+{static const char key[] = \{0x73,0x63,0x6f,0x72,0x65,0x73,0\};\
+err = ultimate\_http\_body\_array(body, key);}
+{Following typed values become array elements until a body-up call.}
+
+\capiref{ultimate\_http\_body\_binary}{ultimate.h}
+{uint8\_t ultimate\_http\_body\_binary(uint8\_t handle, const uint8\_t *data, uint16\_t len)}
+{\cmd{handle} names an \cmd{HTTP\_BODY\_BINARY} slot; \cmd{data} supplies
+\cmd{len} bytes.}
+{An \cmd{ULTIMATE\_*} result.}
+{Appends raw bytes; successive calls extend the same body.}
+{err = ultimate\_http\_body\_binary(body, chunk, sizeof chunk);}
+{The chunk is appended byte-for-byte.}
+
+\begin{tip}
+Build a large JSON document a field at a time inside the Ultimate, exchange it,
+then free both body and request handles on every path. This avoids keeping the
+whole document in the C64's limited RAM.
+\end{tip}
+
+\section{Errors And Diagnostics}
+
+\capirefout{ultimate\_strerror}{ultimate.h}
+{const char *ultimate\_strerror(uint8\_t err)}
+{\cmd{err} is an \cmd{ULTIMATE\_*} result.}
+{A non-null pointer to stable PETSCII English text.}
+{Formats SDK-level diagnostics without exposing target-specific meanings.}
+{printf("load: \%s\textbackslash n", ultimate\_strerror(ULTIMATE\_ERR\_IO));}
+{LOAD: I/O ERROR}
+
+\cmacroref{ultimate\_device\_code}{ultimate\_device\_code()}
+{None.}
+{The most recent raw target status, or \cmd{UCI\_DEVICE\_CODE\_NONE}.}
+{Aliases \cmd{uci\_last\_device\_code()} for diagnostics.}
+{uint16\_t device = ultimate\_device\_code();}
+{\cmd{device} holds firmware-specific detail; application control should use
+the SDK result instead.}
+
+\section{Low-Level UCI Transport}
+
+\capiref{uci\_signature\_present}{uci.h}
+{uint8\_t uci\_signature\_present(void)}
+{None.}
+{1 when the documented identification signature is present, otherwise 0.}
+{Performs a quick register-only probe. It cannot distinguish a healthy from a
+wedged interface.}
+{if (!uci\_signature\_present()) return 1;}
+{The program exits when no UCI signature is mapped.}
+
+\capiref{uci\_ident\_register}{uci.h}
+{uint8\_t uci\_ident\_register(void)}
+{None.}
+{The raw identification-register byte.}
+{Exposes register detail for diagnostics and new bindings.}
+{uint8\_t ident = uci\_ident\_register();}
+{\cmd{ident} contains the unprocessed hardware value.}
+
+\capiref{uci\_init}{uci.h}
+{uint8\_t uci\_init(void)}
+{None.}
+{\cmd{ULTIMATE\_OK}, \cmd{ULTIMATE\_ERR\_NO\_DEVICE}, or
+\cmd{ULTIMATE\_ERR\_TIMEOUT}.}
+{Checks the signature, clears latent state, aborts an abandoned exchange if
+needed, and installs the default timeout.}
+{uint8\_t err = uci\_init();}
+{The raw transport is idle and ready only after success.}
+
+\capiref{uci\_exec}{uci.h}
+{uint8\_t uci\_exec(uci\_request *req)}
+{\cmd{req} points to a fully initialized
+\hyperref[struct:uci-request]{\cmd{uci\_request}} containing target, command,
+input spans and reply buffers.}
+{An \cmd{ULTIMATE\_*} result. \cmd{ULTIMATE\_ERR\_TRUNCATED} means the command
+completed but a non-null data buffer filled; output lengths are always updated.}
+{Runs one command through every reply block. With
+\cmd{UCI\_TARGET\_NO\_REPLY}, waits only for idle and collects nothing.}
+{err = uci\_exec(\&req);}
+{\cmd{req.datalen} and \cmd{req.statuslen} describe the retained reply.}
+
+\capiref{uci\_exec\_first}{uci.h}
+{uint8\_t uci\_exec\_first(uci\_request *req)}
+{\cmd{req} is the same
+\hyperref[struct:uci-request]{\cmd{uci\_request}} layout used by
+\cmd{uci\_exec()}.}
+{An \cmd{ULTIMATE\_*} result for the first reply block; \cmd{req->datalen} is
+reset to this block's length.}
+{Starts a boundary-preserving exchange such as directory reading.}
+{err = uci\_exec\_first(\&req);}
+{The first logical block is available without being joined to the next.}
+
+\capiref{uci\_exec\_next}{uci.h}
+{uint8\_t uci\_exec\_next(uci\_request *req)}
+{\cmd{req} is the same
+\hyperref[struct:uci-request]{\cmd{uci\_request}} passed to
+\cmd{uci\_exec\_first()}; no other command may intervene.}
+{An \cmd{ULTIMATE\_*} result for the next block; final status is decoded on the
+last.}
+{Advances one live boundary-preserving exchange.}
+{if (uci\_more\_blocks()) err = uci\_exec\_next(\&req);}
+{The next block replaces the previous contents and length.}
+
+\capiref{uci\_more\_blocks}{uci.h}
+{uint8\_t uci\_more\_blocks(void)}
+{Call after \cmd{uci\_exec\_first()} or \cmd{uci\_exec\_next()}.}
+{1 when another block follows, otherwise 0.}
+{Reads current transport state without issuing a command.}
+{while (uci\_more\_blocks()) err = uci\_exec\_next(\&req);}
+{The loop consumes all remaining blocks.}
+
+\capiref{uci\_abort}{uci.h}
+{uint8\_t uci\_abort(void)}
+{None.}
+{An \cmd{ULTIMATE\_*} result.}
+{Abandons an exchange and forces the interface back to idle. Safe at any time.}
+{err = uci\_abort();}
+{A half-read directory or stopped program no longer holds the interface.}
+
+\capiref{uci\_set\_timeout}{uci.h}
+{void uci\_set\_timeout(uint8\_t units)}
+{\cmd{units} counts groups of 256 status polls; zero means forever.}
+{Nothing.}
+{Sets the polling budget. Its wall time changes with CPU speed.}
+{uci\_set\_timeout(UCI\_TIMEOUT\_DEFAULT);\
+uci\_set\_timeout(UCI\_TIMEOUT\_FOREVER);}
+{The calls demonstrate bounded default and unbounded operation.}
+
+\capiref{uci\_get\_timeout}{uci.h}
+{uint8\_t uci\_get\_timeout(void)}
+{None.}
+{The current timeout units; zero means forever.}
+{Reads the transport's current polling budget.}
+{uint8\_t saved = uci\_get\_timeout();}
+{\cmd{saved} can restore the caller's policy after a temporary change.}
+
+\capiref{uci\_last\_device\_code}{uci.h}
+{uint16\_t uci\_last\_device\_code(void)}
+{None.}
+{The last decoded raw status: DOS-family 0--99, HTTP 0--999, SoftwareIEC
+0--255, or \cmd{UCI\_DEVICE\_CODE\_NONE}.}
+{Exposes target-specific diagnostic detail.}
+{uint16\_t device = uci\_last\_device\_code();}
+{Interpret \cmd{device} only in the context of the target just called.}
+
+\capiref{uci\_status\_format}{uci.h}
+{uint8\_t uci\_status\_format(uint8\_t target)}
+{\cmd{target} is a \cmd{UCI\_TARGET\_*} value.}
+{The expected \cmd{UCI\_STATUS\_FMT\_*} encoding.}
+{Reports protocol documentation; it does not inspect bytes and must not be used
+as the decoder because some firmware replies violate the target convention.}
+{uint8\_t dos = uci\_status\_format(UCI\_TARGET\_DOS1);\
+uint8\_t http = uci\_status\_format(UCI\_TARGET\_HTTP);\
+uint8\_t iec = uci\_status\_format(UCI\_TARGET\_SOFTIEC);}
+{The values are \cmd{UCI\_STATUS\_FMT\_DECIMAL2},
+\cmd{UCI\_STATUS\_FMT\_DECIMAL3}, and \cmd{UCI\_STATUS\_FMT\_BINARY},
+respectively. Other target numbers use the two-digit default.}
+
+\capiref{uci\_decode\_status}{uci.h}
+{uint8\_t uci\_decode\_status(uint8\_t target, const uint8\_t *status, uint16\_t statuslen)}
+{\cmd{target} supplies context; \cmd{status} points to \cmd{statuslen} raw bytes.
+Pass the complete status when possible; a nonzero length requires a non-null
+pointer.}
+{The decoded \cmd{ULTIMATE\_*} result and, as a side effect, a new raw device
+code. Empty status is success.}
+{Detects two- and three-digit numeric forms, HTTP response lines, SoftwareIEC
+binary status, and unnumbered target-error text from the bytes rather than
+trusting the expected target format.}
+{static const uint8\_t dos[] = \{0x30,0x30,0x2c,0x4f,0x4b\};\
+static const uint8\_t http[] = \{0x34,0x30,0x34,0x20\};\
+static const uint8\_t line[] =\
+\hspace*{2em}\{0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0x20,0x32,0x30,0x30\};\
+static const uint8\_t iec[] = \{0x00\};\
+static const uint8\_t text[] = \{0x46,0x55,0x4c,0x4c\};\
+err = uci\_decode\_status(UCI\_TARGET\_DOS1, dos, sizeof dos);\
+err = uci\_decode\_status(UCI\_TARGET\_HTTP, http, sizeof http);\
+err = uci\_decode\_status(UCI\_TARGET\_HTTP, line, sizeof line);\
+err = uci\_decode\_status(UCI\_TARGET\_SOFTIEC, iec, sizeof iec);\
+err = uci\_decode\_status(UCI\_TARGET\_DOS1, text, sizeof text);\
+err = uci\_decode\_status(UCI\_TARGET\_DOS1, NULL, 0);}
+{The calls demonstrate two-digit status, three-digit firmware HTTP status, an
+HTTP response line, binary status, unnumbered target-error text, and empty
+success. \cmd{uci\_last\_device\_code()} retains a decoded number or
+\cmd{UCI\_DEVICE\_CODE\_NONE} when none exists.}
+
+\evidence{\cmd{include/ultimate.h}; \cmd{include/uci.h};
+\cmd{guide/examples/c\_calls.c}; \cmd{tests/emulator/sdk.suite};
+\cmd{tests/hardware/ucitest.c}}
+
+\end{referencechapter}

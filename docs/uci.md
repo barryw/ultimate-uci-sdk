@@ -612,8 +612,9 @@ The SDK's timeout budget is a byte of 256-poll units: about 0.65 s at
 seconds**, so `ultimate_net_connect()` and `ultimate_net_udp()` run on
 `UCI_TIMEOUT_FOREVER` and rely on the firmware's own connect timeout, which fired
 every time it was tested. They restore the caller's budget afterwards, and they
-are the only entry points in the SDK not bounded by the SDK. Every other network
-command finished in 75 ms or less.
+are the only network entry points not bounded by the SDK. HTTP exchange also
+waits on the firmware's own limit; every other network command finished in 75
+ms or less.
 
 ### Read lengths between 769 and 1023 are dangerous
 

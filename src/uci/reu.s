@@ -1,13 +1,12 @@
 ; reu.s - the RAM expansion, both halves of it.
 ;
-; **This module touches hardware registers directly, and it is the second and
-; last module allowed to.** The rule everywhere else - services are built out of
-; uci_exec and never write a register - is about not reimplementing the
-; transport. Here half the service has no transport to reimplement: there is no
-; UCI command that moves bytes between C64 RAM and the REU, so the only way to
-; do it is the REU's own DMA registers at $DF00-$DF0A. turbo.s is the other
-; exemption, and the test that admits one is the same: does the operation exist
-; on the UCI at all.
+; **This module touches hardware registers directly.** The rule for UCI-backed
+; services - build them out of uci_exec and never write a register - is about
+; not reimplementing the transport. Here half the service has no transport to
+; reimplement: there is no UCI command that moves bytes between C64 RAM and the
+; REU, so the only way to do it is the REU's own DMA registers at $DF00-$DF0A.
+; Turbo and Ultimate Audio are the other direct-hardware features; the test is
+; the same: does the operation exist on the UCI at all?
 ;
 ; The other half does go through uci_exec, because there it does exist:
 ; DOS_CMD_LOAD_REU and DOS_CMD_SAVE_REU move bytes between the *open file* and

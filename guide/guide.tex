@@ -19,6 +19,7 @@
 \usepackage{ultimatesdk}
 \usepackage[hidelinks,pdfusetitle]{hyperref}
 \input{version.tex}
+\makeindex
 
 % Keep source traceability beside each claim without printing it in the guide.
 \newcommand{\evidence}[1]{}
@@ -116,9 +117,10 @@ endorsed by them.
 \addcontentsline{toc}{chapter}{Introduction}
 
 The \sdk{} gives a C64 program one API for the Ultimate Command Interface, the
-UCI, and for the two supported features that use direct hardware registers:
-transfers through the RAM Expansion Unit, the REU, and Ultimate~64 turbo
-control. The language chapters cover every public call.
+UCI, and for supported features that use direct hardware registers: transfers
+through the RAM Expansion Unit, the REU; Ultimate~64 turbo control; and
+Ultimate Audio. It also includes a local software-vsprite compositor for C64
+bitmaps. The language chapters cover every public call.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{include/uci.h};
 \cmd{tools/test\_registers.py}}
@@ -133,9 +135,14 @@ call the same object code through a standalone jump-table binary.
 
 \subsection*{How to read this}
 
-Chapter~1 covers setup and chooses a binding. Chapters~2 to~5 document the
-binding-specific rules and every public entry point. Each example says what
-feature it demonstrates; the appendix holds the result-code table.
+Chapter~1 covers setup and chooses a binding. The language chapters demonstrate
+the services in complete programs; the three reference chapters specify every
+public BASIC, C and assembly entry independently. The appendix holds the
+result-code table.
+
+Boxes titled \textsc{Output} reproduce text actually printed by the example.
+Boxes titled \textsc{Result} describe returned data or a hardware effect that
+the example does not print.
 
 \subsection*{A word about the name}
 
@@ -152,7 +159,11 @@ the command interface predates the Ultimate~64. Programs probe targets with
 \input{chapters/c}
 \input{chapters/assembly}
 \input{chapters/other-toolchains}
+\input{chapters/reference-basic}
+\input{chapters/reference-c}
+\input{chapters/reference-assembly}
 \input{chapters/appendices}
+\printindex
 
 % ---------------------------------------------------------------------------
 % Back cover.
@@ -171,8 +182,9 @@ the command interface predates the Ultimate~64. Programs probe targets with
   \node[anchor=north west,text=black,align=left,text width=3.55in,
         font=\fontsize{9}{12.5}\selectfont]
        at (11,120.5) {%
-         Use files, REU memory, the live palette, sockets and HTTP from a C64
-         program without implementing the command-interface handshake.\\[0.6em]
+         Use files, REU memory, PCM audio, software vsprites, the live palette,
+         sockets and HTTP from a C64 program without implementing the
+         command-interface handshake.\\[0.6em]
          BASIC, cc65 C, ca65 assembly and the standalone jump table all reach
          the same 6502 implementation.};
   \node[anchor=north west,text=black,align=left,text width=3.55in,

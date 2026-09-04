@@ -29,11 +29,12 @@ points:
 | `ultimate_turbo_available`, `ultimate_turbo_set`, `ultimate_turbo_badlines` | Select maximum CPU speed and disable VIC badline stalls |
 | `ultimate_reu_available`, `ultimate_reu_stash`, `ultimate_reu_fetch` | Store the clean bitmap and PCM sample, then restore the shadow area |
 | `ultimate_audio_init`, `ultimate_audio_configure`, `ultimate_audio_start`, `ultimate_audio_stop` | Configure and retrigger the PCM voice safely |
+| `ultimate_vsprite_draw` | Composite and recolor the moving shadow |
 
 The rendering and movement are custom demo code: the raster multiplexer,
 sprite construction, rotation data, bounce physics, bitmap and grid generation,
-shadow compositor, and audio voice setup. The generators are `genball.py`,
-`genbg.py`, and `mkpcm.py`; the runtime is `boing.asm`.
+shadow positioning and image shifting, and audio voice setup. The generators
+are `genball.py`, `genbg.py`, and `mkpcm.py`; the runtime is `boing.asm`.
 
 ## Run it
 

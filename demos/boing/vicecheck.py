@@ -28,7 +28,7 @@ def run():
     mon = ["until %04x" % sym["main"], "r pc = %04x" % sym["start"]]
     shots = []
     for n, frames in enumerate((30, 24, 106, 100, 200)):
-        mon += ["until %04x" % sym["irq_vbl"]] * frames
+        mon += ["until %04x" % sym["shadow_done"]] * frames
         shot = work / ("vice-%d.png" % n)
         mon += ['screenshot "%s" 2' % shot, 'save "st%d.bin" 0 033c 034a' % n]
         shots.append((shot, work / ("st%d.bin" % n)))

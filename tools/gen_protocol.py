@@ -149,8 +149,8 @@ GROUPS = [
     ("DOS file open attributes", "Bit flags for DOS_CMD_OPEN_FILE.", [
         ("DOS_FA_READ",          0x01, "Open for reading"),
         ("DOS_FA_WRITE",         0x02, "Open for writing, do not truncate"),
-        ("DOS_FA_CREATE_NEW",    0x04, "Create/truncate to zero bytes"),
-        ("DOS_FA_CREATE_ALWAYS", 0x08, "May overwrite an existing file"),
+        ("DOS_FA_CREATE_NEW",    0x04, "Create only when the name does not exist"),
+        ("DOS_FA_CREATE_ALWAYS", 0x08, "Create or truncate an existing file"),
     ]),
 
     ("DOS file information reply", "Byte offsets into the reply of DOS_CMD_FILE_STAT "
@@ -385,8 +385,8 @@ GROUPS = [
         ("U64_TURBO_UNAVAILABLE", 0xFF,   "what both registers read when turbo is off in config"),
     ]),
 
-    ("REU registers (NOT UCI)", "The second and last thing the SDK reaches "
-     "without the command interface, for the same reason as turbo: no UCI "
+    ("REU registers (NOT UCI)", "Another part of the SDK that works without "
+     "the command interface, for the same reason as turbo: no UCI "
      "command moves bytes between C64 RAM and the REU. The register set is the "
      "1750's, implemented in fpga/cart_slot/vhdl_source/reu.vhd, and the "
      "command interface overlays $DF1B-$DF1F above it - the REU decodes "
@@ -470,6 +470,25 @@ GROUPS = [
         ("UA_VOICE_REPEAT_B",  16,  "dword, little endian"),
         ("UA_VOICE_RATE",      20,  "word, little endian"),
         ("UA_VOICE_SIZE",      22,  "bytes"),
+    ]),
+
+    ("Software vsprite draw layout", "Byte offsets in ultimate_vsprite. "
+     "The C ABI build asserts the structure still matches these.", [
+        ("VSPRITE_BITMAP",       0, "word: destination bitmap base"),
+        ("VSPRITE_SOURCE",       2, "word: column-major image or source bitmap base"),
+        ("VSPRITE_MASK",         4, "word: column-major mask for VSPRITE_F_MASKED"),
+        ("VSPRITE_SCREEN",       6, "word: optional screen base for VSPRITE_F_COLOR"),
+        ("VSPRITE_X",            8, "byte: destination cell column, 0-39"),
+        ("VSPRITE_Y",            9, "byte: destination raster line, 0-199"),
+        ("VSPRITE_WIDTH",       10, "byte: width in bitmap byte columns"),
+        ("VSPRITE_HEIGHT",      11, "byte: height in raster lines"),
+        ("VSPRITE_COLOR",       12, "byte: screen value for touched cells"),
+        ("VSPRITE_FLAGS",       13, "byte: VSPRITE_F_* operation flags"),
+        ("VSPRITE_SIZE",        14, "bytes"),
+        ("VSPRITE_F_MASKED",  0x01, "draw (destination AND mask) OR source"),
+        ("VSPRITE_F_COPY",    0x02, "copy the same rectangle from a source bitmap"),
+        ("VSPRITE_F_COLOR",   0x04, "write color to screen cells touched by nonzero source"),
+        ("VSPRITE_F_ALL",     0x07, "all supported flag bits"),
     ]),
 
     ("Ultimate 64 speed indices", "Index into the machine's speed table. **Only "

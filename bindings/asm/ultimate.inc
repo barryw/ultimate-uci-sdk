@@ -191,6 +191,13 @@ ULTIMATE_DRIVE_B = 1
                                  ; clobbers ult_buf, ult_buflen, ult_outlen, ult_num, ult_addr, ult_reulen,
                                  ; ult_arg2 and ult_attrib
 
+; --- software vsprites -----------------------------------------------------
+; A/X points at a VSPRITE_SIZE descriptor. The operation draws directly into
+; a standard 40-column C64 bitmap and does not require UCI. The routine
+; self-modifies for speed and therefore must execute from RAM; it is not
+; reentrant.
+.global ultimate_vsprite_draw    ; A/X = ultimate_vsprite -> A = result
+
 ; --- net.s -----------------------------------------------------------------
 ; Measured behaviour, not documented behaviour - see src/uci/net.s for all of
 ; it. The three that decide how these are called: a read never waits, so poll;
