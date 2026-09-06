@@ -13,7 +13,7 @@ all: $(PRG)
 $(LIB): FORCE
 	$(MAKE) -C $(ROOT)/bindings/cc65
 
-$(PRG): visualizer.c $(LIB)
+$(PRG): visualizer.c $(LIB) Makefile
 	$(CL65) -t c64 -Osir -W error \
 		-D 'SDK_VERSION="$(VERSION)"' -D 'WAV_PATH="$(WAV_PATH)"' \
 		-I $(ROOT)/include \

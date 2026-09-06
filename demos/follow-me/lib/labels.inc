@@ -1,0 +1,78 @@
+
+;
+; All of the constants referenced in the rest of the library
+;
+
+
+; We enable by setting bit 8
+ENABLE = $80
+DISABLE = $00
+
+; Bit 8
+BIT8 = ENABLE
+
+; Bit 7
+BIT7 = $40
+
+; Lower 7 bits
+LOWER7 = $7f
+
+NMI_VECTOR = $fffa
+RESET_VECTOR = $fffc
+IRQ_VECTOR = $fffe
+
+; Game Modes
+GAME_MODE_ATTRACT = $00
+GAME_MODE_COMPUTER = $01
+GAME_MODE_HUMAN = $02
+GAME_MODE_FAIL = $03
+GAME_MODE_GAME_OVER = $04
+GAME_MODE_WIN = $05
+
+; Timer constants
+TIMER_SINGLE = $00
+TIMER_CONTINUOUS = $01
+TIMER_HALF_SECOND = $1e
+TIMER_ONE_SECOND = $3c
+TIMER_TWO_SECONDS = $78
+TIMER_THREE_SECONDS = $b4
+TIMER_FOUR_SECONDS = $f0
+TIMER_STRUCT_BYTES = $40
+
+; The bank the VIC-II chip will be in
+BANK = $00
+
+; The start of physical RAM the VIC-II will see
+VIC_START = (BANK * $4000)
+
+SCREEN_START = VIC_START + $0400
+SPRITE_POINTERS = SCREEN_START + $03f8
+
+; Offsets for start of VIC memory for each sprite attribute
+SPR_VISIBLE = vic::SPENA   - vic::SP0X
+SPR_X_EXPAND = vic::XXPAND  - vic::SP0X
+SPR_Y_EXPAND = vic::YXPAND  - vic::SP0X
+SPR_HMC = vic::SPMC    - vic::SP0X
+SPR_PRIORITY = vic::SPBGPR  - vic::SP0X
+
+; Flags for various sprite settings
+SPR_HIDE = DISABLE
+SPR_SHOW = ENABLE
+SPR_NORMAL = DISABLE
+SPR_EXPAND = ENABLE
+SPR_FG = DISABLE
+SPR_BG = ENABLE
+SPR_HIRES = DISABLE
+SPR_MULTICOLOR = ENABLE
+
+; Joystick constants
+JOY_BUTTON = %00010000
+JOY_UP = %00000001
+JOY_DOWN = %00000010
+JOY_LEFT = %00000100
+JOY_RIGHT = %00001000
+
+RED_ADDRESS = $0541
+YELLOW_ADDRESS = $054b
+GREEN_ADDRESS = $0555
+BLUE_ADDRESS = $055f

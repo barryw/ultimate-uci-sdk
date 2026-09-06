@@ -310,8 +310,8 @@ def run(host, port, verbose, as_crt):
         restore_settings(u, changed)
         print("# settings restored; flash was never written")
 
-    print("1..%d" % (len(CHECKS) + 1))
-    print("# %d passed, %d failed" % (len(CHECKS) + 1 - failures, failures))
+    print("1..%d" % (len(checks) + 1))
+    print("# %d passed, %d failed" % (len(checks) + 1 - failures, failures))
     return 1 if failures else 0
 
 

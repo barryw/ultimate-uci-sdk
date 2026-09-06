@@ -27,6 +27,17 @@ cc65's start-up to run — but that is a convenience, not a requirement. A
 cartridge image or a custom loader can `jsr ultimate_init` with no start-up at
 all.
 
+The archive selects service modules on demand, for both ca65 assembly and
+cc65 C. Include `ultimate.inc` and reference only the entry points you need;
+its unused `.global` declarations do not force modules into the program.
+Assembly entry points do not pull in the C adapters. Selection is at object
+granularity: functions within a selected service, its dependencies and shared
+state remain. The standalone blob is a full bundle, not a selective link.
+
+The [selective-linking walkthrough](selective-linking.md) includes a complete
+native PRG, its ld65 configuration, and how to check selected modules and
+addresses in the map. It also contrasts that map with a cc65 C program.
+
 The one place a C runtime does appear is the C API. `ultimate_identify()`,
 `ultimate_get_model()`, `ultimate_palette_set_color()` and
 `uci_decode_status()` take more arguments than fit in registers, so their
@@ -48,9 +59,19 @@ custom linker script, or an assembler with no segment support at all.
 | `UCI_VARS` | undefined — the BSS segment | `UCI_VARS_SIZE` (191) bytes of variables |
 | the request block | — | not a knob: `uci_exec` takes it by pointer |
 
+From the repository root, rebuild a separate archive so every SDK module
+receives the same definitions:
+
+```sh
+make -B -C bindings/cc65 BUILD=build-custom \
+  ASM_DEFINES="-D UCI_VARS=52992 -D UCI_ZP=163"
 ```
-ca65 -D UCI_VARS=$CF00 -D UCI_ZP=$A3 uci_core.s
-```
+
+Link `bindings/cc65/build-custom/ultimate.lib`. These decimal values select
+`$CF00` and `$A3` without shell expansion of `$` names. `-B` prevents stale
+objects when build flags change; keep a separate build directory per layout.
+Application-only defines cannot change an existing library. Reserve both
+ranges yourself: fixed workspace equates do not get overlap checks from ld65.
 
 **With `UCI_VARS` defined the core emits no BSS at all** — every variable
 becomes an equate off that address, so there is nothing left for a linker to

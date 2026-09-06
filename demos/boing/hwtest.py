@@ -3,7 +3,7 @@
 
     python3 hwtest.py --host 192.168.1.62 [--prg boing.prg]
 
-The PRG is over the REST runner's 16 KB body limit (blob, frames, background
+The PRG is over the REST runner's 16 KB body limit (SDK code, frames, background
 and sample inside), so it goes to /Temp over FTP and runs from there. Then the
 status block at $033C is read back: frame rate, feature flags, bounces and the
 last SDK result, and x/y/rotation every half second for eight seconds.
@@ -80,7 +80,8 @@ def main():
             print("  x %3d y %3d rot %2d bounces %3d" % (s["x"], s["y"], s["rot"], s["bounces"]))
             time.sleep(0.5)
         turbo = u.readmem(0xD031, 1)[0]
-        ok = fps > 50 and s["bounces"] > b["bounces"] and f == 7 and turbo == 0x8f
+        ok = (fps > 50 and s["bounces"] > b["bounces"] and f == 7
+              and turbo == 0x8f and b["result"] == s["result"] == 0)
         print(("ok" if ok else "not ok") + " - %.1f fps, %d bounces in eight seconds" % (fps, s["bounces"] - b["bounces"]))
         return 0 if ok else 1
 

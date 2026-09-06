@@ -14,7 +14,7 @@ time; the black below it is what is left.
 
 ## What the SDK does here
 
-Four calls, through the standalone blob at `$7000`:
+Four calls, linked directly from `ultimate.lib`:
 `ultimate_turbo_available()` says whether the machine's Turbo Control setting
 gives the program the speed register; `ultimate_turbo_set(U64_SPEED_MAX)` asks
 for the top speed; `ultimate_turbo_badlines(0)` stops the VIC stealing cycles,
@@ -22,22 +22,25 @@ which is worth six per cent of every frame at any speed; and
 `ultimate_vsprite_draw()` restores and masked-composites each vsprite. The draw
 routine is plain 6510 code and also runs, slowly, on a stock C64.
 
-Measured on an Elite (firmware 3.15, NTSC), the adaptive loop settled at 39
+Before the ca65 port, measured on an Elite (firmware 3.15, NTSC), the adaptive loop settled at 39
 32x32 vsprites at 59.9 fps, using 13,312 of the frame's 17,055 CIA cycles for
 movement, restore and draw.
 
 ## Building
 
+Requires cc65 (ca65/ld65) and Python 3. The build links only the SDK's turbo
+and vsprite modules; it needs neither the UCI transport nor a C runtime.
+`gen_shapes.py` generates the pre-shifted image/mask data.
+
 ```
-make            # vsprites.prg, with the SDK blob inside it
-make check      # run it in VICE (1 MHz) and write vsprites-vice.png
+make            # vsprites.prg, with only the required SDK modules
+make check      # check moving vsprites in VICE (1 MHz)
 make run U64_HOST=192.168.1.62
 ```
 
 `make run` uploads the PRG to the Ultimate's `/Temp` RAM disk over FTP, runs
-it from there (the REST runner's upload path stops at 16 KB), reads the frame
-counter back and reports vsprites and frames per second. Needs KickAssembler on
-the path as `kickass`, and Python 3 with Pillow for the screenshot.
+it from there, reads the frame counter back and reports vsprites and frames
+per second. Hardware screenshots additionally need Pillow.
 
 On the machine itself: copy `vsprites.prg` anywhere and run it from the
 Ultimate's file browser. Set *Turbo Control* to *U64 Turbo Registers* to see
@@ -47,10 +50,8 @@ it at speed; with any other setting it runs at 1 MHz, honestly.
 
 | | |
 |---|---|
-| `$0801-$24ff` | code, tables, three shapes pre-shifted four ways |
+| `$0801-$26dc` | program, three shapes pre-shifted four ways, linked SDK code (current build) |
 | `$4000-$5f3f` | bitmap A (VIC bank 1), screen A at `$6000` |
-| `$7000-$9d2c` | the SDK blob (current build) |
-| `$9f00-$9fbe` | the SDK's `UCI_VARS_SIZE` bytes (currently 191) |
 | `$a000-$bf3f` | the clean background, RAM under BASIC (`$01 = $35`) |
 | `$c000-$c3ff` | screen B (VIC bank 3), bitmap B at `$e000-$ff3f` under the KERNAL |
 

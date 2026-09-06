@@ -3,9 +3,8 @@
 
     python3 hwtest.py --host 192.168.1.62 --prg vsprites.prg [--png shot.png]
 
-The PRG is bigger than the REST runner's 16 KB body limit (the SDK blob is
-inside it), so it goes to the Ultimate's /Temp RAM disk over FTP and runs from
-there with runners:run_prg?file=. The demo publishes a status block in the
+The self-contained PRG goes to the Ultimate's /Temp RAM disk over FTP and
+runs from there with runners:run_prg?file=. The demo publishes a status block in the
 cassette buffer; this reads it back over REST. Turbo Control is required to be
 "U64 Turbo Registers" for the run and put back afterwards, because the check
 is that the demo reaches the frame rate and vsprite count only turbo allows.

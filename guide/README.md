@@ -61,6 +61,12 @@ are the callout environments.
 
 Build the PDF with `make -C guide`. Run `make unittest` for generated tables,
 keyword dispatch, register boundaries and blob ABI checks; run `make test` when
-an example or claim depends on assembled SDK behaviour. For real hardware, run
-`make hardware-run`, `make basic-run`, `make vsprites-run`, and `make boing-run`
-with `U64_HOST=<address>`; each runner restores the settings it changes.
+an example or claim depends on assembled SDK behaviour.
+
+Then run `make -C guide hardware U64_HOST=<address>` for the standalone C and
+assembly examples, including the selective-linking and custom-workspace builds.
+This checks screen RAM and border-register effects on the Ultimate; compiling
+`c_calls.o` and `assembly_calls.o` checks call forms, not execution of every API.
+Run the affected SDK/BASIC/demo hardware suites too, one at a time, as listed in
+[the test guide](../tests/README.md#hardware-is-part-of-completion). Record
+failures, missing fixtures, and any visual/audio checks still needing a person.

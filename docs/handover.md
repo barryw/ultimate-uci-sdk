@@ -1,5 +1,9 @@
 # Handover
 
+> Historical development record, not current build instructions. Source paths,
+> layouts, measurements, and commands below describe the work at that time.
+> For the current cc65/ca65 workflow, see [Selective linking](selective-linking.md).
+
 Written to be picked up cold. Where things stand, what is already decided and
 why, the traps that have already cost debugging time, and what to do next.
 
@@ -166,7 +170,7 @@ UCI_REG_CONTROL` in a service, stop.
 **`src/uci/palette.s` is the worked example to copy from** — it is the newest and
 smallest complete service: four commands, its own module because cc65 links whole
 object files and folding it into `ultimate.s` would charge every program for
-palette code it never calls, and it reuses `ult_req_clear` from `ultimate.s`
+palette code it never calls, and it reuses `ult_req_clear` from `service_common.s`
 rather than growing a second copy. Add the module to `src/uci/sources.mk` and
 both bindings pick it up.
 

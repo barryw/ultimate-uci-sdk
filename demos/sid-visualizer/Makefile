@@ -26,7 +26,7 @@ $(LIB): FORCE
 $(BUILD):
 	mkdir -p $@
 
-$(CORE): visualizer.c music_state.s visualizer.cfg $(LIB) | $(BUILD)
+$(CORE): visualizer.c music_state.s visualizer.cfg $(LIB) Makefile | $(BUILD)
 	$(CL65) -t c64 -C visualizer.cfg -Osir -W error \
 		-D TUNE=$(TUNE) -D SID1_ADDRESS=$(SID1) -D SID2_ADDRESS=$(SID2) \
 		-D 'SDK_VERSION="$(VERSION)"' \

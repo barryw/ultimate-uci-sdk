@@ -1,5 +1,9 @@
 # The UCI, complete, in assembly, C and BASIC
 
+> Historical development record, not current build instructions. Source paths,
+> layouts, measurements, and commands below describe the work at that time.
+> For the current cc65/ca65 workflow, see [Selective linking](../../selective-linking.md).
+
 Design for making the whole Ultimate Command Interface reachable from every
 toolchain a C64 programmer might use, in the smallest and most reusable form
 that can be built.

@@ -1,5 +1,9 @@
 # Love note: resume the disk PCM demo here
 
+> Historical development record, not current build instructions. Source paths,
+> layouts, measurements, and commands below describe the work at that time.
+> For the current cc65/ca65 workflow, see [Selective linking](selective-linking.md).
+
 Local work resumed 2026-08-22. Barry confirmed the bench is ready.
 
 ## Most important observation

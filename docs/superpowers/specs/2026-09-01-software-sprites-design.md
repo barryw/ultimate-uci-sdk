@@ -1,5 +1,9 @@
 # Software sprites under Ultimate 64 turbo: findings and design
 
+> Historical development record, not current build instructions. Source paths,
+> layouts, measurements, and commands below describe the work at that time.
+> For the current cc65/ca65 workflow, see [Selective linking](../../selective-linking.md).
+
 Date: 2026-09-01. Machine: Ultimate 64 Elite, firmware 3.15, core 1.4F, NTSC,
 Turbo Control = "U64 Turbo Registers". Experiment code: `experiments/bobs/`.
 

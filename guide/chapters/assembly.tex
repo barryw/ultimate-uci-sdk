@@ -63,24 +63,110 @@ therefore appear in lowercase source below but reach the firmware in uppercase.
 
 \evidence{\cmd{bindings/asm/ultimate.inc}; \cmd{docs/asm-abi.md}}
 
+\section{A Native PRG Without C Startup}
+\phantomsection
+\label{sec:native-selective}
+
+Selective linking does not require the C runtime. This complete ca65 source
+performs the same turbo-register check as the
+\hyperref[sec:selective-linking]{selective-linking walkthrough}
+(page~\pageref{sec:selective-linking}).
+It supplies its own BASIC line, \bas{10 sys 2304}, instead of force-importing
+\cmd{\_\_STARTUP\_\_}. The listing comes from
+\cmd{guide/examples/selective.s}, which the guide build assembles:
+
+\begin{listingbox}[before upper={}]
+\verbatiminput{examples/selective.s}
+\end{listingbox}
+
+Its complete ld65 configuration is \cmd{guide/examples/selective.cfg}:
+\begin{listingbox}[before upper={}]
+\verbatiminput{examples/selective.cfg}
+\end{listingbox}
+
+The first two file bytes hold the PRG's load address; they are not loaded at
+\cmd{\$07FF}. The BASIC stub loads at \cmd{\$0801} and enters code at
+\cmd{\$0900} (2304). If you move the entry address, update the stub as well.
+RAM ends before \cmd{\$4000}; ld65 reports overflow if the program grows past
+it. Optional RODATA and BSS allow services that need constant data or workspace;
+turbo needs neither. Without C startup, initialize your own variables and obey
+the SDK's per-API initialization rules.
+
+Assemble and link from the repository root, with the application object before
+the archive:
+\begin{listingbox}
+make lib\\
+ca65 -t c64 -I bindings/asm \textbackslash\\
+\hspace*{1em}-o guide/examples/selective.o \textbackslash\\
+\hspace*{1em}guide/examples/selective.s\\
+ld65 -C guide/examples/selective.cfg \textbackslash\\
+\hspace*{1em}-m guide/examples/selective-asm.map \textbackslash\\
+\hspace*{1em}-o guide/examples/selective-asm.prg \textbackslash\\
+\hspace*{1em}guide/examples/selective.o \textbackslash\\
+\hspace*{1em}bindings/cc65/build/ultimate.lib
+\end{listingbox}
+
+\begin{resultbox}
+Running the PRG makes the border green if the turbo register is available,
+red otherwise, then returns to BASIC. It prints nothing and does not change
+CPU speed.
+\end{resultbox}
+
+The map's Modules list contains only the application and
+\cmd{ultimate.lib(turbo.o)}. There are no C adapters or \cmd{c64.lib} members.
+The Segment list places CODE at \cmd{\$0900}; the Imports list shows the
+application's reference to \cmd{ultimate\_turbo\_available}. More complex
+VIC and sample layouts appear in the ca65 configurations for Boing and
+Follow Me; this small configuration is not a general game memory layout.
+
+\evidence{\cmd{guide/examples/selective.s}; \cmd{guide/examples/selective.cfg};
+\cmd{demos/boing/boing.cfg}; \cmd{demos/follow-me/followme.cfg}}
+
 \section{Place The SDK's Working Memory}
 
 The SDK's zero-page block starts at \cmd{UCI\_ZP}, which defaults to
 \cmd{\$FB}. Its size is \cmd{UCI\_ZP\_SIZE}. The normal variable block occupies
 \cmd{UCI\_VARS\_SIZE} bytes in the BSS segment, which is where the linker puts
-variables that have no starting value. Define both bases when assembling every
-SDK source to choose fixed locations instead:
+variables that have no starting value. To choose fixed locations, rebuild a
+separate archive from the repository root so every SDK object receives the
+same definitions:
 
 \begin{listingbox}
-ca65 -D UCI\_VARS=\$CF00 -D UCI\_ZP=\$A3 uci\_core.s
+make -B -C bindings/cc65 BUILD=build-custom \textbackslash\\
+\hspace*{1em}ASM\_DEFINES="-D UCI\_VARS=52992 -D UCI\_ZP=163"
 \end{listingbox}
 
 \begin{resultbox}
 UCI variables begin at \$CF00; zero-page workspace begins at \$A3.
 \end{resultbox}
 
+Link \cmd{bindings/cc65/build-custom/ultimate.lib}, not the default archive.
+For example, rebuild the earlier startup check against this layout:
+\begin{listingbox}
+cl65 -t c64 -{}-asm-include-dir bindings/asm \textbackslash\\
+\hspace*{1em}-m guide/examples/hello-custom.map \textbackslash\\
+\hspace*{1em}-o guide/examples/hello-custom.prg \textbackslash\\
+\hspace*{1em}guide/examples/hello.s \textbackslash\\
+\hspace*{1em}bindings/cc65/build-custom/ultimate.lib
+\end{listingbox}
+
+\begin{resultbox}
+The hello program is linked with SDK workspace at the selected addresses.
+Its behavior is the same as the Getting Started assembly check.
+\end{resultbox}
+
+Decimal values avoid the shell expanding dollar-prefixed names. \cmd{-B}
+forces rebuilding because changing Make variables alone does not invalidate
+existing objects. Keep a separate build directory per layout; application-only
+defines do not relocate a prebuilt SDK.
+
 With \cmd{UCI\_VARS} defined, the core emits no BSS; its variables become
-equates from that address. The SDK installs no interrupt handler and is not
+equates from that address. Reserve both workspace ranges yourself: currently
+\cmd{\$CF00--\$CFBE} and \cmd{\$A3--\$A6}. ld65 cannot detect an overlap with
+fixed equates. This tiny hello program fits; larger programs must reserve these
+ranges away from code, stack, and buffers. These definitions move workspace,
+not code; the linker configuration places CODE and RODATA.
+The SDK installs no interrupt handler and is not
 re-entrant, so an interrupt routine must not call it while foreground code is
 inside a service.
 

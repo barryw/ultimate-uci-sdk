@@ -20,8 +20,8 @@ perspective grid, moving shadow, and PCM boing on every bounce.
 
 ## SDK code versus demo code
 
-The PRG embeds the SDK's standalone blob at `$8000` and uses these entry
-points:
+The ca65 build links only the required services from `ultimate.lib`, with
+SDK code at `$8000` and SDK variables at `$5900`. It uses these entry points:
 
 | SDK API | Used for |
 |---|---|
@@ -34,11 +34,11 @@ points:
 The rendering and movement are custom demo code: the raster multiplexer,
 sprite construction, rotation data, bounce physics, bitmap and grid generation,
 shadow positioning and image shifting, and audio voice setup. The generators
-are `genball.py`, `genbg.py`, and `mkpcm.py`; the runtime is `boing.asm`.
+are `genball.py`, `genbg.py`, and `mkpcm.py`; the runtime is `boing.s`.
 
 ## Run it
 
-`boing.prg` is self-contained: program, graphics, SDK blob, and sound are all
+`boing.prg` is self-contained: program, graphics, linked SDK code, and sound are all
 inside it. Copy that file to USB or Ultimate storage and choose **Run** in the
 Ultimate file browser. A D64 is unnecessary.
 
@@ -67,7 +67,7 @@ make boing-run U64_HOST=192.168.1.62
 ```
 
 `make boing` rebuilds the self-contained PRG. A clean rebuild needs
-KickAssembler, Python 3, and Pillow. If `boing-orig8.pcm` is present locally,
+cc65 (ca65/ld65), Python 3, and Pillow. If `boing-orig8.pcm` is present locally,
 the build uses it at 8,363 Hz; otherwise it generates the synthetic fallback.
 
 `make -C demos/boing check` verifies startup refusal without UCI and checks the

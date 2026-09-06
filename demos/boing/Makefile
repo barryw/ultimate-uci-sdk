@@ -1,12 +1,12 @@
 # Boing ball. make (self-contained boing.prg);
 # make check (VICE screenshots + status readback);
 # make run U64_HOST=<ip> (FTP to /Temp, run from file, read the status block).
-KICK   ?= kickass
+CA65   ?= ca65
+LD65   ?= ld65
 ROOT   := ../..
 SAMPLE ?= $(if $(wildcard boing-orig8.pcm),boing-orig8.pcm 8363)
-# The blob at $8000 with code below $ad30 and its variables in the free page at
-# $5900. A separate build keeps the default blob untouched.
-BLOB   := $(ROOT)/bindings/blob/build-boing/ultimate-8000.bin
+# SDK code remains at $8000, variables at $5900, below the fixed PCM pieces.
+LIB    := $(ROOT)/bindings/cc65/build-boing/ultimate.lib
 
 all: boing.prg
 
@@ -17,11 +17,14 @@ bg.bin bgscr.bin shadow.bin: genbg.py
 boing.pcm boing_pcm.inc: mkpcm.py genboing.py
 	python3 mkpcm.py $(SAMPLE)
 
-$(BLOB): FORCE
-	$(MAKE) -C $(ROOT)/bindings/blob BUILD=build-boing BASE=8000 VARS=22784 LIMIT=44336
+$(LIB): FORCE
+	$(MAKE) -C $(ROOT)/bindings/cc65 BUILD=build-boing ASM_DEFINES="-D UCI_VARS=22784"
 
-boing.prg: boing.asm ball.bin disc.bin bg.bin bgscr.bin shadow.bin boing.pcm $(BLOB)
-	$(KICK) boing.asm -o $@ -symbolfile
+boing.o: boing.s ball.bin disc.bin bg.bin bgscr.bin shadow.bin boing.pcm boing_pcm.inc Makefile $(wildcard $(ROOT)/bindings/asm/*.inc)
+	$(CA65) -g -I $(ROOT)/bindings/asm -o $@ boing.s
+
+boing.prg: boing.o boing.cfg $(LIB) Makefile
+	$(LD65) -C boing.cfg -m boing.map -Ln boing.lbl -o $@ boing.o $(LIB)
 
 check: boing.prg
 	python3 vicecheck.py
@@ -31,7 +34,7 @@ run: boing.prg
 	python3 hwtest.py --host $(U64_HOST)
 
 clean:
-	rm -f boing.prg boing.sym ball.bin disc.bin bg.bin bgscr.bin shadow.bin boing.pcm \
+	rm -f boing.prg boing.o boing.map boing.lbl ball.bin disc.bin bg.bin bgscr.bin shadow.bin boing.pcm boing_pcm.inc \
 	      preview*.png bg-preview.png vice-*.png
 
 FORCE:

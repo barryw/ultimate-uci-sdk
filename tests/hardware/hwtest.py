@@ -410,7 +410,8 @@ def main():
         settings, _check = SCENARIOS[1]["steps"][0]
         SCENARIOS[1]["steps"][0] = (settings, expect_sid_addresses(expected_sids))
 
-    touched = {CMD_IF, REU, IEC_DRIVE, TURBO, AUDIO}
+    touched = {key for scenario in SCENARIOS
+               for settings, _check in scenario["steps"] for key in settings}
     saved = read_settings(u, touched)
     print("# saved settings: %s"
           % ", ".join("%s=%s" % (k[1], v) for k, v in saved.items()))

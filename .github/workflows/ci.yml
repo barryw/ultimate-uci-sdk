@@ -25,12 +25,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install cc65 and ACME
+      - name: Install cc65, ACME, and asset generator dependencies
         # ACME is here for tools/test_generated_assembles.py, which feeds the
         # generated constant files to the assemblers they are written for. It
         # skips when the tool is missing, so without this line the check would
         # pass by never running.
-        run: sudo apt-get update && sudo apt-get install -y cc65 acme
+        run: sudo apt-get update && sudo apt-get install -y cc65 acme python3-pil
       - name: Build the library
         run: make lib
       - name: Build the assembly and cc65 examples

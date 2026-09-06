@@ -49,7 +49,8 @@ def wait_running(u, timeout=60.0):
     raise RuntimeError("demo did not start streaming; screen=%r" % screen)
 
 
-def wait_swaps_and_motion(u, first, timeout=25.0):
+def wait_swaps_and_motion(u, first, timeout=45.0):
+    # Three 1 MiB buffers at 22050 Hz, stereo 16-bit take about 35.7 s.
     deadline = time.time() + timeout
     levels = {bytes(first[8:14])}
     while time.time() < deadline:

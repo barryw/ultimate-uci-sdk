@@ -35,7 +35,7 @@ AFLAGS  := -t $(TARGET) -I $(ROOT)/bindings/asm -I $(ROOT)/src/uci -I $(BUILD) $
 include $(ROOT)/src/uci/sources.mk
 
 CSRC    := abi_assert.c
-ASRC    := $(addprefix $(ROOT)/,$(UCI_SRC)) ultimate_cc65.s
+ASRC    := $(addprefix $(ROOT)/,$(UCI_SRC)) $(wildcard cc65_*.s)
 
 COBJ    := $(addprefix $(BUILD)/,$(notdir $(CSRC:.c=.o)))
 AOBJ    := $(addprefix $(BUILD)/,$(notdir $(ASRC:.s=.o)))
@@ -59,12 +59,14 @@ $(BUILD)/%.o: $(ROOT)/src/uci/%.s | $(BUILD)
 $(BUILD)/ultimate_asm.o: $(ROOT)/bindings/asm/ultimate_asm.s | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
-$(BUILD)/ultimate_cc65.o: ultimate_cc65.s | $(BUILD)
+$(BUILD)/cc65_%.o: cc65_%.s | $(BUILD)
 	$(CA65) $(AFLAGS) -o $@ $<
 
-$(LIB): $(COBJ) $(AOBJ)
+# Recreate the archive: updating members in place would leave removed modules
+# (notably the old monolithic C adapter) available to the linker.
+$(LIB): $(COBJ) $(AOBJ) Makefile $(ROOT)/src/uci/sources.mk
 	rm -f $@
-	$(AR65) a $@ $^
+	$(AR65) a $@ $(COBJ) $(AOBJ)
 
 clean:
 	rm -rf $(BUILD)

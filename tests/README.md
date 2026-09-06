@@ -108,9 +108,9 @@ ok 2 - init
 Firmware-dependent checks are skipped rather than failed, so the same binary
 gives a meaningful result on a 1541 Ultimate-II and on a Commodore 64 Ultimate.
 
-Last run: **Ultimate 64 Elite, firmware 3.15, FPGA 124/core 1.4F — 7/7
-scenarios, 0 failed**. The peer-enabled run included up to 180 checks per
-configuration.
+Hardware run records, including failures and limits, live in
+[`hardware-verification.md`](hardware-verification.md). A successful retry
+does not erase an earlier intermittent failure.
 Mutating checks write to `/Temp`, the FAT filesystem the firmware
 formats in RAM at boot, so nothing they do can fill a medium or outlive a power
 cycle.
@@ -139,6 +139,48 @@ still decoded and printed when something fails.
 Every setting it touches is read first and restored afterwards, including on
 Ctrl-C. Nothing is written to the Ultimate's flash.
 
+To include real TCP round trips and HTTP responses, start the disposable peers
+in a second terminal. Use your **computer's LAN IP** for `--bind` and both peer
+values; use the **Ultimate's IP** for `U64_HOST`:
+
+```sh
+python3 tests/hardware/peers.py --bind 192.168.1.112
+```
+
+```sh
+make -B -C tests/hardware NET_PEER=192.168.1.112:6464 HTTP_PEER=192.168.1.112:8099
+python3 tests/hardware/hwtest.py --host 192.168.1.62 --prg tests/hardware/ucitest.prg --verbose
+```
+
+These peers serve fixed test bytes, not local files. Stop them with Ctrl-C
+after the suite. Without peers, those checks are skipped, not verified.
+
+### Hardware is part of completion
+
+For SDK, demo, example, and executable-documentation changes, run the affected
+programs on the Ultimate after the host/emulator checks. Run hardware commands
+**serially**: each owns the C64 and may restart it or change temporary settings.
+
+```sh
+make -C guide hardware U64_HOST=192.168.1.62
+make basic-run U64_HOST=192.168.1.62
+make boing-run U64_HOST=192.168.1.62
+make vsprites-run U64_HOST=192.168.1.62
+make demo-run U64_HOST=192.168.1.62
+make -C demos/follow-me hardware U64_HOST=192.168.1.62
+make -C demos/pcm-visualizer run U64_HOST=192.168.1.62
+```
+
+The guide runner also builds and checks the standalone C/assembly examples.
+It verifies default and custom SDK workspace, UCI present/absent behavior, and
+both selective-linking examples with turbo registers enabled/disabled while
+UCI is disabled. The PCM visualizer needs the WAV named in its README.
+
+Record missing fixtures or unavailable hardware as **not tested**. Screen RAM,
+frame counters, and sampler status prove specific behavior, not that the HDMI
+picture and audible mix are correct. Check those separately on the real output;
+the network video stream does not necessarily show the HDMI palette.
+
 ### The wedge, typed at a real machine
 
 `make -C tests/hardware basic-run U64_HOST=192.168.1.62`
@@ -147,7 +189,8 @@ Ctrl-C. Nothing is written to the Ultimate's flash.
 back, because the wedge's tokeniser only runs when a line is *typed*: `ICRNCH`
 is reached from the screen editor and no program can call it. Four bugs hid
 exactly there, every one of them found on this script's first run. It covers
-both deliveries — the `.prg` and the cartridge — and 32 checks each.
+both deliveries — the `.prg` and the cartridge — including typed file/REU/turbo
+commands and reconstruction of every returned SID address.
 
 This is the layer that found the SoftwareIEC status-encoding bug: the target
 answers `IDENTIFY` in ASCII and everything else in binary, so decoding by target

@@ -41,7 +41,7 @@ def main():
     open("boing.pcm", "wb").write(data)
     a = min(PIECE_A, len(data)); b = len(data) - a
     div = round(6250000 / rate)
-    open("boing_pcm.inc", "w").write(".const PCM_A    = %d\n.const PCM_B    = %d\n.const PCM_LEN  = %d\n.const PCM_RATE = %d   // 6250000 / %d Hz\n" % (a, b, len(data), div, rate))
+    open("boing_pcm.inc", "w").write("PCM_A    = %d\nPCM_B    = %d\nPCM_LEN  = %d\nPCM_RATE = %d   ; 6250000 / %d Hz\n" % (a, b, len(data), div, rate))
     print("boing.pcm: %d bytes of 8-bit PCM at %d Hz (divider %d), pieces %d + %d" % (len(data), rate, div, a, b))
 
 if __name__ == "__main__":

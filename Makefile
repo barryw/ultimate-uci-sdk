@@ -13,7 +13,7 @@
 #   make boing-run U64_HOST=<ip>      build and run it on an Ultimate
 #   make protocol    regenerate the protocol constants     (Python 3)
 #   make release VERSION=vX.Y.Z   package every release artifact
-#   make all         library, examples, emulator tests, wedge and SID demo
+#   make all         library, examples, emulator tests, wedge and demos
 #
 # SPDX-License-Identifier: MIT
 
@@ -51,20 +51,23 @@ examples: lib
 
 demos: lib
 	$(MAKE) -C demos/sid-visualizer
+	$(MAKE) -C demos/pcm-visualizer
+	$(MAKE) -C demos/vsprites
+	$(MAKE) -C demos/follow-me
+	$(MAKE) -C demos/boing
 
 demo-run: lib
 	$(MAKE) -C demos/sid-visualizer run U64_HOST=$(U64_HOST)
 
-# Software sprites under turbo, through the standalone blob. KickAssembler,
-# like demos/follow-me, so it is not part of `demos`.
+# Software sprites under turbo, linked directly against the SDK archive.
 #   make vsprites-run U64_HOST=192.168.1.62
-vsprites: blob
+vsprites: lib
 	$(MAKE) -C demos/vsprites
 
-vsprites-run: blob
+vsprites-run: lib
 	$(MAKE) -C demos/vsprites run U64_HOST=$(U64_HOST)
 
-# The Boing ball uses its own blob layout, so its Makefile builds that directly.
+# Boing builds an SDK archive with its own RAM placement.
 #   make boing-run U64_HOST=192.168.1.62
 boing:
 	$(MAKE) -C demos/boing

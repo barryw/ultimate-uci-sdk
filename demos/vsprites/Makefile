@@ -1,35 +1,39 @@
 # Software sprites on an Ultimate 64: the vsprites demo.
 #
-#   make                       vsprites.prg (KickAssembler, and the SDK blob)
-#   make check                 run it in VICE and write vsprites-vice.png
+#   make                       vsprites.prg (ca65, selective SDK archive link)
+#   make check                 check moving vsprites in VICE
 #   make run U64_HOST=<ip>     run it on an Ultimate and check the frame rate
 
 ROOT   := ../..
-KICK   ?= kickass
+CA65   ?= ca65
+LD65   ?= ld65
 PYTHON ?= python3
 PRG    := vsprites.prg
-BLOB   := $(ROOT)/bindings/blob/build/ultimate-7000.bin
+LIB    := $(ROOT)/bindings/cc65/build/ultimate.lib
 
 all: $(PRG)
 
-$(BLOB): FORCE
-	$(MAKE) -C $(ROOT)/bindings/blob
+$(LIB): FORCE
+	$(MAKE) -C $(ROOT)/bindings/cc65
 
-$(PRG): vsprites.asm $(BLOB)
-	$(KICK) vsprites.asm -o $@ -symbolfile
+build/shapes.bin: gen_shapes.py
+	$(PYTHON) gen_shapes.py
+
+vsprites.o: vsprites.s build/shapes.bin Makefile $(wildcard $(ROOT)/bindings/asm/*.inc)
+	$(CA65) -g -I $(ROOT)/bindings/asm -o $@ vsprites.s
+
+$(PRG): vsprites.o vsprites.cfg $(LIB) Makefile
+	$(LD65) -C vsprites.cfg -m vsprites.map -Ln vsprites.lbl -o $@ vsprites.o $(LIB)
 
 check: $(PRG)
-	rm -f vsprites-vice.png
-	-x64sc -console -warp +sound -limitcycles 14000000 \
-	  -exitscreenshot vsprites-vice.png -autostart $(PRG) >/dev/null 2>&1
-	@test -s vsprites-vice.png
+	$(PYTHON) $(ROOT)/tools/check_ca65_demos.py vsprites
 
 run: $(PRG)
 	@test -n "$(U64_HOST)" || { echo "U64_HOST is required"; exit 2; }
 	$(PYTHON) hwtest.py --host $(U64_HOST) --prg $(PRG) --png vsprites-hw.png
 
 clean:
-	rm -f $(PRG) vsprites.sym vsprites-vice.png vsprites-hw.png
+	rm -f $(PRG) vsprites.o vsprites.map vsprites.lbl build/shapes.bin vsprites-vice.png vsprites-hw.png
 
 FORCE:
 

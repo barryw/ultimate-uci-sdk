@@ -1,5 +1,9 @@
 # SDK Fixes From The Boing Demo Implementation Plan
 
+> Historical development record, not current build instructions. Source paths,
+> layouts, measurements, and commands below describe the work at that time.
+> For the current cc65/ca65 workflow, see [Selective linking](../../selective-linking.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fold four things the Boing demo works around into the SDK: `BLOB_*` offsets generated into every assembler binding, byte results that set the flags, a settle inside `ultimate_audio_configure`, and `ultimate_audio_load_wav`, which turns a WAV file on the Ultimate into a voice ready to play.

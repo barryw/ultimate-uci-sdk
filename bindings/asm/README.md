@@ -9,6 +9,10 @@ Start with [../../docs/asm-abi.md](../../docs/asm-abi.md); it covers the registe
 contract, memory placement, the fact that no runtime is required, and a complete
 worked call.
 
+For a complete PRG without C startup, follow the
+[selective-linking walkthrough](../../docs/selective-linking.md#assembly-native-ca65ld65-no-c-runtime).
+It includes the source, linker configuration, commands, and map interpretation.
+
 ca65 is the assembler that links the compiled core directly. Every other
 assembler — KickAssembler, ACME, and anything else that can `jsr` an address —
 uses the standalone binary in [../blob](../blob) instead; see

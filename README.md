@@ -117,12 +117,15 @@ make lib           # build bindings/cc65/build/ultimate.lib
 make blob          # standalone binary with a jump table, for every other toolchain
 make wedge         # the BASIC wedge: src/basic/uci.prg and uci.crt
 make examples      # assembly and cc65 versions of the same program
+make demos         # build the demos, including Boing, vsprites, and Follow Me
 make test          # the host unit tests, then the SDK against a simulated Ultimate
 ```
 
 `make lib`, `make blob` and `make examples` need [cc65](https://cc65.github.io/).
-`make test` needs cc65 and Docker; `make emulator` is the same thing under its
-own name.
+All C and assembly demos use cc65/ca65 and selectively link `ultimate.lib`.
+`make demos` also needs Python 3 and Pillow for Boing's graphics.
+`make test` needs cc65, Python 3, Pillow, and Docker; `make emulator` runs just
+the simulated SDK tests.
 
 ## From assembly
 
@@ -181,6 +184,24 @@ if (ultimate_identify(UCI_TARGET_DOS1, name, sizeof(name), NULL) == ULTIMATE_OK)
 ```
 
 Full example: [examples/cc65/identify.c](examples/cc65/identify.c).
+
+### Link only the services you use
+
+For **cc65 C and ca65 assembly**, the same `ultimate.lib` links selectively:
+unused service modules and C adapters stay out of your program. No feature
+flags or separate libraries are needed. Including the header or assembly
+interface does not pull everything in.
+
+Selection is per object/service, not per individual function. A selected service
+also brings its dependencies and shared state; for example, file loading uses
+the DOS service. The fixed jump-table blob remains a complete SDK, and the
+BASIC wedge retains its compiled command set regardless of which commands a
+BASIC program uses. Toolchains using the blob do not get selective linking.
+
+Start with [the selective-linking walkthrough](docs/selective-linking.md):
+complete C and native ca65/ld65 programs, a custom linker configuration,
+how to read their maps, and safe SDK workspace placement. The book covers the
+same workflow in Getting Started and Programming in Assembly.
 
 ## From BASIC
 

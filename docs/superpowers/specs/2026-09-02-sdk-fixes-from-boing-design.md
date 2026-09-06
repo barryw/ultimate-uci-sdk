@@ -1,5 +1,9 @@
 # Four SDK fixes the Boing demo asked for
 
+> Historical development record, not current build instructions. Source paths,
+> layouts, measurements, and commands below describe the work at that time.
+> For the current cc65/ca65 workflow, see [Selective linking](../../selective-linking.md).
+
 Date: 2026-09-02. Bench: Ultimate 64 Elite at 192.168.1.62, firmware 3.15,
 core 1.4F, NTSC. Origin: `docs/handover-vsprites-boing.md`, "Two more SDK
 findings", and the demo's own hand-copied blob offsets.

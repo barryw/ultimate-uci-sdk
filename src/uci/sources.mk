@@ -12,6 +12,7 @@
 # SPDX-License-Identifier: MIT
 
 UCI_SRC := src/uci/uci_core.s \
+           src/uci/service_common.s \
            src/uci/ultimate.s \
            src/uci/palette.s \
            src/uci/dos.s \

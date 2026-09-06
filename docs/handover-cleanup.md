@@ -1,5 +1,9 @@
 # Handover: the cleanup pass, and the order after it
 
+> Historical development record, not current build instructions. Source paths,
+> layouts, measurements, and commands below describe the work at that time.
+> For the current cc65/ca65 workflow, see [Selective linking](selective-linking.md).
+
 Written to be picked up cold, alongside [handover.md](handover.md), which is the
 state of the SDK and the traps that have already cost debugging time,
 [handover-phase3.md](handover-phase3.md), which is what Phase 3 delivered, and

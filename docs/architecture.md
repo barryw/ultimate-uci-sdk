@@ -51,6 +51,25 @@ Constraints it holds itself to:
 
 ## Layer 2 — services
 
+The cc65/ca65 archive uses one object per service and separate C adapter
+objects in `bindings/cc65/cc65_*.s`. The linker includes only referenced
+objects and their dependencies, not the entire archive. Shared request
+helpers live in `src/uci/service_common.s` so they do not pull in identity
+and detection. C adapter helpers shared across services have their own object;
+service-specific helpers stay with their service's adapters.
+
+This is service-level selection, not function-level dead-code elimination.
+The shared transport/state object is still included when a selected service
+depends on it. The blob links the complete implementation directly, and the
+BASIC wedge's dispatcher retains its compiled command set. Neither is trimmed
+based on the application that later uses it.
+
+`tools/test_link_modularity.py` checks C and assembly link maps and resolves
+every exported C adapter to guard these boundaries.
+
+For runnable C and native assembly examples and map interpretation, see
+[Link only the SDK services you use](selective-linking.md).
+
 Each service turns a family of UCI commands or a documented hardware block into
 an API that reads naturally on a C64:
 

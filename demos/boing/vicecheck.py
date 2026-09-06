@@ -18,11 +18,13 @@ def classify(rgb):
     return None
 
 def run():
-    sym = {k: int(v, 16) for k, v in re.findall(r"\.label (\w+)=\$([0-9a-fA-F]+)", (HERE / "boing.sym").read_text())}
+    sym = {k: int(v, 16) for v, k in re.findall(r"^al ([0-9a-fA-F]+) \.(\w+)$", (HERE / "boing.lbl").read_text(), re.M)}
     work = pathlib.Path(tempfile.mkdtemp(prefix="boing-"))
     shutil.copy(HERE / "boing.prg", work / "t.prg")
     (work / "guard.txt").write_text("until %04x\nquit\n" % sym["no_ultimate"])
-    subprocess.run(["x64sc", "-console", "-warp", "+sound", "-moncommands", "guard.txt", "-autostart", "t.prg"],
+    # Like the Ultimate's DMA runner, inject into RAM: a KERNAL LOAD cannot
+    # safely place this near-64K PRG's assets underneath I/O and ROM.
+    subprocess.run(["x64sc", "-default", "-console", "-warp", "+sound", "-autostartprgmode", "1", "-moncommands", "guard.txt", "-autostart", "t.prg"],
                    cwd=work, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60, check=True)
     print("no-UCI startup: correctly returned to BASIC")
     mon = ["until %04x" % sym["main"], "r pc = %04x" % sym["start"]]
@@ -34,7 +36,8 @@ def run():
         shots.append((shot, work / ("st%d.bin" % n)))
     mon += ["quit", ""]
     (work / "mon.txt").write_text("\n".join(mon))
-    subprocess.run(["x64sc", "-console", "-warp", "+sound", "-moncommands", "mon.txt", "-autostart", "t.prg"],
+    # The RGB classifier below expects Colodore, not the user's video settings.
+    subprocess.run(["x64sc", "-default", "-console", "-warp", "+sound", "-autostartprgmode", "1", "-VICIIextpal", "-VICIIpalette", "colodore", "-reu", "-reusize", "16384", "-moncommands", "mon.txt", "-autostart", "t.prg"],
                    cwd=work, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
     ok, ys, bounces, darks = True, [], [], []
     for shot, st in shots:

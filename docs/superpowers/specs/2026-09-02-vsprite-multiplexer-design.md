@@ -1,5 +1,9 @@
 # A generic sprite multiplexer, and the Boing demo on it
 
+> Historical development record, not current build instructions. Source paths,
+> layouts, measurements, and commands below describe the work at that time.
+> For the current cc65/ca65 workflow, see [Selective linking](../../selective-linking.md).
+
 Date: 2026-09-02. Bench: Ultimate 64 Elite at 192.168.1.62, firmware 3.15,
 core 1.4F, NTSC. Origin: `experiments/boing/`, whose ball is sixteen sprites a
 frame out of eight, with three hand-written raster interrupts that know the

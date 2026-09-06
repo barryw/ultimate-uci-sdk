@@ -222,6 +222,82 @@ away, before another instruction overwrites it.
 \evidence{\cmd{docs/asm-abi.md}; \cmd{examples/asm/identify.s};
 \cmd{examples/asm/Makefile}}
 
+\section{Link Only The Services You Use}
+\phantomsection
+\label{sec:selective-linking}
+
+Link \cmd{ultimate.lib} normally: both cc65 C and ca65 assembly select
+referenced archive objects and their dependencies automatically. No feature
+flag or separate service library is needed. Including a header does not
+include every service. Selection is per object/service, not per function:
+calling one turbo function includes the other functions in \cmd{turbo.o} too.
+
+This complete program is \cmd{guide/examples/selective.c}. The listing is
+read directly from the source file compiled by the guide build:
+
+\begin{listingbox}[before upper={}]
+\verbatiminput{examples/selective.c}
+\end{listingbox}
+
+From the repository root:
+\begin{listingbox}
+make lib\\
+cl65 -t c64 -I include \textbackslash\\
+\hspace*{1em}-m guide/examples/selective-c.map \textbackslash\\
+\hspace*{1em}-o guide/examples/selective-c.prg \textbackslash\\
+\hspace*{1em}guide/examples/selective.c \textbackslash\\
+\hspace*{1em}bindings/cc65/build/ultimate.lib
+\end{listingbox}
+
+Run the PRG from the Ultimate file browser or your usual PRG loader.
+\begin{resultbox}
+The border becomes green when the turbo register is available, red otherwise.
+The program returns to BASIC without printing text or changing CPU speed.
+\end{resultbox}
+
+Turbo availability reads a register and needs no \cmd{ultimate\_init()}.
+Command-interface services such as files and palette access still need
+initialization. Do not remove required startup calls just to reduce size.
+
+Open \cmd{guide/examples/selective-c.map}. Under \textbf{Modules list}, the
+only SDK member is \cmd{ultimate.lib(turbo.o)}. The other archive entries,
+\cmd{c64.lib(...)}, are the normal C runtime and compiler helpers, not extra
+SDK services. Chapter~4's \hyperref[sec:native-selective]{native PRG walkthrough}
+(page~\pageref{sec:native-selective}) builds the same effect without that runtime.
+
+Read the map in three parts:
+\begin{itemize}
+\item \textbf{Modules list}: selected objects and their segment contributions.
+  \cmd{Offs} is a segment offset, not an absolute C64 address.
+\item \textbf{Segment list}: final addresses and total sizes of code, data and
+  BSS (uninitialized RAM, not stored in the PRG).
+\item \textbf{Imports list}: which object references each symbol. Follow these
+  references to explain why an unexpected service was included.
+\end{itemize}
+
+Services bring their dependencies: file loading needs DOS and transport
+helpers; C calls may need argument adapters. Shared objects are included only
+once. Adding \cmd{ultimate\_init()} adds initialization/identity code.
+The size of \cmd{ultimate.lib} on disk is not the SDK footprint in your PRG;
+fixed-address layouts can also leave padding in a PRG, as Boing does.
+
+\begin{tip}
+Keep a map as your program grows. Link the archive, not every SDK object
+individually, and do not force-import unused services. A reference in a
+retained dispatcher or application object can keep a service linked even if
+your program never takes that branch at runtime. This is not whole-program
+dead-code analysis.
+\end{tip}
+
+The standalone blob is still a complete SDK. BASIC retains the wedge's compiled
+command set regardless of which commands a BASIC program uses. Existing demo
+and example Makefiles recheck the SDK and emit maps. \cmd{make -C guide
+check-examples} builds these examples; host link tests check the selected
+objects, not execution on Ultimate hardware.
+
+\evidence{\cmd{docs/selective-linking.md}; \cmd{guide/examples/selective.c};
+\cmd{guide/Makefile}; \cmd{tools/test\_link\_modularity.py}}
+
 \section{Recover From Common Failures}
 
 \subsection*{No device}

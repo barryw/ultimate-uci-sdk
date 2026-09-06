@@ -1,5 +1,9 @@
 # Handover: software sprites, the vsprites demo, the Boing ball, and an SDK fix
 
+> Historical development record, not current build instructions. Source paths,
+> layouts, measurements, and commands below describe the work at that time.
+> For the current cc65/ca65 workflow, see [Selective linking](selective-linking.md).
+
 Written 2026-09-02 at the end of a long session. Nothing below is committed.
 Bench: Ultimate 64 Elite at 192.168.1.62, firmware 3.15, core 1.4F, NTSC.
 

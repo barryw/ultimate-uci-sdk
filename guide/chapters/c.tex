@@ -10,6 +10,18 @@
 
 \section{How To Read The Examples}
 
+When linking with cc65, \cmd{ultimate.lib} includes only referenced service
+objects, their dependencies and any required C adapters. Including a header
+does not include every service. Selection is per object, not per function:
+other routines within a selected service and shared state remain. The same
+selective linking works for ca65 assembly. Other toolchains using the
+standalone blob receive the complete SDK; BASIC retains the wedge's compiled
+command set.
+
+The \hyperref[sec:selective-linking]{selective-linking walkthrough}
+(page~\pageref{sec:selective-linking}) gives a complete small C program, the
+build command with a map file, and how to check exactly what was linked.
+
 Every public function from \cmd{ultimate.h} and \cmd{uci.h} appears below.
 Each listing shows one complete operation within a program; calls share state
 only when the text says so. The guide build compiles every displayed call form.
@@ -331,8 +343,8 @@ the objects.
 \end{tip}
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/vsprite.s};
-\cmd{tests/emulator/sdk.suite}; \cmd{demos/vsprites/vsprites.asm};
-\cmd{demos/boing/boing.asm}}
+\cmd{tests/emulator/sdk.suite}; \cmd{demos/vsprites/vsprites.s};
+\cmd{demos/boing/boing.s}}
 
 \section{Change And Read The Current Directory}
 
@@ -945,7 +957,7 @@ clear takes one channel number.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/audio.s};
 \cmd{src/uci/wav.s}; \cmd{tests/hardware/ucitest.c};
-\cmd{demos/boing/boing.asm}}
+\cmd{demos/boing/boing.s}}
 
 \section{Inspect Network Interfaces}
 

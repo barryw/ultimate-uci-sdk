@@ -1,0 +1,76 @@
+
+.scope vic
+  ; The 47 VIC-II registers
+  SP0X = $d000
+  SP0Y = $d001
+  SP1X = $d002
+  SP1Y = $d003
+  SP2X = $d004
+  SP2Y = $d005
+  SP3X = $d006
+  SP3Y = $d007
+  SP4X = $d008
+  SP4Y = $d009
+  SP5X = $d00a
+  SP5Y = $d00b
+  SP6X = $d00c
+  SP6Y = $d00d
+  SP7X = $d00e
+  SP7Y = $d00f
+  MSIGX = $d010 ; MSB of sprite x positions
+  SCROLY = $d011
+  RASTER = $d012
+  LPENX = $d013
+  LPENY = $d014
+  SPENA = $d015 ; Sprite enable
+  SCROLX = $d016
+  YXPAND = $d017
+  VMCSB = $d018
+  VICIRQ = $d019
+  IRQMSK = $d01a
+  SPBGPR = $d01b
+  SPMC = $d01c
+  XXPAND = $d01d
+  SPSPCL = $d01e
+  SPBGCL = $d01f
+  EXTCOL = $d020
+  BGCOL0 = $d021
+  BGCOL1 = $d022
+  BGCOL2 = $d023
+  BGCOL3 = $d024
+  SPMC0 = $d025
+  SPMC1 = $d026
+  SP0COL = $d027
+  SP1COL = $d028
+  SP2COL = $d029
+  SP3COL = $d02a
+  SP4COL = $d02b
+  SP5COL = $d02c
+  SP6COL = $d02d
+  SP7COL = $d02e
+
+  CLRRAM = $d800
+  COLCLK = $d81a
+  TODTN1 = $dc08
+  CIAICR = $dc0d
+  TODTN2 = $dd08
+  CI2ICR = $dd0d
+
+  BLACK = $00
+  WHITE = $01
+  RED = $02
+  CYAN = $03
+  PURPLE = $04
+  VIOLET = $04
+  GREEN = $05
+  BLUE = $06
+  YELLOW = $07
+  ORANGE = $08
+  BROWN = $09
+  LT_RED = $0a
+  DK_GRAY = $0b
+  MED_GRAY = $0c
+  LT_GREEN = $0d
+  LT_BLUE = $0e
+  LT_GRAY = $0f
+.endscope

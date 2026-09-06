@@ -2,17 +2,18 @@
 """Small build check for the embedded SDK, PCM loops, and Simon palette."""
 
 import re
+import hashlib
 from pathlib import Path
 
 
 ROOT = Path(__file__).parent
 prg = (ROOT / "followme.prg").read_bytes()
 load = int.from_bytes(prg[:2], "little")
-symbol_text = (ROOT / "followme.sym").read_text()
+symbol_text = (ROOT / "followme.lbl").read_text()
 symbols = {
     name: int(value, 16)
-    for name, value in re.findall(
-        r"\.label ([A-Za-z][A-Za-z0-9_]*)=\$([0-9a-f]+)", symbol_text
+    for value, name in re.findall(
+        r"^al ([0-9a-fA-F]+) \.([A-Za-z][A-Za-z0-9_]*)$", symbol_text, re.M
     )
 }
 
@@ -22,10 +23,19 @@ def memory(address, length):
     return prg[offset : offset + length]
 
 
-assert memory(0x7000, 4) == bytes((0xD5, 0xC3, 0xC9, 1))
-assert memory(0x72E8, 24)[::3] == bytes((0x4C,)) * 8
+modules = set(re.findall(r"ultimate\.lib\(([^)]+)\)", (ROOT / "followme.map").read_text()))
+assert modules == {"uci_core.o", "service_common.o", "ultimate.o", "palette.o", "reu.o", "audio.o"}
 assert symbols["INPUT_TIMEOUT"] == 180
 assert symbols["PatternLength"] - symbols["GamePattern"] == 31
+# The PRG must include the gap up to the SDK's linked address, not merely
+# concatenate its two memory areas. Check a real SDK instruction at that address.
+assert memory(symbols["ultimate_init"], 3) == b"\x20" + symbols["uci_init"].to_bytes(2, "little")
+# Preserve the original sprites and screen-code text/color data across the port.
+for start, size, digest in (
+    ("Sprites", 640, "ae2e27ed53249c2a667c5a8bd54b2c9cf23ee861e0f08c428ba3d1d5d26335c8"),
+    ("StartMessage", 1137, "1581eb873374b7aa575376ffd9bc8064e7e5b580c151cda848b67a411786ad3c"),
+):
+    assert hashlib.sha256(memory(symbols[start], size)).hexdigest() == digest
 
 tones = (
     ("ToneFail", "ToneRed", 42),
@@ -53,4 +63,4 @@ for dim, bright in ((2, 10), (8, 7), (5, 13), (6, 14)):
         palette[dim * 3 : dim * 3 + 3]
     )
 
-print("ok - SDK blob, bounded game loop, five PCM loops, and glow palette")
+print("ok - selective SDK link, bounded game loop, five PCM loops, and glow palette")

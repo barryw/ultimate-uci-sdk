@@ -9,8 +9,7 @@ build/
 
 # cc65 intermediate assembly emitted next to the objects
 bindings/cc65/build/
-bindings/cc65/build-placed/
-bindings/cc65/build-banked/
+bindings/cc65/build-*/
 
 # Python bytecode
 __pycache__/
@@ -54,6 +53,9 @@ guide/*.out
 guide/*.toc
 guide/*.fls
 guide/*.fdb_latexmk
+guide/*.idx
+guide/*.ilg
+guide/*.ind
 guide/chapters/*.aux
 guide/version.tex
 
