@@ -30,8 +30,11 @@ $(LIB): FORCE
 examples/discover.prg: examples/discover.c ../include/ultimate.h $(LIB) Makefile
 	$(CL65) -t c64 -I ../include -m $(@:.prg=.map) -o $@ $< $(LIB)
 
-examples/hello-c.prg: examples/hello.c ../include/ultimate.h $(LIB) Makefile
-	$(CL65) -t c64 -I ../include -m $(@:.prg=.map) -o $@ $< $(LIB)
+examples/hello-c.o: examples/hello.c ../include/ultimate.h Makefile
+	$(CL65) -t c64 -I ../include -c -o $@ $<
+
+examples/hello-c.prg: examples/hello-c.o $(LIB) Makefile
+	$(CL65) -t c64 -m $(@:.prg=.map) -o $@ $< $(LIB)
 
 examples/hello-asm.prg: examples/hello.s ../bindings/asm/ultimate.inc $(LIB) Makefile
 	$(CL65) -t c64 --asm-include-dir ../bindings/asm -m $(@:.prg=.map) -o $@ $< $(LIB)
@@ -48,8 +51,11 @@ hardware: check-examples
 	$(MAKE) -C .. examples
 	$(PYTHON) ../tools/check_hardware_examples.py --host $(U64_HOST)
 
-examples/selective-c.prg: examples/selective.c ../include/ultimate.h $(LIB) Makefile
-	$(CL65) -t c64 -I ../include -m $(@:.prg=.map) -o $@ $< $(LIB)
+examples/selective-c.o: examples/selective.c ../include/ultimate.h Makefile
+	$(CL65) -t c64 -I ../include -c -o $@ $<
+
+examples/selective-c.prg: examples/selective-c.o $(LIB) Makefile
+	$(CL65) -t c64 -m $(@:.prg=.map) -o $@ $< $(LIB)
 
 examples/selective.o: examples/selective.s $(wildcard ../bindings/asm/*.inc) Makefile
 	$(CA65) -t c64 -I ../bindings/asm -o $@ $<
