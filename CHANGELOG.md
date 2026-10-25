@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.7.1](https://github.com/barryw/ultimate-uci-sdk/compare/8a438efcf2a86d306b3b7f4fc15732c46cd15138..v0.7.1) - 2026-10-25
+#### Refactoring
+- (**sdk**) consolidate layout, long waits, and hardware launches - ([8a438ef](https://github.com/barryw/ultimate-uci-sdk/commit/8a438efcf2a86d306b3b7f4fc15732c46cd15138)) - Barry Walker
+
+- - -
+
 ## [v0.7.0](https://github.com/barryw/ultimate-uci-sdk/compare/5e1b6507360ff9dee017c4cf056ddefa6f07c13f..v0.7.0) - 2026-10-25
 #### Features
 - (**sdk**) enable selective linking - ([8aa50f6](https://github.com/barryw/ultimate-uci-sdk/commit/8aa50f66dedc226ca4b6e85dcd2d1d7949de6448)) - Barry Walker
