@@ -11,6 +11,7 @@
 
 LATEXMK ?= latexmk
 CL65    ?= cl65
+CC65    ?= cc65
 CA65    ?= ca65
 LD65    ?= ld65
 PYTHON  ?= python3
@@ -31,7 +32,8 @@ examples/discover.prg: examples/discover.c ../include/ultimate.h $(LIB) Makefile
 	$(CL65) -t c64 -I ../include -m $(@:.prg=.map) -o $@ $< $(LIB)
 
 examples/hello-c.o: examples/hello.c ../include/ultimate.h Makefile
-	$(CL65) -t c64 -I ../include -c -o $@ $<
+	$(CC65) -t c64 -I ../include -o $(@:.o=.s) $<
+	$(CA65) -t c64 -o $@ $(@:.o=.s)
 
 examples/hello-c.prg: examples/hello-c.o $(LIB) Makefile
 	$(CL65) -t c64 -m $(@:.prg=.map) -o $@ $< $(LIB)
@@ -52,7 +54,8 @@ hardware: check-examples
 	$(PYTHON) ../tools/check_hardware_examples.py --host $(U64_HOST)
 
 examples/selective-c.o: examples/selective.c ../include/ultimate.h Makefile
-	$(CL65) -t c64 -I ../include -c -o $@ $<
+	$(CC65) -t c64 -I ../include -o $(@:.o=.s) $<
+	$(CA65) -t c64 -o $@ $(@:.o=.s)
 
 examples/selective-c.prg: examples/selective-c.o $(LIB) Makefile
 	$(CL65) -t c64 -m $(@:.prg=.map) -o $@ $< $(LIB)
@@ -78,7 +81,7 @@ guide.pdf: guide.tex version.tex ultimatesdk.sty $(wildcard chapters/*.tex) exam
 clean:
 	$(LATEXMK) -c guide.tex
 	rm -f *.aux *.log *.out *.toc *.idx *.ilg *.ind *.fls *.fdb_latexmk chapters/*.aux \
-	  examples/*.o examples/*.prg examples/*.map version.tex
+	  examples/hello-c.s examples/selective-c.s examples/*.o examples/*.prg examples/*.map version.tex
 
 distclean: clean
 	rm -f guide.pdf

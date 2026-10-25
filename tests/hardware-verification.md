@@ -1,5 +1,41 @@
 # Ultimate hardware verification
 
+## 2026-10-25 — Woodpecker-only release follow-up
+
+Machine: Ultimate 64 Elite at `192.168.1.62`, firmware `3.15`, firmware
+commit `4402a806`, FPGA `126`, core `1.50`. The guide build now keeps tracked
+assembly sources intact while compiling C examples. The hardware test display
+string was corrected for the C64 character map. GitHub Actions was disabled;
+Woodpecker now installs ACME and builds the hardware test program.
+
+Exact commands (each shell command was prefixed with `rtk`):
+
+```sh
+make unittest
+make hardware
+make -B -C tests/hardware NET_PEER=192.168.1.197:6464 HTTP_PEER=192.168.1.197:8099
+python3 tests/hardware/peers.py --bind 192.168.1.197
+python3 -u tests/hardware/hwtest.py --host 192.168.1.62 --prg tests/hardware/ucitest.prg
+make -C guide check-examples
+python3 -u tools/check_hardware_examples.py --host 192.168.1.62
+```
+
+Host: 128 unit tests passed; hardware program and guide examples compiled.
+Ultimate matrix: **7/7 scenarios passed, 0 failed**. UCI-disabled path returned
+the expected one failed signature check. Enabled UCI: 161 checks, 156 passed,
+5 skipped. REU size and coexistence: 181 each, 177 passed, 4 skipped. IEC:
+161 checks, 156 passed, 5 skipped; target `$05` unavailable with IEC Drive
+`Disabled`. Audio: 194 checks, 190 passed, 4 skipped. Turbo: 177 checks, 173
+passed, 4 skipped. TCP, UDP truncation and follow-up datagram, and HTTP peer
+paths ran. Guide and SDK examples: **17/17 runs passed** across UCI enabled,
+UCI disabled, and turbo settings; no failed runs.
+
+Both runners read settings first and restored them after testing. Saved SDK
+settings: Command Interface `Enabled`, IEC Drive `UCI Only`, REU `Disabled`/
+`2 MB`, Ultimate Audio `Disabled`, Turbo `Off`. No firmware flash or persistent
+settings write. Border color checks read `$D020`; HDMI color appearance and
+audible sound still need human confirmation.
+
 ## 2026-10-25 — firmware alignment
 
 Machine: Ultimate 64 Elite at `192.168.1.62`, firmware string `3.15`, firmware

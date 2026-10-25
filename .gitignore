@@ -58,6 +58,8 @@ guide/*.ilg
 guide/*.ind
 guide/chapters/*.aux
 guide/version.tex
+guide/examples/hello-c.s
+guide/examples/selective-c.s
 
 # Release bundles are produced from a clean checkout by Woodpecker.
 dist/

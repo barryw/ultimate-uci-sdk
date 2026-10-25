@@ -1444,7 +1444,7 @@ after_write:
                     }
                     if (err == ULTIMATE_OK && got == 4)
                         skip("net-udp-truncation-reported",
-                             "firmware does not report dropped UDP bytes");
+                             "firmware does not report dropped udp bytes");
                     else
                         check("net-udp-truncation-reported",
                               ULTIMATE_ERR_TRUNCATED, err);
