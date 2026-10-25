@@ -2,6 +2,19 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.7.0](https://github.com/barryw/ultimate-uci-sdk/compare/5e1b6507360ff9dee017c4cf056ddefa6f07c13f..v0.7.0) - 2026-10-25
+#### Features
+- (**sdk**) enable selective linking - ([8aa50f6](https://github.com/barryw/ultimate-uci-sdk/commit/8aa50f66dedc226ca4b6e85dcd2d1d7949de6448)) - Barry Walker
+- (**sdk**) add reusable vsprite API - ([5e1b650](https://github.com/barryw/ultimate-uci-sdk/commit/5e1b6507360ff9dee017c4cf056ddefa6f07c13f)) - Barry Walker
+#### Bug Fixes
+- (**ci**) restore tracked demo after build - ([1550cf4](https://github.com/barryw/ultimate-uci-sdk/commit/1550cf43edfce5993d8310f9f2ac27e49ed22796)) - Barry Walker
+- (**ci**) run release checks on Woodpecker only - ([34326ab](https://github.com/barryw/ultimate-uci-sdk/commit/34326ab20cfe5919a32df3332a63d54ec0de4ce8)) - Barry Walker
+- (**docs**) preserve assembly source in selective build - ([b649982](https://github.com/barryw/ultimate-uci-sdk/commit/b6499827f46e7f9f964c15c06c48718ad5e03a88)) - Barry Walker
+- (**guide**) preserve assembly example sources - ([5ec72f5](https://github.com/barryw/ultimate-uci-sdk/commit/5ec72f58326b2baa59e3b6dd7b4976d661e7ca17)) - Barry Walker
+- (**sdk**) align UCI behavior with current firmware - ([9d4c984](https://github.com/barryw/ultimate-uci-sdk/commit/9d4c9841916f4bc5393bf03fca546e2fe0560f2c)) - Barry Walker
+
+- - -
+
 ## [v0.6.2](https://github.com/barryw/ultimate-uci-sdk/compare/0c7d558c8356d722cee827890f2067ced8631b97..v0.6.2) - 2026-09-03
 #### Documentation
 - (**boing**) remove video capture - ([557cc75](https://github.com/barryw/ultimate-uci-sdk/commit/557cc7552776bf51743b4a402ba19983b054a32b)) - Barry Walker
