@@ -68,6 +68,8 @@ steps:
       - git config --global user.email "ci@woodpecker.local"
       - git config --global --add safe.directory "$CI_WORKSPACE"
       - git remote set-url origin "https://x-access-token:$GH_TOKEN@github.com/$CI_REPO.git"
+      # CI rebuilds tracked Boing PRG with fallback audio when original PCM is absent.
+      - git restore -- demos/boing/boing.prg
       - 'VERSION=$(cog bump --auto --dry-run) && echo "Releasing $VERSION"'
       - cog bump --auto --skip-ci
       - 'VERSION=$(git describe --tags --abbrev=0) && make -B release VERSION="$VERSION"'
