@@ -14,6 +14,7 @@ REPO = Path(__file__).resolve().parents[1]
 BINDING = REPO / "bindings/cc65"
 LIB = BINDING / "build/ultimate.lib"
 TRANSPORT = {"uci_core.o", "service_common.o"}
+LONG_WAIT = {"long_wait.o"}
 
 # Expressions are never executed. These deliberately omit initialization so
 # the map measures each operation's dependencies, not application startup.
@@ -21,13 +22,13 @@ CASES = (
     ("palette", "ultimate_palette_set_color(0, 0, 0, 0)",
      "ultimate_palette_set_color", TRANSPORT | {"palette.o"}, {"cc65_palette.o"}),
     ("net", 'ultimate_net_connect("localhost", 80, 0)',
-     "ultimate_net_connect", TRANSPORT | {"net.o"},
+     "ultimate_net_connect", TRANSPORT | LONG_WAIT | {"net.o"},
      {"cc65_net.o", "cc65_helpers.o"}),
     ("http", 'ultimate_http_get("http://localhost/", 0, 0, 0)',
-     "ultimate_http_get", TRANSPORT | {"http.o"},
+     "ultimate_http_get", TRANSPORT | LONG_WAIT | {"http.o"},
      {"cc65_http.o", "cc65_helpers.o"}),
     ("reu", "ultimate_reu_fetch(0, 0, 1)",
-     "ultimate_reu_fetch", TRANSPORT | {"reu.o"}, {"cc65_reu.o"}),
+     "ultimate_reu_fetch", TRANSPORT | LONG_WAIT | {"reu.o"}, {"cc65_reu.o"}),
     ("file", 'ultimate_load("test.prg", 0)',
      "ultimate_load", TRANSPORT | {"file.o", "dos.o"},
      {"cc65_file.o", "cc65_helpers.o"}),
@@ -99,7 +100,7 @@ class LinkModularity(unittest.TestCase):
             "examples/cc65": ("all", {
                 "identify": {"ultimate_strerror"},
                 "sid-info": {"ultimate_strerror"},
-                "files": {"dos", "dosinfo", "clock", "control", "reu", "ultimate_strerror"},
+                "files": {"dos", "dosinfo", "clock", "control", "reu", "long_wait", "ultimate_strerror"},
             }),
             "guide": ("check-examples", {
                 "examples/discover": set(), "examples/hello-asm": set(),
@@ -109,7 +110,7 @@ class LinkModularity(unittest.TestCase):
                 "build/visualizer": {"palette", "turbo"},
             }),
             "demos/pcm-visualizer": ("all", {
-                "pcm-visualizer": {"palette", "dos", "turbo", "reu", "audio"},
+                "pcm-visualizer": {"palette", "dos", "turbo", "reu", "long_wait", "audio"},
             }),
         }
         for directory, (target, maps) in consumers.items():
@@ -135,9 +136,9 @@ class LinkModularity(unittest.TestCase):
 
     def test_native_demos_select_only_required_services(self):
         demos = (
-            ("boing", "boing", TRANSPORT | {"ultimate.o", "turbo.o", "reu.o", "audio.o", "vsprite.o"}),
+            ("boing", "boing", TRANSPORT | LONG_WAIT | {"ultimate.o", "turbo.o", "reu.o", "audio.o", "vsprite.o"}),
             ("vsprites", "vsprites", {"turbo.o", "vsprite.o"}),
-            ("follow-me", "followme", TRANSPORT | {"ultimate.o", "palette.o", "reu.o", "audio.o"}),
+            ("follow-me", "followme", TRANSPORT | LONG_WAIT | {"ultimate.o", "palette.o", "reu.o", "audio.o"}),
         )
         for directory, stem, expected in demos:
             with self.subTest(demo=directory):

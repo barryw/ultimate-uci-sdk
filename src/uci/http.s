@@ -63,7 +63,7 @@
         .include "uci_zp.inc"
 
         .import uci_exec, uci_devcode
-        .import uci_get_timeout_a, uci_set_timeout_a
+        .import ult_exec_long
         .import ult_req, ult_req_clear, ult_invalid, ult_have_buf
         .import ult_buf, ult_buflen
         .import ult_url, ult_http, ult_body, ult_httplen
@@ -229,15 +229,7 @@ ultimate_http_exchange:
 
         ; A request contains a name lookup and a connection, and neither fits
         ; the timeout byte. See the file header.
-        jsr uci_get_timeout_a
-        pha
-        lda #UCI_TIMEOUT_FOREVER
-        jsr uci_set_timeout_a
-        jsr http_exec
-        tax
-        pla
-        jsr uci_set_timeout_a
-        txa
+        jsr ult_exec_long
 
         ; Whatever the result, what did arrive is worth reporting: a truncated
         ; reply still filled the buffer, and a device error can still carry the

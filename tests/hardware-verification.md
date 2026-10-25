@@ -1,5 +1,54 @@
 # Ultimate hardware verification
 
+## 2026-10-25 — SDK architecture consolidation
+
+Machine: Ultimate 64 Elite at `192.168.1.62`, firmware `3.15`, commit
+`4402a806`, FPGA `126`, core `1.50`. Host peer: `192.168.1.197`.
+Each command below used `rtk` prefix and hardware runs were serial:
+
+```sh
+make unittest
+make emulator
+make protocol
+make -B release VERSION=v0.7.1
+make -B -C tests/hardware NET_PEER=192.168.1.197:6464 HTTP_PEER=192.168.1.197:8099
+python3 -u tests/hardware/peers.py --bind 192.168.1.197
+python3 -u tests/hardware/hwtest.py --host 192.168.1.62 --prg tests/hardware/ucitest.prg --verbose
+make boing-run U64_HOST=192.168.1.62
+make vsprites-run U64_HOST=192.168.1.62
+make -C demos/follow-me hardware U64_HOST=192.168.1.62
+make -C guide hardware U64_HOST=192.168.1.62
+make demo-run U64_HOST=192.168.1.62
+make demo-run U64_HOST=192.168.1.62
+make basic-run U64_HOST=192.168.1.62
+```
+
+Host: 133 unit tests passed; emulator default, placed, and blob suites passed.
+Protocol regeneration left tracked outputs unchanged; release package built.
+Ultimate matrix: **7/7 scenarios passed**, including UCI unavailable, REU,
+audio, turbo, TCP, UDP, and HTTP peer paths. Enabled UCI: 161 checks, 156 passed,
+5 skipped. REU size and coexistence: 181 each, 177 passed, 4 skipped. IEC:
+161 checks, 156 passed, 5 skipped; target `$05` unavailable with IEC Drive
+`Disabled`. Audio: 194 checks, 190 passed, 4 skipped. Turbo: 177 checks, 173
+passed, 4 skipped. UCI disabled returned its expected failed signature check.
+Peer logs showed the HTTP requests. Matrix saved Command Interface `Enabled`,
+IEC Drive `UCI Only`, REU `Disabled`/`2 MB`, Ultimate Audio `Disabled`, Turbo
+`Off`; runner restored all settings. No flash write.
+
+Boing: 59.8 fps, seven bounces, turbo/REU/audio flags set, SDK result 0.
+Vertical sprites: 39 sprites at 59.8 fps. Follow Me: PCM/palette and SID
+fallback keyboard, answer, score, timeout, and exit checks passed. Guide
+hardware runner passed its UCI enabled and unavailable cases. BASIC wedge:
+41/41 checks passed from PRG and 41/41 from cartridge; settings restored.
+
+SID visualizer `make demo-run` failed twice at the existing 45 fps minimum:
+44.9 then 38.0 fps. Previous firmware-alignment run also failed at 41.2 and
+43.0 fps with the unchanged runner. Both new runs passed their startup, SID
+address, animation, render, and music-tick checks before the frame-rate gate;
+later palette and key checks did not run. Runner restored settings on failure.
+No human HDMI color or audible sound confirmation was performed; status and
+memory checks alone do not establish those properties.
+
 ## 2026-10-25 — Woodpecker-only release follow-up
 
 Machine: Ultimate 64 Elite at `192.168.1.62`, firmware `3.15`, firmware

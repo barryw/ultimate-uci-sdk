@@ -1,9 +1,7 @@
 ; uci_vars.inc - sizes of the shared variable block's buffers.
 ;
-; The block itself is laid out in src/uci/uci_core.s, twice: once as BSS and
-; once as equates from UCI_VARS. The sizes are here rather than there because
-; the modules that use the buffers need them too, and two spellings of the same
-; number is how a placed build stops matching a linked one.
+; One field list in src/uci/uci_core.s produces BSS or equates from UCI_VARS.
+; Buffer sizes live here because other modules use them too.
 ;
 ; SPDX-License-Identifier: MIT
 

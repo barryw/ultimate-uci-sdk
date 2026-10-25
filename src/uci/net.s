@@ -53,7 +53,7 @@
         .include "uci_zp.inc"
 
         .import uci_exec, uci_last_code
-        .import uci_get_timeout_a, uci_set_timeout_a
+        .import ult_exec_long
         .import ult_req, ult_req_clear, ult_invalid, ult_have_buf
         .import ult_buf, ult_buflen
         .import ult_sock, ult_socklen, ult_iface, ult_port
@@ -302,15 +302,8 @@ net_open:
         lda #$01
         sta ult_req + UCI_REQ_DATAMAX
 
-        jsr uci_get_timeout_a
-        pha
-        lda #UCI_TIMEOUT_FOREVER
-        jsr uci_set_timeout_a
-        jsr net_exec
-        tax                             ; the result, across the restore
-        pla
-        jsr uci_set_timeout_a
-        txa
+        jsr ult_exec_long
+        tax                             ; keep result across failed-handle reset
 
         cmp #ULTIMATE_OK
         beq @check

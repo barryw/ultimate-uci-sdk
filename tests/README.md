@@ -138,6 +138,8 @@ still decoded and printed when something fails.
 
 Every setting it touches is read first and restored afterwards, including on
 Ctrl-C. Nothing is written to the Ultimate's flash.
+PRGs above the REST runner's 16 KB inline limit use a unique file in `/Temp`.
+The driver deletes that scratch file after launch, including on launch failure.
 
 To include real TCP round trips and HTTP responses, start the disposable peers
 in a second terminal. Use your **computer's LAN IP** for `--bind` and both peer

@@ -4,40 +4,24 @@
     python3 hwtest.py --host 192.168.1.62 [--prg boing.prg]
 
 The PRG is over the REST runner's 16 KB body limit (SDK code, frames, background
-and sample inside), so it goes to /Temp over FTP and runs from there. Then the
+and sample inside), so the shared launcher uses disposable /Temp storage. Then the
 status block at $033C is read back: frame rate, feature flags, bounces and the
 last SDK result, and x/y/rotation every half second for eight seconds.
 """
 import argparse
-import ftplib
-import io
 import pathlib
 import sys
 import time
-import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 from u64_settings import Ultimate, require_settings, restore_settings  # noqa: E402
 
 STATUS = 0x033C
-REMOTE = "/Temp/boing.prg"
 AUDIO = ("C64 and Cartridge Settings", "Map Ultimate Audio $DF20-DFFF")
 REU = ("C64 and Cartridge Settings", "RAM Expansion Unit")
 TURBO = ("U64 Specific Settings", "Turbo Control")
 UCI = ("C64 and Cartridge Settings", "Command Interface")
-
-
-def upload(host, path):
-    data = open(path, "rb").read()
-    f = ftplib.FTP(host, timeout=30)
-    f.login()
-    try:
-        f.cwd("/Temp")
-        f.storbinary("STOR boing.prg", io.BytesIO(data))
-    finally:
-        f.quit()
-    return len(data)
 
 
 def status(u):
@@ -57,11 +41,9 @@ def main():
         TURBO: "U64 Turbo Registers",
     })
     try:
-        print("uploaded %d bytes to %s" % (upload(args.host, args.prg), REMOTE))
         u._request("PUT", "/machine:reset")
         time.sleep(2.0)
-        req = urllib.request.Request(u.base + "/runners:run_prg?file=" + REMOTE, method="PUT")
-        urllib.request.urlopen(req, timeout=15).read()
+        u.run_prg(args.prg)
         deadline = time.time() + 15
         while time.time() < deadline and status(u)["magic"] != b"BONG":
             time.sleep(0.2)

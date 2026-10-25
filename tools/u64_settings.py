@@ -29,18 +29,23 @@ Part of the Ultimate SDK. SPDX-License-Identifier: MIT
 """
 
 import argparse
+import ftplib
+import io
 import json
+import posixpath
 import subprocess
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 
 class Ultimate:
-    """Minimal client for the Ultimate's REST API (v1)."""
+    """Minimal Ultimate REST (v1) client with FTP staging for large PRGs."""
 
     def __init__(self, host, port=80, timeout=15):
+        self.host = host
         self.base = "http://%s:%d/v1" % (host, port)
         self.timeout = timeout
 
@@ -82,8 +87,27 @@ class Ultimate:
     def run_prg(self, path):
         with open(path, "rb") as fh:
             payload = fh.read()
-        self._request("POST", "/runners:run_prg", data=payload,
-                      content_type="application/octet-stream")
+        if len(payload) <= 16 * 1024:
+            self._request("POST", "/runners:run_prg", data=payload,
+                          content_type="application/octet-stream")
+            return
+
+        name = "sdk-" + uuid.uuid4().hex + ".prg"
+        with ftplib.FTP(self.host, timeout=30) as ftp:
+            ftp.login()
+            if name.casefold() in {posixpath.basename(p).casefold()
+                                   for p in ftp.nlst("/Temp")}:
+                raise FileExistsError("/Temp/" + name)
+            ftp.cwd("/Temp")
+            try:
+                ftp.storbinary("STOR " + name, io.BytesIO(payload))
+                self._request("PUT", "/runners:run_prg?file=/Temp/" + name)
+            finally:
+                try:
+                    ftp.delete(name)
+                except ftplib.error_perm:
+                    if name.casefold() in {p.casefold() for p in ftp.nlst()}:
+                        raise
 
     def run_crt(self, path):
         """Load a .crt into cartridge ROM and start the machine on it.
@@ -111,12 +135,19 @@ def require_settings(u, requirements):
     value} for exactly the settings this call changed - what the caller
     must restore, and nothing else.
     """
+    original = read_settings(u, requirements)
     changed = {}
-    for key, desired in requirements.items():
-        current = u.get_setting(*key)
-        if str(current) != str(desired):
-            u.set_setting(key[0], key[1], desired)
-            changed[key] = current
+    try:
+        for key, desired in requirements.items():
+            current = original[key]
+            if str(current) != str(desired):
+                changed[key] = current  # A failed write may still have applied.
+                u.set_setting(key[0], key[1], desired)
+    except BaseException:
+        restore_settings(u, changed,
+                         warn=lambda msg: print("# WARNING: " + msg,
+                                                file=sys.stderr))
+        raise
     return changed
 
 

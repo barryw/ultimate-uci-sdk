@@ -57,6 +57,8 @@ objects and their dependencies, not the entire archive. Shared request
 helpers live in `src/uci/service_common.s` so they do not pull in identity
 and detection. C adapter helpers shared across services have their own object;
 service-specific helpers stay with their service's adapters.
+Long network, HTTP, and REU requests share `src/uci/long_wait.s`, linked only
+when one of those services needs it. It restores the caller's timeout.
 
 This is service-level selection, not function-level dead-code elimination.
 The shared transport/state object is still included when a selected service

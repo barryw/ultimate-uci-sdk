@@ -24,7 +24,7 @@ def memory(address, length):
 
 
 modules = set(re.findall(r"ultimate\.lib\(([^)]+)\)", (ROOT / "followme.map").read_text()))
-assert modules == {"uci_core.o", "service_common.o", "ultimate.o", "palette.o", "reu.o", "audio.o"}
+assert modules == {"uci_core.o", "service_common.o", "long_wait.o", "ultimate.o", "palette.o", "reu.o", "audio.o"}
 assert symbols["INPUT_TIMEOUT"] == 180
 assert symbols["PatternLength"] - symbols["GamePattern"] == 31
 # The PRG must include the gap up to the SDK's linked address, not merely

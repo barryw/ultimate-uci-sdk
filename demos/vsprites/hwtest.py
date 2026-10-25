@@ -3,8 +3,7 @@
 
     python3 hwtest.py --host 192.168.1.62 --prg vsprites.prg [--png shot.png]
 
-The self-contained PRG goes to the Ultimate's /Temp RAM disk over FTP and
-runs from there with runners:run_prg?file=. The demo publishes a status block in the
+The shared launcher stages large PRGs in disposable /Temp storage. The demo publishes a status block in the
 cassette buffer; this reads it back over REST. Turbo Control is required to be
 "U64 Turbo Registers" for the run and put back afterwards, because the check
 is that the demo reaches the frame rate and vsprite count only turbo allows.
@@ -12,13 +11,10 @@ is that the demo reaches the frame rate and vsprite count only turbo allows.
 Part of the Ultimate SDK. SPDX-License-Identifier: MIT
 """
 import argparse
-import ftplib
-import io
 import pathlib
 import struct
 import sys
 import time
-import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -29,7 +25,6 @@ MAGIC = b"VSPR"
 TURBO = ("U64 Specific Settings", "Turbo Control")
 BITMAP = {0: 0x4000, 1: 0xE000}
 COLOURS = [0x00, 0x0B, 0x0E, 0x01]
-REMOTE = "/Temp/vsprites.prg"
 
 
 class Status:
@@ -46,24 +41,6 @@ class Status:
 
 def status(u):
     return Status(u.readmem(STATUS, 17))
-
-
-def upload(host, path):
-    data = open(path, "rb").read()
-    f = ftplib.FTP(host, timeout=30)
-    f.login()
-    try:
-        f.cwd("/Temp")
-        f.storbinary("STOR " + REMOTE.rsplit("/", 1)[1], io.BytesIO(data))
-    finally:
-        f.quit()
-    return len(data)
-
-
-def run_from_file(u, remote):
-    req = urllib.request.Request(u.base + "/runners:run_prg?file=" + remote, method="PUT")
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return r.read()
 
 
 def wait_running(u, timeout=20):
@@ -117,10 +94,9 @@ def main():
     changed = {}
     try:
         changed = require_settings(u, {TURBO: "U64 Turbo Registers"})
-        print("uploaded %d bytes to %s" % (upload(args.host, args.prg), REMOTE))
         u._request("PUT", "/machine:reset")
         time.sleep(2.0)
-        run_from_file(u, REMOTE)
+        u.run_prg(args.prg)
         s = wait_running(u)
         print("running: frame = %d CIA cycles, $d031 = $%02x" % (s.frame, s.turbo))
         time.sleep(4.0)                      # let the vsprite count settle

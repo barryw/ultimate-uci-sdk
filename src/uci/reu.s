@@ -53,7 +53,7 @@
         .include "uci_protocol.inc"
         .include "uci_seg.inc"
 
-        .import uci_exec, uci_get_timeout_a, uci_set_timeout_a
+        .import ult_exec_long
         .import ult_req, ult_req_clear
         .import ult_addr, ult_reu, ult_reulen, ult_scratch
 
@@ -407,17 +407,4 @@ reu_dos_cmd:
         ; byte-sized polling budget represents only milliseconds. The firmware
         ; owns the operation once issued, so wait for its result and restore
         ; the caller's budget exactly as the network services do.
-        jsr uci_get_timeout_a
-        pha
-        lda #UCI_TIMEOUT_FOREVER
-        jsr uci_set_timeout_a
-        lda #<ult_req
-        ldx #>ult_req
-        jsr uci_exec
-        tax
-        pla
-        jsr uci_set_timeout_a
-        txa
-        ldx #$00
-        ora #$00                ; N and Z from A, not the ldx
-        rts
+        jmp ult_exec_long

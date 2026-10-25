@@ -567,6 +567,33 @@ suites {
       assert([net_iface] == $00, "no interface count was invented")
     }
 
+    test("sdk-net-open-restores-timeout", "an unavailable network target leaves the caller's budget intact") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [reply0] = $61
+      [reply1] = $00
+      [timeout_val] = $2f
+      jsr([t_set_timeout], stop_on_rts = true, fail_on_brk = true)
+      [result] = $ff
+      jsr([t_net_connect], stop_on_rts = true, fail_on_brk = true)
+      assert([result] != $00, "the absent target did not open a socket")
+      assert([net_sock] == $ff, "no handle was left behind")
+      jsr([t_get_timeout], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $2f, "the caller's timeout budget is restored")
+    }
+
+    test("sdk-http-exchange-restores-timeout", "an unavailable HTTP target leaves the caller's budget intact") {
+      jsr([boot], stop_on_rts = true, fail_on_brk = true)
+      jsr([t_init], stop_on_rts = true, fail_on_brk = true)
+      [timeout_val] = $2f
+      jsr([t_set_timeout], stop_on_rts = true, fail_on_brk = true)
+      [result] = $ff
+      jsr([t_http_exchange], stop_on_rts = true, fail_on_brk = true)
+      assert([result] != $00, "the absent target did not exchange")
+      jsr([t_get_timeout], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $2f, "the caller's timeout budget is restored")
+    }
+
     ; ---------------------------------------------------------------- identity
 
     test("sdk-identify", "ultimate_identify reads the DOS version string") {

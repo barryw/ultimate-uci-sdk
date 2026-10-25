@@ -57,12 +57,13 @@
         .import ultimate_drive_info, ultimate_ramdisk_info
         .import ctrl_drvinfo_reply, ult_req
         .import ultimate_net_setip
+        .import ultimate_http_exchange
         .import ultimate_http_body, ultimate_http_body_free
         .import ultimate_http_body_clear, ultimate_http_body_up
         .import ultimate_http_body_int, ultimate_http_body_bool
         .import ultimate_http_body_string, ultimate_http_body_object
         .import ultimate_http_body_array, ultimate_http_body_binary
-        .import ult_arg2, ult_stage, ult_val, ult_body
+        .import ult_arg2, ult_stage, ult_val, ult_http, ult_body
         .import ult_attrib, ult_addr, ult_max, ult_end, ult_num
         .import ultimate_load, ultimate_bload, ultimate_save
         .import ultimate_reu_available, ultimate_reu_stash, ultimate_reu_fetch
@@ -103,6 +104,7 @@
         .export t_drive_enable, t_drive_power
         .export t_drive_info, t_ramdisk_info, t_drvinfo_reply, drvinfo_len
         .export t_net_setip
+        .export t_http_exchange
         .export t_body, t_body_free, t_body_clear, t_body_up
         .export t_body_int, t_body_bool, t_body_string
         .export t_body_object, t_body_array, t_body_binary
@@ -772,6 +774,24 @@ t_net_setip:
         lda #>reply
         sta ult_buf + 1
         jsr ultimate_net_setip
+        sta result
+        rts
+
+; An exchange reaches the long timeout path even when HTTP is unavailable.
+t_http_exchange:
+        lda #$01
+        sta ult_http
+        lda #HTTP_BODY_NONE
+        sta ult_body
+        lda #<reply
+        sta ult_buf
+        lda #>reply
+        sta ult_buf + 1
+        lda #$40
+        sta ult_buflen
+        lda #$00
+        sta ult_buflen + 1
+        jsr ultimate_http_exchange
         sta result
         rts
 

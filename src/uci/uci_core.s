@@ -77,184 +77,93 @@
 ; Enough to hold "HTTP/1.1 NNN" and a little more; see uci_stat below.
 UCI_STAT_KEEP = 16
 
-.ifdef UCI_VARS
-
-uci_timeout     = UCI_VARS + 0  ; budget, in units of 256 status polls
-uci_ready       = UCI_VARS + 1  ; uci_init has succeeded
-uci_devcode     = UCI_VARS + 2  ; last raw device status code (word)
-uci_trunc       = UCI_VARS + 4  ; the reply did not fit the caller's buffer
-uci_cnt         = UCI_VARS + 5  ; 16-bit loop counter
-uci_tmp         = UCI_VARS + 7  ; 16-bit scratch
-uci_stat        = UCI_VARS + 9  ; captured status prefix, UCI_STAT_KEEP bytes
-uci_statlen     = UCI_VARS + 25
-uci_dec_target  = UCI_VARS + 26 ; parameters for uci_decode, which takes more
-uci_dec_ptr     = UCI_VARS + 27 ; than fits in registers
-uci_dec_len     = UCI_VARS + 29
-
-; --- service layer (src/uci/ultimate.s) ---
-; One block for the whole SDK, so a cartridge places one thing, not two.
-ult_up          = UCI_VARS + 30 ; ultimate_init has succeeded
-ult_buf         = UCI_VARS + 31 ; caller buffer for identify / model
-ult_buflen      = UCI_VARS + 33
-ult_outlen      = UCI_VARS + 35 ; where to write the length, 0 for nowhere
-ult_caps        = UCI_VARS + 37 ; caller capability block
-ult_scratch     = UCI_VARS + 39 ; probe buffer, see ultimate.s for why 16
-ult_req         = UCI_VARS + 55 ; the service layer's own request block
-ult_probe       = UCI_VARS + 55 + UCI_REQ_SIZE  ; capability probe cursor
-
-; --- caller-facing request block (bindings/asm/ultimate_asm.s) ---
-uci_req         = UCI_VARS + 56 + UCI_REQ_SIZE
-
-; Appended after uci_req rather than beside the other service variables, so that
-; the addresses bindings/blob/README.md publishes stay where they are. Anything
-; added later goes on the end for the same reason.
-ult_color       = UCI_VARS + 56 + 2 * UCI_REQ_SIZE  ; index, r, g, b for the palette
-uci_more        = UCI_VARS + 60 + 2 * UCI_REQ_SIZE  ; another reply block follows
-
-; --- dos service (src/uci/dos.s) ---
-ult_attrib      = UCI_VARS + 61 + 2 * UCI_REQ_SIZE  ; open's mask in, readdir's out
-ult_dir         = UCI_VARS + 62 + 2 * UCI_REQ_SIZE  ; where a directory walk is up to
-ult_num         = UCI_VARS + 63 + 2 * UCI_REQ_SIZE  ; seek's dword, read's word
-
-; --- file service (src/uci/file.s) ---
-; ult_fargs is the SoftwareIEC argument block, laid out per command, and
-; ult_addr is the address field inside it rather than a copy of it - so a caller
-; that sets the address has already filled the argument.
-ult_fargs       = UCI_VARS + 67 + 2 * UCI_REQ_SIZE  ; sec, verify, addr16, unused16
-ult_addr        = UCI_VARS + 69 + 2 * UCI_REQ_SIZE  ; = ult_fargs + 2
-ult_max         = UCI_VARS + 73 + 2 * UCI_REQ_SIZE  ; bload's limit, save's length
-ult_end         = UCI_VARS + 75 + 2 * UCI_REQ_SIZE  ; after the last byte loaded
-ult_got         = UCI_VARS + 77 + 2 * UCI_REQ_SIZE  ; bytes the last chunk moved
-
-; --- reu service (src/uci/reu.s) ---
-ult_reu         = UCI_VARS + 79 + 2 * UCI_REQ_SIZE  ; REU address, 24 bits of 32
-ult_reulen      = UCI_VARS + 83 + 2 * UCI_REQ_SIZE  ; and the length beside it
-
-; --- net service (src/uci/net.s) ---
-; ult_socklen follows ult_sock because READ_SOCKET wants <handle> <len:16> as
-; three consecutive bytes on the wire, and they are sent straight out of here.
-ult_sock        = UCI_VARS + 87 + 2 * UCI_REQ_SIZE  ; socket handle, in and out
-ult_socklen     = UCI_VARS + 88 + 2 * UCI_REQ_SIZE  ; buffer size in, bytes moved out
-ult_iface       = UCI_VARS + 90 + 2 * UCI_REQ_SIZE  ; interface index in, count out
-ult_port        = UCI_VARS + 91 + 2 * UCI_REQ_SIZE  ; TCP or UDP port, little-endian
-
-; --- http service (src/uci/http.s) ---
-; ult_body follows ult_http because an exchange sends the two as one pair.
-ult_url         = UCI_VARS + 93 + 2 * UCI_REQ_SIZE  ; URL, or a header line
-ult_http        = UCI_VARS + 95 + 2 * UCI_REQ_SIZE  ; verb in, header handle out
-ult_body        = UCI_VARS + 96 + 2 * UCI_REQ_SIZE  ; body handle, or HTTP_BODY_NONE
-ult_httplen     = UCI_VARS + 97 + 2 * UCI_REQ_SIZE  ; reply bytes stored
-
-; --- second string, and the staging buffer ---
-; Appended on the end, like everything before them, so that the offsets
-; bindings/blob/README.md publishes do not move.
-ult_arg2        = UCI_VARS + 99 + 2 * UCI_REQ_SIZE  ; a second caller string
-ult_stage       = UCI_VARS + 101 + 2 * UCI_REQ_SIZE ; ULT_STAGE_SIZE bytes
-ult_stagelen    = UCI_VARS + 101 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE
-ult_val         = UCI_VARS + 102 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE
-
-; --- Ultimate Audio (src/uci/audio.s) ---
-ult_audio_up    = UCI_VARS + 106 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE
-
-.assert (107 + ULT_STAGE_SIZE + 2 * UCI_REQ_SIZE) = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
-
-        .export uci_req
-
-.else
-
+; One field list owns both layouts. The logical offset includes the optional
+; caller request block, which has separate BSS ownership in ultimate_asm.s.
+uci_layout_offset .set 0
+.ifndef UCI_VARS
         .bss
-
-uci_timeout:    .res 1
-uci_ready:      .res 1
-uci_devcode:    .res 2
-uci_trunc:      .res 1
-uci_cnt:        .res 2
-uci_tmp:        .res 2
-
-; The status prefix, always captured whatever the caller asked for. The SDK
-; decides which encoding a status is in by looking at exactly these bytes, so
-; decoding from a caller buffer that might be shorter would change the answer.
-;
-; **Four bytes was enough until it was not.** "NNN " is the widest *numeric*
-; prefix, but an HTTP exchange answers with the response line itself, and
-; "HTTP/1.1 404 " is thirteen bytes before the code is even complete. With four
-; captured, every successful request decoded as the binary form and came back
-; as a device error - and the fault was invisible from a unit test, because
-; testing uci_decode directly hands it a full-length buffer and never goes
-; through this capture at all.
-uci_stat:       .res UCI_STAT_KEEP
-uci_statlen:    .res 1
-
-uci_dec_target: .res 1
-uci_dec_ptr:    .res 2
-uci_dec_len:    .res 1
-
-; --- service layer (src/uci/ultimate.s) ---
-ult_up:         .res 1
-ult_buf:        .res 2
-ult_buflen:     .res 2
-ult_outlen:     .res 2
-ult_caps:       .res 2
-ult_scratch:    .res 16
-ult_req:        .res UCI_REQ_SIZE
-ult_probe:      .res 1
-
-; --- palette service (src/uci/palette.s) ---
-ult_color:      .res 4          ; index, r, g, b
-
-; Set by the data phase: another reply block follows. See uci_exec_first.
-uci_more:       .res 1
-
-; --- dos service (src/uci/dos.s) ---
-ult_attrib:     .res 1          ; open's DOS_FA_* mask in, readdir's attributes out
-ult_dir:        .res 1          ; where a directory walk is up to
-ult_num:        .res 4          ; seek's 32-bit position, read's 16-bit length
-
-; --- file service (src/uci/file.s) ---
-; ult_addr is the address field inside ult_fargs rather than a copy of it, so a
-; caller that sets the address has already filled the SoftwareIEC argument.
-ult_fargs:      .res 2          ; sec, verify
-ult_addr:       .res 2          ; ...the address field, which callers write
-                .res 2          ; ...and the unused pair LOAD_SU still needs
-ult_max:        .res 2
-ult_end:        .res 2
-ult_got:        .res 2
-
-; --- reu service (src/uci/reu.s) ---
-; One block, because the DOS REU pair takes its two arguments as eight
-; consecutive bytes on the wire and the DMA half wants the same two numbers.
-ult_reu:        .res 4          ; REU address, 24 bits used of 32
-ult_reulen:     .res 4          ; how many bytes; the DMA half uses the low word
-
-; --- net service (src/uci/net.s) ---
-; ult_socklen follows ult_sock because READ_SOCKET wants <handle> <len:16> as
-; three consecutive bytes on the wire, and they are sent straight out of here.
-ult_sock:       .res 1          ; socket handle, in and out
-ult_socklen:    .res 2          ; buffer size in, bytes moved out
-ult_iface:      .res 1          ; interface index in, interface count out
-ult_port:       .res 2          ; TCP or UDP port, little-endian
-
-; --- http service (src/uci/http.s) ---
-; ult_body follows ult_http because an exchange sends the two as one pair.
-ult_url:        .res 2          ; URL, or a header line
-ult_http:       .res 1          ; verb in, header handle out
-ult_body:       .res 1          ; body handle, or HTTP_BODY_NONE
-ult_httplen:    .res 2          ; reply bytes stored
-
-; --- second string, and the staging buffer ---
-; The second string is what rename, copy and the HTTP body builder need and the
-; request block cannot hold: it has two spans, and those commands have three
-; runs of caller bytes.
-ult_arg2:       .res 2          ; a second caller string
-ult_stage:      .res ULT_STAGE_SIZE
-ult_stagelen:   .res 1          ; how much of it the command being built uses
-ult_val:        .res 4          ; a scalar argument: the HTTP body builder's
-                                ; integers and booleans
-
-; --- Ultimate Audio (src/uci/audio.s) ---
-ult_audio_up:   .res 1          ; silent probe succeeded
-
 .endif
+
+.macro uci_field name, size
+    .ifdef UCI_VARS
+        name = UCI_VARS + uci_layout_offset
+    .else
+name:   .res size
+    .endif
+    uci_layout_offset .set uci_layout_offset + size
+.endmacro
+
+.macro uci_padding size
+    .ifndef UCI_VARS
+        .res size
+    .endif
+    uci_layout_offset .set uci_layout_offset + size
+.endmacro
+
+uci_field uci_timeout,    1
+uci_field uci_ready,      1
+uci_field uci_devcode,    2
+uci_field uci_trunc,      1
+uci_field uci_cnt,        2
+uci_field uci_tmp,        2
+; Keep 16 bytes even when the caller's reply buffer is shorter. HTTP status
+; lines need more than a numeric status prefix to decode correctly.
+uci_field uci_stat,       UCI_STAT_KEEP
+uci_field uci_statlen,    1
+uci_field uci_dec_target, 1
+uci_field uci_dec_ptr,    2
+uci_field uci_dec_len,    1
+
+; Shared SDK state and its private request block.
+uci_field ult_up,         1
+uci_field ult_buf,        2
+uci_field ult_buflen,     2
+uci_field ult_outlen,     2
+uci_field ult_caps,       2
+uci_field ult_scratch,    16
+uci_field ult_req,        UCI_REQ_SIZE
+uci_field ult_probe,      1
+
+; Assembly callers link their own request block in default BSS mode. Placed
+; builds reserve its address here so published blob offsets remain fixed.
+.ifdef UCI_VARS
+uci_req = UCI_VARS + uci_layout_offset
+        .export uci_req
+.endif
+uci_layout_offset .set uci_layout_offset + UCI_REQ_SIZE
+
+; Append fields after the caller block; old published offsets must not move.
+uci_field ult_color,      4
+uci_field uci_more,       1
+uci_field ult_attrib,     1
+uci_field ult_dir,        1
+uci_field ult_num,        4
+; SoftwareIEC argument: sec, verify, addr16, then an unused pair.
+uci_field ult_fargs,      2
+uci_field ult_addr,       2
+uci_padding              2
+uci_field ult_max,        2
+uci_field ult_end,        2
+uci_field ult_got,        2
+uci_field ult_reu,        4
+uci_field ult_reulen,     4
+; Socket handle and length are consecutive bytes on the wire.
+uci_field ult_sock,       1
+uci_field ult_socklen,    2
+uci_field ult_iface,      1
+uci_field ult_port,       2
+uci_field ult_url,        2
+; HTTP verb and body handles are sent as one pair.
+uci_field ult_http,       1
+uci_field ult_body,       1
+uci_field ult_httplen,    2
+uci_field ult_arg2,       2
+uci_field ult_stage,      ULT_STAGE_SIZE
+uci_field ult_stagelen,   1
+uci_field ult_val,        4
+uci_field ult_audio_up,   1
+
+.assert uci_layout_offset = UCI_VARS_SIZE, error, "UCI_VARS_SIZE no longer matches the layout"
 
 ; ---------------------------------------------------------------------------
 

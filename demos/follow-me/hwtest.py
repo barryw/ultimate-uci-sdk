@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Real keyboard/score/timeout checks, with PCM+palette and SID fallback."""
 import argparse
-import ftplib
 from pathlib import Path
 import re
 import sys
@@ -43,21 +42,13 @@ def main():
                 raise AssertionError(description + "\n" + screen_text(u.readmem(0x400, 1000)))
             time.sleep(0.05)
 
-    # Do not overwrite an existing file, even on the temporary volume.
-    remote = "/Temp/sdk-followme-check.prg"
-    with ftplib.FTP(args.host, timeout=30) as ftp:
-        ftp.login()
-        if any(Path(p).name.lower() == Path(remote).name.lower() for p in ftp.nlst("/Temp")):
-            raise RuntimeError(f"{remote} already exists; refusing to replace it")
-        with (HERE / "followme.prg").open("rb") as source:
-            ftp.storbinary("STOR " + remote, source)
     game_running = False
     try:
         for key, value in requirements.items():
             u.set_setting(*key, value)
         for enabled in (True, False):
             u.set_setting(category, "Command Interface", "Enabled" if enabled else "Disabled")
-            u._request("PUT", "/runners:run_prg?file=" + remote)
+            u.run_prg(HERE / "followme.prg")
             game_running = True
             time.sleep(3)
             wait_for(lambda: read("GameMode") == b"\0",
@@ -89,10 +80,7 @@ def main():
                          "cleanup could not exit game (palette may need restoration)", 5)
         finally:
             restore_settings(u, saved)
-            with ftplib.FTP(args.host, timeout=30) as ftp:
-                ftp.login()
-                ftp.delete(remote)
-            print("# settings restored; temporary test PRG removed", flush=True)
+            print("# settings restored", flush=True)
 
 
 if __name__ == "__main__":

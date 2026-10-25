@@ -70,7 +70,7 @@ HARNESS_SYMS := boot t_break_cstack t_init t_present t_ident_reg t_status_reg t_
                 t_mount t_unmount t_swap t_get_time t_set_time \
                 t_reboot t_freeze t_drive_enable t_drive_power \
                 t_drive_info t_ramdisk_info t_drvinfo_reply drvinfo_len \
-                t_net_setip \
+                t_net_setip t_http_exchange \
                 t_body t_body_free t_body_clear t_body_up t_body_int \
                 t_body_bool t_body_string t_body_object t_body_array \
                 t_body_binary drive_arg flag_arg body_arg time_arg val_arg \

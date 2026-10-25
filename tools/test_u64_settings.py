@@ -13,8 +13,11 @@ SPDX-License-Identifier: MIT
 """
 
 import os
+from pathlib import Path
 import sys
+import tempfile
 import unittest
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import u64_settings as guard
@@ -65,6 +68,23 @@ class RequireSettingsTests(unittest.TestCase):
             u, {CMD_IF: "Enabled", reu: "Disabled"})
         self.assertEqual(changed, {CMD_IF: "Disabled"})
         self.assertEqual(len(u.writes), 1)
+
+    def test_partial_write_failure_restores_every_attempted_setting(self):
+        reu = ("C64 and Cartridge Settings", "RAM Expansion Unit")
+
+        class FlakyUltimate(FakeUltimate):
+            failed = False
+
+            def set_setting(self, category, item, value):
+                super().set_setting(category, item, value)
+                if (category, item) == reu and not self.failed:
+                    self.failed = True  # The device applied the write before failing.
+                    raise OSError("connection dropped")
+
+        u = FlakyUltimate({CMD_IF: "Disabled", reu: "Disabled"})
+        with self.assertRaisesRegex(OSError, "connection dropped"):
+            guard.require_settings(u, {CMD_IF: "Enabled", reu: "Enabled"})
+        self.assertEqual(u.values, {CMD_IF: "Disabled", reu: "Disabled"})
 
 
 class RestoreSettingsTests(unittest.TestCase):
@@ -145,6 +165,57 @@ class ParseSettingSpecTests(unittest.TestCase):
     def test_missing_equals_is_rejected(self):
         with self.assertRaises(ValueError):
             guard.parse_setting_spec("C64 and Cartridge Settings:Command Interface")
+
+
+class RunPrgTests(unittest.TestCase):
+    def run_with_payload(self, size, ftp_listing=(), request_error=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "program.prg"
+            path.write_bytes(b"x" * size)
+            u = guard.Ultimate("ultimate.test")
+            u._request = MagicMock(side_effect=request_error)
+            ftp = MagicMock()
+            ftp.__enter__.return_value = ftp
+            ftp.nlst.return_value = list(ftp_listing)
+            with patch.object(guard.ftplib, "FTP", return_value=ftp) as connect, \
+                 patch.object(guard.uuid, "uuid4") as random_name:
+                random_name.return_value.hex = "1" * 32
+                if ftp_listing:
+                    with self.assertRaises(FileExistsError):
+                        u.run_prg(path)
+                elif request_error:
+                    with self.assertRaises(type(request_error)):
+                        u.run_prg(path)
+                else:
+                    u.run_prg(path)
+            return u._request, ftp, connect
+
+    def test_inline_prg_uses_rest_through_limit(self):
+        request, ftp, connect = self.run_with_payload(16 * 1024)
+        request.assert_called_once()
+        self.assertEqual(request.call_args.args[:2], ("POST", "/runners:run_prg"))
+        connect.assert_not_called()
+
+    def test_large_prg_uses_owned_scratch_and_removes_it(self):
+        request, ftp, connect = self.run_with_payload(16 * 1024 + 1)
+        connect.assert_called_once_with("ultimate.test", timeout=30)
+        ftp.storbinary.assert_called_once()
+        self.assertEqual(request.call_args.args[:2],
+                         ("PUT", "/runners:run_prg?file=/Temp/sdk-" + "1" * 32 + ".prg"))
+        ftp.delete.assert_called_once_with("sdk-" + "1" * 32 + ".prg")
+
+    def test_large_prg_refuses_existing_scratch_name(self):
+        name = "/Temp/SDK-" + "1" * 32 + ".PRG"
+        request, ftp, _ = self.run_with_payload(16 * 1024 + 1, (name,))
+        request.assert_not_called()
+        ftp.storbinary.assert_not_called()
+        ftp.delete.assert_not_called()
+
+    def test_large_prg_removes_scratch_after_launch_failure(self):
+        request, ftp, _ = self.run_with_payload(16 * 1024 + 1,
+                                                request_error=OSError("REST failed"))
+        request.assert_called_once()
+        ftp.delete.assert_called_once_with("sdk-" + "1" * 32 + ".prg")
 
 
 if __name__ == "__main__":
