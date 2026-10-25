@@ -32,8 +32,9 @@ int main(void)
 
 ```sh
 make lib
-cl65 -t c64 -I include -c -o guide/examples/selective-c.o \
+cc65 -t c64 -I include -o guide/examples/selective-c.s \
   guide/examples/selective.c
+ca65 -t c64 -o guide/examples/selective-c.o guide/examples/selective-c.s
 cl65 -t c64 -m guide/examples/selective-c.map \
   -o guide/examples/selective-c.prg guide/examples/selective-c.o \
   bindings/cc65/build/ultimate.lib
