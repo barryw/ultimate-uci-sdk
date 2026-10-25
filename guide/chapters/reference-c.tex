@@ -1088,12 +1088,14 @@ returns \cmd{ULTIMATE\_END}; the firmware already removed it.}
 {\cmd{handle} is open; \cmd{buf} has \cmd{bufsize} bytes; \cmd{got} is required.
 The SDK refuses unsafe requests above \cmd{UCI\_NET\_READ\_MAX}.}
 {\cmd{ULTIMATE\_OK} with zero or more bytes, \cmd{ULTIMATE\_END} once when the
-peer closes, or an error.}
+peer closes, \cmd{ULTIMATE\_ERR\_TRUNCATED} when a UDP datagram was longer than
+the request on newer firmware, or another error.}
 {Polls without waiting. At most \cmd{bufsize-UCI\_NET\_READ\_PREFIX} data bytes
 fit because the firmware prefixes its count.}
 {err = ultimate\_net\_read(handle, buf, sizeof buf, \&got);}
-{Use data only when \cmd{err == ULTIMATE\_OK \&\& got != 0}; stop on
-\cmd{ULTIMATE\_END}.}
+{Use retained data when \cmd{err == ULTIMATE\_OK} or
+\cmd{ULTIMATE\_ERR\_TRUNCATED} and \cmd{got != 0}; stop on
+\cmd{ULTIMATE\_END}. A truncated UDP datagram cannot be resumed.}
 
 \capiref{ultimate\_net\_write}{ultimate.h}
 {uint8\_t ultimate\_net\_write(uint8\_t handle, const uint8\_t *buf, uint16\_t len, uint16\_t *sent)}

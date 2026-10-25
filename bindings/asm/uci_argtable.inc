@@ -54,8 +54,6 @@ uci_argtable:
         .byte $03, $08, 2, $24
         ; NET_CMD_READ_SOCKET  <handle> <len:16>
         .byte $03, $10, 2, $12
-        ; NET_CMD_LISTEN_START  <port:16>
-        .byte $03, $12, 1, $20
         ; ---- CONTROL ($04) ----
         ; CTRL_CMD_EASYFLASH  $00 <bank> <baseaddr>
         .byte $04, $20, 3, $71, $10

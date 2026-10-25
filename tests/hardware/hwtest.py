@@ -222,19 +222,7 @@ def expect_no_device(r, state=None):
 
 
 def record_softiec(r, state):
-    """Drive off: note whether the target is still visible, assert nothing.
-
-    Presence here is the interesting observation, and it is the expected one -
-    GideonZ/1541ultimate#794 confirms that disabling the drive removes it from
-    the IEC bus and not from UCI, because UCI is how the hyperspeed kernal
-    reaches it. /v1/drives reports enabled=false while target $05 still returns
-    SOFTWARE IEC TARGET V1.0.
-
-    It is still not asserted, for one reason: this run cannot prove what a cold
-    boot with the drive already disabled would report, and this bench machine
-    cannot be power cycled remotely. Absence here would be a finding to chase,
-    not a failure to fail on.
-    """
+    """Drive off: record target availability across old and current firmware."""
     problem = expect_clean_pass(r)
     if problem:
         return problem
@@ -250,9 +238,9 @@ def expect_softiec_present(r, state):
         return ("detection must see target $05 with the IEC drive enabled, "
                 "targets=$%04x" % r.targets)
     if state.get("softiec_before") is True:
-        state["note"] = ("target $05 was visible with the drive disabled too, "
-                         "which is the documented intent (#794) - the SDK's "
-                         "SoftwareIEC path needs no drive setting from the user")
+        state["note"] = "target $05 stayed visible with IEC Drive Disabled (3.15 behavior)"
+    else:
+        state["note"] = "target $05 was unavailable with IEC Drive Disabled (current source behavior)"
     return None
 
 
@@ -335,10 +323,9 @@ SCENARIOS = [
         ],
     },
     {
-        "name": "softiec-survives-drive-disabled",
-        "why": "target $05 must stay reachable over UCI with the IEC drive "
-               "switched off - see #794, it is the path the hyperspeed kernal "
-               "uses, and the SDK's fast load depends on it",
+        "name": "softiec-drive-setting",
+        "why": "target $05 is available with the IEC drive enabled; older "
+               "firmware also serves it while disabled, current source does not",
         "steps": [
             ({CMD_IF: "Enabled", REU: "Disabled", AUDIO: "Disabled",
               IEC_DRIVE: "Disabled",

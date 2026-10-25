@@ -7,12 +7,10 @@
 ;     `- otherwise         -> DOS OPEN/READ/CLOSE every byte through the
 ;                                                 response queue
 ;
-; **Which tier is chosen by trying, not by asking.** Target $05 reports present
-; even when the IEC drive is switched off - GideonZ/1541ultimate#794 settles
-; that this is intended, because UCI is how the hyperspeed kernal reaches it -
-; and detection could not tell you a *file* is loadable in any case. So the fast
-; path is attempted and the slow one runs if it did not work, which is also what
-; makes this correct on a firmware with no SoftwareIEC target at all.
+; **Which tier is chosen by trying, not by asking.** Firmware 3.15 reports
+; target $05 present even with IEC Drive disabled; current firmware returns
+; MODULE NOT LOADED. A probe cannot tell whether a particular file is loadable
+; in either case. The fast path is attempted and the slow one runs if it fails.
 ;
 ; Two things about LOAD_SU that were read out of the firmware rather than
 ; guessed, and that a reimplementation would get wrong:

@@ -8,6 +8,7 @@ New machines get extra capabilities. Nothing gets an incompatible ecosystem.
 | Machine | Firmware | Result |
 |---|---|---|
 | Ultimate 64 Elite | 3.15 (FPGA 124, core 1.4F) | hardware runner 7/7 scenarios, 0 failed; peer-enabled configurations reached 180 checks |
+| Ultimate 64 Elite | 3.15, commit `4402a806` (FPGA 126, core 1.50) | hardware runner 7/7 scenarios, 0 failed; TCP/UDP/HTTP peers exercised, including UDP truncation |
 
 Everything else in this document comes from the firmware and FPGA sources rather
 than from a machine on a bench. Reports from other hardware are welcome.
@@ -81,7 +82,10 @@ The interface has grown targets over time. Probe, do not assume.
 | 3.0 | `DOS_CMD_COPY_UI_PATH` deprecated, answers `99,FUNCTION NOT IMPLEMENTED` |
 | 3.x | network (`$03`), control (`$04`), SoftwareIEC (`$05`) targets |
 | 3.15 | HTTP target (`$06`); IRQ-on-completion; `CTRL_CMD_GET_HWINFO` sub-command optional |
-| after 3.15 | runtime palette commands `$51`-`$54` on the control target |
+| after 3.15 | runtime palette commands `$51`-`$54` on the control target; network multi-block reads and UDP truncation status `04`; IEC Drive `UCI Only` mode |
+
+The bench firmware still reports `3.15` after those changes. Identify a build by
+its commit when version-dependent behavior matters.
 
 The firmware documentation marks `CTRL_CMD_GET_HWINFO` deprecated. Current
 firmware still implements it, but no replacement C64-side UCI command is
@@ -102,22 +106,16 @@ the result.
 
 Two things worth knowing about what the probe reports:
 
-- **`ultimate_has_softiec()` does not track the IEC Drive setting, by design.**
-  The documentation says every SoftwareIEC command returns `$05 IEC MODULE NOT
-  LOADED` when no emulated drive sits behind the interface, which would make the
-  target probe reflect whether the drive is switched on. It does not: target
-  `$05` identifies itself and serves commands with the IEC Drive setting
-  disabled, and
-  [GideonZ/1541ultimate#794](https://github.com/GideonZ/1541ultimate/issues/794)
-  settles that this is intended and permanent. Disabling the drive takes it off
-  the *IEC bus*; UCI is a separate path to the same code, and it is the path the
-  hyperspeed kernal uses.
-
-  The useful consequence: **a program driving SoftwareIEC over UCI does not need
-  the user to enable the IEC drive first.** `ultimate_has_softiec()` means "this
-  firmware has the target", which is the thing you actually need to know. Still
-  fall back on a command failing rather than on the probe — the probe cannot see
-  a mounted image, a valid path, or a full disk.
+- **`ultimate_has_softiec()` can depend on the IEC Drive setting.** Firmware
+  3.15 still identifies and serves target `$05` with the drive disabled. In the
+  current firmware source, `Disabled` returns binary status `$05 IEC MODULE NOT
+  LOADED`; `Enabled` and `UCI Only` serve UCI commands. This changes the earlier
+  behavior discussed in
+  [GideonZ/1541ultimate#794](https://github.com/GideonZ/1541ultimate/issues/794).
+  The SDK probe correctly omits the target when `IDENTIFY` returns `$05`, and
+  `ultimate_load()` falls back to DOS when SoftwareIEC is unavailable. Probe
+  after changing the setting; a saved capabilities block does not update itself.
+  A probe still cannot see a mounted image, a valid path, or a full disk.
 - **`ultimate_get_model()` is for humans.** It reads the deprecated
   `CTRL_CMD_GET_HWINFO`,
   which needs the control target and returns mixed-case strings —

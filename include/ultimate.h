@@ -442,10 +442,10 @@ uint8_t ultimate_set_time(uint8_t year_1900, uint8_t month, uint8_t day,
  *   otherwise            -> DOS open/read/close, every byte through the
  *                           response queue
  *
- * Trying rather than asking is deliberate. Target $05 reports present even when
- * the IEC drive is switched off, and detection could not tell you a particular
- * *file* is loadable in any case, so the only honest test is the command
- * itself. Nothing about this is visible to the caller except the speed.
+ * Trying rather than asking is deliberate. Target $05 stays present with IEC
+ * Drive disabled on firmware 3.15, but becomes unavailable in current firmware.
+ * Detection cannot tell whether a particular *file* is loadable in either
+ * case. Nothing about this is visible to the caller except the speed.
  */
 
 /*
@@ -715,18 +715,23 @@ uint8_t ultimate_ramdisk_info(uint8_t *info);
  * budget afterwards. They are the only network entry points that do; HTTP
  * exchange has the same exception.
  *
+ * On firmware with UDP truncation reporting, a datagram longer than the read
+ * request returns ULTIMATE_ERR_TRUNCATED. *got bytes were copied to buf; the
+ * rest of that datagram was discarded. uci_last_device_code() then returns 4.
+ * A zero-length UDP datagram returns ULTIMATE_OK with *got = 0, as does a
+ * would-block read; inspect uci_last_device_code() to distinguish them.
+ *
  * bufsize in ultimate_net_read() is the size of the buffer, and at most
  * UCI_NET_READ_PREFIX fewer bytes than that are stored: the firmware sends its
  * own 16-bit count in front of the data, which this strips. The request is also
- * capped at UCI_NET_READ_MAX; larger reads have taken the machine off the
- * network, so this SDK will not issue one. See docs/uci.md.
+ * capped at UCI_NET_READ_MAX to protect older firmware, where larger reads
+ * have taken the machine off the network. See docs/uci.md.
  *
  * A write reports how many bytes the firmware took. It has matched the length
  * asked for every time it has been measured, which is why it is worth checking
  * rather than assuming.
  *
- * The four LISTEN commands are deliberately absent - their command numbers are
- * not in the published specification. uci_exec() still reaches them.
+ * Firmware does not implement network LISTEN commands.
  * ------------------------------------------------------------------------- */
 uint8_t ultimate_net_ifcount(uint8_t *count);
 uint8_t ultimate_net_macaddr(uint8_t iface, uint8_t *mac);

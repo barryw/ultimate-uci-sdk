@@ -65,12 +65,8 @@ commands as tested that no test has ever sent.
 | Network commands | `NET_CMD_CLOSE_SOCKET` | `$09` | tested | hardware only |
 | Network commands | `NET_CMD_READ_SOCKET` | `$10` | tested | hardware only |
 | Network commands | `NET_CMD_WRITE_SOCKET` | `$11` | tested | hardware only |
-| Network commands | `NET_CMD_LISTEN_START` | `$12` | no API yet | hardware only |
-| Network commands | `NET_CMD_LISTEN_STOP` | `$13` | no API yet | hardware only |
-| Network commands | `NET_CMD_LISTEN_STATE` | `$14` | no API yet | hardware only |
-| Network commands | `NET_CMD_LISTEN_SOCKET` | `$15` | no API yet | hardware only |
 | Control commands | `CTRL_CMD_IDENTIFY` | `$01` | tested | simulator + hardware |
-| Control commands | `CTRL_CMD_READ_RTC` | `$02` | no API yet | hardware only |
+| Control commands | `CTRL_CMD_READ_RTC` | `$02` | reserved; not in firmware | not reachable |
 | Control commands | `CTRL_CMD_FINISH_CAPTURE` | `$03` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_FREEZE` | `$05` | tested | hardware only |
 | Control commands | `CTRL_CMD_REBOOT` | `$06` | tested | hardware only |
@@ -78,7 +74,7 @@ commands as tested that no test has ever sent.
 | Control commands | `CTRL_CMD_SAVE_REU` | `$09` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_U64_SAVEMEM` | `$0F` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_DECODE_TRACK` | `$11` | no API yet | simulator + hardware |
-| Control commands | `CTRL_CMD_ENCODE_TRACK` | `$12` | no API yet | simulator + hardware |
+| Control commands | `CTRL_CMD_ENCODE_TRACK` | `$12` | reserved; not in firmware | not reachable |
 | Control commands | `CTRL_CMD_EASYFLASH` | `$20` | no API yet | simulator + hardware |
 | Control commands | `CTRL_CMD_GET_HWINFO` | `$28` | tested; deprecated | simulator + hardware |
 | Control commands | `CTRL_CMD_GET_DRVINFO` | `$29` | tested | hardware only |
@@ -134,8 +130,8 @@ commands as tested that no test has ever sent.
 
 | | |
 | --- | --- |
-| commands defined | 103 |
-| exercised by a test | 68 (66%) |
+| commands defined | 97 |
+| exercised by a test | 68 (70%) |
 | wrapped but untested | 0 |
 
 Commands with no API yet are the remainder. They are the ones a

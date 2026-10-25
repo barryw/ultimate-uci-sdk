@@ -1,6 +1,6 @@
 ; net.s - Layer 2: TCP and UDP sockets, on the network target.
 ;
-; Ten commands of the sixteen. Built entirely out of uci_exec, like every
+; Built entirely out of uci_exec, like every
 ; service except turbo.s and reu.s; nothing here touches a hardware register.
 ;
 ; **Everything in this file was measured against firmware 3.15 on real
@@ -25,6 +25,8 @@
 ; uci_decode_status follows, so all three arrive as ULTIMATE_OK. Reading the
 ; code back is what turns the middle one into ULTIMATE_END. Nothing here parses
 ; the status text; the code alone separates the three.
+; Current firmware also answers 04 when a UDP datagram exceeded the requested
+; length. The bytes that fit are returned with ULTIMATE_ERR_TRUNCATED.
 ;
 ; **A connect can take thirty seconds.** Measured: 48-75 ms to a host that is
 ; up, and 30.8 seconds to an address on the same subnet with nothing at it,
@@ -36,17 +38,13 @@
 ; afterwards. Every other command here finished in 75 ms or less and runs on
 ; whatever the caller set.
 ;
-; **Read lengths between 769 and 1023 are dangerous.** The firmware range-checks
-; at 1024 and answers "82,PARAMETER(S) OUT OF RANGE" above it, but its own
-; response queue is UCI_MAX_RESPONSE = $380 = 896 bytes, and a probe stepping
-; through that gap took the machine off the network entirely and needed a power
-; cycle. UCI_NET_READ_MAX is 512, which is verified with real data behind it,
-; and this file will not ask for more. See docs/uci.md.
+; **Older firmware has dangerous large reads.** A 3.15 probe stepping through
+; 769-1023 took the machine off the network and needed a power cycle. Current
+; firmware splits replies into blocks, but UCI_NET_READ_MAX stays 512 so the
+; same binary remains safe on older firmware. See docs/uci.md.
 ;
-; **The four LISTEN commands are not here.** tools/gen_protocol.py marks them
-; INFERRED: their command numbers are not in the published specification. The
-; generic form reaches them, so issuing one stays a deliberate act rather than
-; something the SDK appears to endorse.
+; **There are no LISTEN commands in the firmware.** The network target
+; dispatches no such opcodes, so the SDK publishes none.
 ;
 ; SPDX-License-Identifier: MIT
 
@@ -377,6 +375,8 @@ ultimate_net_close:
 ;   ULTIMATE_OK  with ult_socklen > 0   bytes arrived
 ;   ULTIMATE_OK  with ult_socklen = 0   nothing pending; ask again
 ;   ULTIMATE_END                        the peer hung up, and this is said once
+;   ULTIMATE_ERR_TRUNCATED              UDP payload was longer than requested;
+;                                       ult_socklen bytes survived, rest dropped
 ;
 ; ULTIMATE_END is the same code ultimate_readdir uses at the end of a
 ; directory, and for the same reason: running out is not failing.
@@ -454,10 +454,16 @@ ultimate_net_read:
 
         jsr net_exec
         cmp #ULTIMATE_OK
+        beq @classify
+        cmp #ULTIMATE_ERR_DEVICE
         bne @failed
+        jsr uci_last_code
+        cmp #UCI_NET_DEV_TRUNCATED
+        bne @device_failed
 
-        ; Data, end of stream, or nothing yet - and only the device code knows,
-        ; because all three are success to uci_decode_status.
+@classify:
+
+        ; Data, end of stream, or nothing yet - and only the device code knows.
         jsr uci_last_code
         cmp #UCI_NET_DEV_CLOSED
         beq @closed
@@ -481,8 +487,16 @@ ultimate_net_read:
         sbc #$00
         sta ult_socklen + 1
         jsr net_unprefix
+        jsr uci_last_code
+        cmp #UCI_NET_DEV_TRUNCATED
+        beq @truncated
         ldx #$00
         lda #ULTIMATE_OK
+        rts
+
+@truncated:
+        ldx #$00
+        lda #ULTIMATE_ERR_TRUNCATED
         rts
 
 @empty: jsr net_nothing
@@ -507,6 +521,10 @@ ultimate_net_read:
         ldx #$00
         pla
         rts
+
+@device_failed:
+        lda #ULTIMATE_ERR_DEVICE
+        bne @failed
 
 @invalid:
         jsr net_nothing

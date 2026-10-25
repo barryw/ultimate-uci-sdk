@@ -90,7 +90,7 @@ static ultimate_capabilities caps;
  *
  *     make -C tests/hardware NET_PEER=192.168.1.242:6464
  *
- * with something at the far end that accepts a connection and sends a byte.
+ * with tests/hardware/peers.py at the far end: TCP echo plus fixed UDP replies.
  * **A dotted quad, not a name**: cc65 charmaps source characters into PETSCII,
  * and digits and '.' survive that unchanged where letters do not.
  *
@@ -143,6 +143,10 @@ static const char net_peer[] = NET_PEER_HOST;
 /* Something to say to a peer that waits to be spoken to. Bytes rather than a
    literal, because the charmap would rewrite it. */
 static const uint8_t net_hello[] = { 0x68, 0x69, 0x0D, 0x0A };  /* "hi" CRLF */
+static const uint8_t net_udp_reply[] = {
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x38, 0x39, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66
+};
 #endif
 
 /*
@@ -1421,23 +1425,58 @@ after_write:
                     check("net-close-an-open-socket", ULTIMATE_OK,
                           ultimate_net_close(handle));
 
-                /*
-                 * UDP has no handshake, so the socket opens whether or not
-                 * anything is listening. That is the whole of what this proves
-                 * - the command reaches the firmware and hands back a handle
-                 * that closes cleanly - and it is deliberately not a claim that
-                 * a datagram went anywhere.
-                 */
+                /* peers.py answers each UDP request with sixteen fixed bytes.
+                   Read four first: current firmware reports dropped tail as 04
+                   while older firmware returns the four bytes without notice. */
                 handle = 0xFF;
                 err = ultimate_net_udp(net_peer, NET_PEER_PORT, &handle);
                 check("net-udp-opens-a-socket", ULTIMATE_OK, err);
                 if (err == ULTIMATE_OK) {
                     check("net-udp-gives-back-a-handle", 1,
                           handle != 0xFF ? 1 : 0);
+                    check("net-udp-write", ULTIMATE_OK,
+                          ultimate_net_write(handle, net_hello,
+                                             sizeof(net_hello), &sent));
+                    for (tries = 0; tries < 40; ++tries) {
+                        err = ultimate_net_read(handle, net_buf, 6, &got);
+                        if (err != ULTIMATE_OK || got != 0)
+                            break;
+                    }
+                    if (err == ULTIMATE_OK && got == 4)
+                        skip("net-udp-truncation-reported",
+                             "firmware does not report dropped UDP bytes");
+                    else
+                        check("net-udp-truncation-reported",
+                              ULTIMATE_ERR_TRUNCATED, err);
+                    check("net-udp-truncation-keeps-four", 4, got);
+                    check("net-udp-truncation-keeps-data", 1,
+                          memcmp(net_buf, "0123", 4) == 0);
+
+                    check("net-udp-write-again", ULTIMATE_OK,
+                          ultimate_net_write(handle, net_hello,
+                                             sizeof(net_hello), &sent));
+                    for (tries = 0; tries < 40; ++tries) {
+                        err = ultimate_net_read(handle, net_buf,
+                                                sizeof(net_buf), &got);
+                        if (err != ULTIMATE_OK || got != 0)
+                            break;
+                    }
+                    check("net-udp-after-truncation", ULTIMATE_OK, err);
+                    check("net-udp-full-datagram", 16, got);
+                    check("net-udp-full-data", 1,
+                          memcmp(net_buf, net_udp_reply, 16) == 0);
                     check("net-udp-closes", ULTIMATE_OK,
                           ultimate_net_close(handle));
                 } else {
                     skip("net-udp-gives-back-a-handle", "the socket did not open");
+                    skip("net-udp-write", "the socket did not open");
+                    skip("net-udp-truncation-reported", "the socket did not open");
+                    skip("net-udp-truncation-keeps-four", "the socket did not open");
+                    skip("net-udp-truncation-keeps-data", "the socket did not open");
+                    skip("net-udp-write-again", "the socket did not open");
+                    skip("net-udp-after-truncation", "the socket did not open");
+                    skip("net-udp-full-datagram", "the socket did not open");
+                    skip("net-udp-full-data", "the socket did not open");
                     skip("net-udp-closes", "the socket did not open");
                 }
             }

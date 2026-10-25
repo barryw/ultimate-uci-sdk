@@ -26,8 +26,8 @@ $(LIB): FORCE
 #   make NET_PEER=192.168.1.242:6464
 #
 # A dotted quad, not a name: cc65 charmaps source characters, and digits and
-# '.' survive that unchanged where letters do not. The far end only has to
-# accept a connection and send a byte.
+# '.' survive that unchanged where letters do not. The far end must echo TCP
+# and answer UDP with 0123456789abcdef; peers.py does both on the same port.
 ifdef NET_PEER
 NET_DEFS := -DNET_PEER_HOST='"$(word 1,$(subst :, ,$(NET_PEER)))"' \
             -DNET_PEER_PORT=$(word 2,$(subst :, ,$(NET_PEER)))

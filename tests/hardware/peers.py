@@ -14,6 +14,12 @@ class Echo(socketserver.BaseRequestHandler):
             self.request.sendall(payload)
 
 
+class UDP(socketserver.BaseRequestHandler):
+    def handle(self):
+        _, sock = self.request
+        sock.sendto(b"0123456789abcdef", self.client_address)
+
+
 class HTTP(BaseHTTPRequestHandler):
     def do_GET(self):
         status = 200 if self.path.lower() == "/hello" else 404
@@ -30,8 +36,10 @@ if __name__ == "__main__":
     parser.add_argument("--bind", required=True, help="this host's LAN address")
     args = parser.parse_args()
     with socketserver.TCPServer((args.bind, 6464), Echo) as tcp, \
+            socketserver.UDPServer((args.bind, 6464), UDP) as udp, \
             HTTPServer((args.bind, 8099), HTTP) as http:
         threading.Thread(target=tcp.serve_forever, daemon=True).start()
+        threading.Thread(target=udp.serve_forever, daemon=True).start()
         print(f"NET_PEER={args.bind}:6464 HTTP_PEER={args.bind}:8099", flush=True)
         try:
             http.serve_forever()

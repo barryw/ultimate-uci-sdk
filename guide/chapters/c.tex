@@ -1049,7 +1049,10 @@ UDP. Both return a handle. Write reports bytes accepted through \cmd{sent}; read
 reports bytes stored through \cmd{got}. A successful zero-byte read means
 ``not yet'', so poll. \cmd{ULTIMATE\_END} means the peer closed and the handle
 is already released; call \cmd{ultimate\_net\_close()} only for a handle still
-owned by the program.
+owned by the program. On newer firmware, a truncated UDP datagram returns
+\cmd{ULTIMATE\_ERR\_TRUNCATED} with the bytes that fit in \cmd{got}; the rest is
+discarded. An empty UDP datagram also returns zero bytes; inspect
+\cmd{uci\_last\_device\_code()} to distinguish it from no pending data.
 
 \evidence{\cmd{include/ultimate.h}; \cmd{src/uci/net.s}}
 

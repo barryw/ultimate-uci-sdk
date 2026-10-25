@@ -22,22 +22,21 @@
 ;   CTRL_CMD_EASYFLASH        erases a flash sector. A wrapper would make it
 ;                             look like an ordinary call; it is not one.
 ;   CTRL_CMD_DECODE_TRACK     GCR track decoding into the REU, for a disk
-;   CTRL_CMD_ENCODE_TRACK     copier. A service of its own if it is ever wanted,
-;                             and INFERRED in the encode direction.
+;                             copier. A service of its own if it is ever wanted.
 ;   CTRL_CMD_LOAD_REU         the control target's REU pair never returns on
 ;   CTRL_CMD_SAVE_REU         firmware 3.14d and wedges the interface. The DOS
 ;                             pair does the same job and is what reu.s uses.
 ;                             See GideonZ/1541ultimate#740.
 ;   CTRL_CMD_U64_SAVEMEM      writes the whole of C64 memory to a file, U64
 ;                             family only.
-;   CTRL_CMD_READ_RTC         INFERRED, and src/uci/clock.s reads the clock
-;                             through a documented command instead.
 ;   CTRL_CMD_LOAD_CONFIG      INFERRED, and it reloads the machine's own
 ;                             settings from a file.
 ;   CTRL_CMD_FINISH_CAPTURE   ends a tape capture nothing else here starts.
 ;
 ; All of them are reachable through uci_exec, which is the whole reason the
 ; generic form exists.
+; READ_RTC and ENCODE_TRACK are defined in the firmware header but have no
+; dispatch cases; they answer UNKNOWN COMMAND and have no service wrapper.
 ;
 ; SPDX-License-Identifier: MIT
 

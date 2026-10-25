@@ -156,10 +156,6 @@
 #define NET_CMD_CLOSE_SOCKET        0x09  /* <handle> */
 #define NET_CMD_READ_SOCKET         0x10  /* <handle> <len:16> */
 #define NET_CMD_WRITE_SOCKET        0x11  /* <handle> <data...> */
-#define NET_CMD_LISTEN_START        0x12  /* <port:16> - INFERRED: not in the published spec */
-#define NET_CMD_LISTEN_STOP         0x13  /* INFERRED: not in the published spec */
-#define NET_CMD_LISTEN_STATE        0x14  /* INFERRED: not in the published spec */
-#define NET_CMD_LISTEN_SOCKET       0x15  /* INFERRED: not in the published spec */
 
 /* ---- Network address sizes ---- */
 /* Fixed-width blobs the network target exchanges. */
@@ -171,10 +167,11 @@
 #define UCI_NET_DEV_OK         0  /* network device code: the reply carries data */
 #define UCI_NET_DEV_CLOSED     1  /* network device code: the peer hung up, reported once */
 #define UCI_NET_DEV_NO_DATA    2  /* network device code: nothing pending, try again */
+#define UCI_NET_DEV_TRUNCATED  4  /* network device code: UDP datagram exceeded requested length; remaining bytes were dropped */
 
 /* ---- Control commands (target $04) ---- */
 #define CTRL_CMD_IDENTIFY          0x01
-#define CTRL_CMD_READ_RTC          0x02  /* INFERRED: firmware only, not in the published spec */
+#define CTRL_CMD_READ_RTC          0x02  /* RESERVED: defined in the firmware header but not dispatched */
 #define CTRL_CMD_FINISH_CAPTURE    0x03
 #define CTRL_CMD_FREEZE            0x05
 #define CTRL_CMD_REBOOT            0x06  /* Never replies: the C64 and the UCI are reset */
@@ -182,7 +179,7 @@
 #define CTRL_CMD_SAVE_REU          0x09  /* <filename> */
 #define CTRL_CMD_U64_SAVEMEM       0x0F  /* <filename> - U64 family only */
 #define CTRL_CMD_DECODE_TRACK      0x11  /* GCR -> binary in REU */
-#define CTRL_CMD_ENCODE_TRACK      0x12  /* INFERRED: firmware only, not in the published spec */
+#define CTRL_CMD_ENCODE_TRACK      0x12  /* RESERVED: defined in the firmware header but not dispatched */
 #define CTRL_CMD_EASYFLASH         0x20  /* $00 <bank> <baseaddr> - sector erase; baseaddr bit $20 selects the high ROM */
 #define CTRL_CMD_GET_HWINFO        0x28  /* <sub> - deprecated; sub may be omitted; defaults to CTRL_HWINFO_MODEL */
 #define CTRL_CMD_GET_DRVINFO       0x29  /* <effective_addr> */

@@ -728,6 +728,13 @@ suites {
       [dec_buf] + $01 = $33
       jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
       assert([result] == $07, "ULTIMATE_ERR_DEVICE")
+
+      ; New firmware reports UDP truncation as 04 with retained reply bytes.
+      ; The network wrapper translates this raw error after reading those bytes.
+      [dec_buf] + $01 = $34
+      jsr([t_decode], stop_on_rts = true, fail_on_brk = true)
+      assert([result] == $07, "raw UDP truncation remains a device error")
+      assert([devcode].w == 4, "the wrapper can identify UDP truncation")
     }
 
     test("sdk-decode-decimal3", "NNN TEXT decoding, and what counts as an error") {

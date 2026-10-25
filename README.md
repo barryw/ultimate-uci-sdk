@@ -102,11 +102,11 @@ on the tested 48 MHz Elite, one on a stock C64.
 sprites, a software-composited vsprite shadow, a perspective grid and PCM audio.
 
 Some commands stay unwrapped on purpose: EasyFlash sector erase, GCR track
-encoding and decoding, the control target's REU pair — which never returns on
-firmware 3.14d — the SoftwareIEC channel commands the hyperspeed kernal owns,
-and the four TCP listener commands, whose numbers are not in the published
-specification. All of them are reachable through the generic form, which is the
-whole reason it exists.
+decoding, the control target's REU pair — which never returns on
+firmware 3.14d — and the SoftwareIEC channel commands the hyperspeed kernal owns.
+All implemented commands remain reachable through the generic form. Firmware
+does not implement network listener commands; the SDK publishes no constants for
+them.
 [docs/generated/command-coverage.md](docs/generated/command-coverage.md) is the
 per-command list.
 

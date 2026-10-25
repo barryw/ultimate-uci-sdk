@@ -329,24 +329,13 @@ which is why the fault only appeared on hardware.
 not loaded, `$06` invalid parameters, `$07` invalid name, `$08` invalid
 partition, `$09` invalid directory, `$80` verify failure.
 
-`$05` deserves attention. The documentation says **every** command on that
-target returns it when the emulated drive behind the SoftwareIEC interface has
-not been loaded, which would make a capability probe tell you whether the target
-is usable. Firmware 3.15 does not behave that way: with the IEC Drive setting
-disabled, target `$05` still identifies itself *and still serves functional
-commands* — `SOFTIEC_CMD_GET_FATNAME` returns a resolved host path. The
-availability guard tests a pointer that is set unconditionally at boot rather
-than the drive's enable flag, so that status is effectively unreachable.
-
-**This is intended and it is not going to change.** Asked directly in
-[GideonZ/1541ultimate#794](https://github.com/GideonZ/1541ultimate/issues/794),
-Gideon confirmed it: disabling the drive removes it from the *IEC bus*, not from
-UCI, because UCI is exactly the path the hyperspeed kernal uses to reach it. So
-the IEC Drive setting and SoftwareIEC-over-UCI are two independent things, and
-`$05` is reachable whether or not a drive is answering on the bus. Treat the
-`$05` status as documented-but-unreachable rather than as a case to design
-around — the SDK still maps it in `uci_map_binary`, which costs six bytes and
-means a future firmware that does fire it is handled without a change.
+`$05` now matters for capability detection. Firmware 3.15 identifies and serves
+target `$05` even with IEC Drive `Disabled`, as observed on hardware and discussed
+in [GideonZ/1541ultimate#794](https://github.com/GideonZ/1541ultimate/issues/794).
+Current firmware instead returns `$05 IEC MODULE NOT LOADED` when IEC Drive is
+`Disabled`. `Enabled` and `UCI Only` serve the target. The SDK maps `$05` to
+`ULTIMATE_ERR_NOT_SUPPORTED`, so `ultimate_detect()` omits SoftwareIEC from its
+capabilities on that firmware. Re-probe after a setting change.
 
 **The SoftwareIEC target mixes two status encodings.** `SOFTIEC_CMD_IDENTIFY`
 answers with the firmware's shared ASCII message `00,OK`; every other command on
@@ -386,11 +375,12 @@ status at all when everything went well.
 Machine-generated from the same definition the code and the assembler include are
 generated from: [generated/protocol-constants.md](generated/protocol-constants.md).
 
-Commands present in the firmware but absent from the published documentation are
-marked `INFERRED` there. At the time of writing those are, on the control target:
-`READ_RTC` (`$02`), `ENCODE_TRACK` (`$12`), `LOAD_CONFIG` (`$50`) and the palette
-commands `$51`-`$54`; and on the network target, the TCP listener commands
-`$12`-`$15`, which `ultimateii-dos-lib` uses.
+Commands dispatched by firmware but absent from the published documentation are
+marked `INFERRED` there. On the control target those include `LOAD_CONFIG`
+(`$50`) and palette commands `$51`-`$54`. `READ_RTC` (`$02`) and `ENCODE_TRACK`
+(`$12`) are defined in the firmware header but not dispatched; the generated
+coverage table marks them reserved. Firmware defines no network listener
+commands, so the SDK publishes none.
 
 ---
 
@@ -558,9 +548,8 @@ wrong.
 ## Sockets, and what the network target really does
 
 The protocol document gives the argument shapes for target `$03` and stops
-there. Everything below was measured against firmware 3.15 on an Ultimate 64
-Elite, because the parts it stops before are the parts a caller trips over.
-`src/uci/net.s` is built on these and nothing else.
+there. The baseline below was measured against firmware 3.15 on an Ultimate 64
+Elite. Later behavior comes from current firmware source and is labeled below.
 
 ### A read never waits for the wire
 
@@ -584,13 +573,21 @@ given holds `UCI_NET_READ_PREFIX` fewer bytes of payload than its size.
 | `1` | `01,CONNECTION CLOSED BY HOST` | end of stream, said exactly once |
 | `2` | `02,NO DATA: 11` | the socket is open and nothing is pending |
 | `2` | `02,NO DATA: 9` | the handle is dead, closed, or was never opened |
+| `4` | `04,DATAGRAM TRUNCATED: n` | newer firmware: UDP datagram exceeded requested length; remaining bytes were dropped |
 
-**All three decode to `ULTIMATE_OK`.** `00`, `01` and `02` are success in the CBM
+**Codes 0, 1 and 2 decode to `ULTIMATE_OK`.** `00`, `01` and `02` are success in the CBM
 DOS numbering that [status decoding](#status-encodings) follows, so `uci_exec()`
 cannot tell them apart and neither can a caller using it directly. Reading
 `uci_last_device_code()` back is what separates them, and it is what
 `ultimate_net_read()` does to turn code `1` into `ULTIMATE_END`. Nothing needs to
 parse the status text.
+
+On status `04`, `uci_exec()` returns `ULTIMATE_ERR_DEVICE` and retains the raw
+code. `ultimate_net_read()` instead returns `ULTIMATE_ERR_TRUNCATED` and keeps
+the bytes that fit in the caller's buffer. It does not recover the rest of the
+datagram. Newer firmware also keeps a socket open after an empty UDP datagram:
+status `00` with zero bytes. `uci_last_device_code()` distinguishes this from
+status `02`, the ordinary would-block result.
 
 Once end of stream has been reported the firmware has already released the
 handle, so closing it answers `12,ERROR ON CLOSE`. A caller that reads to the end
@@ -616,9 +613,9 @@ are the only network entry points not bounded by the SDK. HTTP exchange also
 waits on the firmware's own limit; every other network command finished in 75
 ms or less.
 
-### Read lengths between 769 and 1023 are dangerous
+### Read sizes across firmware versions
 
-The firmware range-checks the requested length at 1024 and answers
+Firmware 3.15 range-checks the requested length at 1024 and answers
 `82,PARAMETER(S) OUT OF RANGE` above it. Its response queue is
 `UCI_MAX_RESPONSE` = `$380` = 896 bytes, which is smaller than the largest
 request it accepts.
@@ -628,6 +625,10 @@ and needed a power cycle.** The exact edge has not been pinned, deliberately —
 finding it means wedging the machine again to no useful end. `UCI_NET_READ_MAX`
 is 512, which has been verified with 700 bytes queued behind it, and
 `ultimate_net_read()` will not ask for more however large a buffer it is given.
+Current firmware accepts up to 1472 bytes and delivers replies over multiple
+blocks. The SDK keeps its 512-byte cap so a single binary also runs safely on
+older firmware. Each read can still truncate a larger UDP datagram; check for
+`ULTIMATE_ERR_TRUNCATED` when receiving UDP.
 
 Writes are bounded by the SDK instead: the whole command must fit
 `UCI_MAX_COMMAND_USABLE` (`$37F`), and `uci_exec()` answers
@@ -680,11 +681,12 @@ the interface number as its own first argument. The constant is kept, marked
 `RESERVED`, because the byte is allocated and a UCI trace will show it; it is
 left out of the coverage totals rather than counted as an unwrapped command.
 
-### The listener commands stay unwrapped
+### Network listener commands are absent
 
-`$12`-`$15` are marked `INFERRED`: their numbers are not in the published
-specification. The generic form reaches them, so issuing one remains a
-deliberate act rather than something the SDK appears to vouch for.
+Current firmware's network target dispatches no listener commands. The SDK's
+older `$12`-`$15` constants were guesses based on another library, and have been
+removed. Sending those bytes through the generic form returns `21,UNKNOWN
+COMMAND` on this firmware.
 
 ---
 

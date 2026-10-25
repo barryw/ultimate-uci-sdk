@@ -164,10 +164,6 @@
 .label NET_CMD_CLOSE_SOCKET       = $09  // <handle>
 .label NET_CMD_READ_SOCKET        = $10  // <handle> <len:16>
 .label NET_CMD_WRITE_SOCKET       = $11  // <handle> <data...>
-.label NET_CMD_LISTEN_START       = $12  // <port:16> - INFERRED: not in the published spec
-.label NET_CMD_LISTEN_STOP        = $13  // INFERRED: not in the published spec
-.label NET_CMD_LISTEN_STATE       = $14  // INFERRED: not in the published spec
-.label NET_CMD_LISTEN_SOCKET      = $15  // INFERRED: not in the published spec
 
 // ---- Network address sizes ----
 // Fixed-width blobs the network target exchanges.
@@ -179,10 +175,11 @@
 .label UCI_NET_DEV_OK             = $00  // network device code: the reply carries data
 .label UCI_NET_DEV_CLOSED         = $01  // network device code: the peer hung up, reported once
 .label UCI_NET_DEV_NO_DATA        = $02  // network device code: nothing pending, try again
+.label UCI_NET_DEV_TRUNCATED      = $04  // network device code: UDP datagram exceeded requested length; remaining bytes were dropped
 
 // ---- Control commands (target $04) ----
 .label CTRL_CMD_IDENTIFY          = $01
-.label CTRL_CMD_READ_RTC          = $02  // INFERRED: firmware only, not in the published spec
+.label CTRL_CMD_READ_RTC          = $02  // RESERVED: defined in the firmware header but not dispatched
 .label CTRL_CMD_FINISH_CAPTURE    = $03
 .label CTRL_CMD_FREEZE            = $05
 .label CTRL_CMD_REBOOT            = $06  // Never replies: the C64 and the UCI are reset
@@ -190,7 +187,7 @@
 .label CTRL_CMD_SAVE_REU          = $09  // <filename>
 .label CTRL_CMD_U64_SAVEMEM       = $0F  // <filename> - U64 family only
 .label CTRL_CMD_DECODE_TRACK      = $11  // GCR -> binary in REU
-.label CTRL_CMD_ENCODE_TRACK      = $12  // INFERRED: firmware only, not in the published spec
+.label CTRL_CMD_ENCODE_TRACK      = $12  // RESERVED: defined in the firmware header but not dispatched
 .label CTRL_CMD_EASYFLASH         = $20  // $00 <bank> <baseaddr> - sector erase; baseaddr bit $20 selects the high ROM
 .label CTRL_CMD_GET_HWINFO        = $28  // <sub> - deprecated; sub may be omitted; defaults to CTRL_HWINFO_MODEL
 .label CTRL_CMD_GET_DRVINFO       = $29  // <effective_addr>
